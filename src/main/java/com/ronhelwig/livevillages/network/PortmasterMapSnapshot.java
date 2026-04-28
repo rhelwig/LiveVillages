@@ -12,6 +12,7 @@ public record PortmasterMapSnapshot(
 	String statusMessage,
 	String settlementName,
 	String timeLabel,
+	boolean hasCartographer,
 	BlockPos center,
 	int radius,
 	int terrainRadius,
@@ -22,6 +23,7 @@ public record PortmasterMapSnapshot(
 		Codec.STRING.optionalFieldOf("status_message", "").forGetter(PortmasterMapSnapshot::statusMessage),
 		Codec.STRING.optionalFieldOf("settlement_name", "").forGetter(PortmasterMapSnapshot::settlementName),
 		Codec.STRING.optionalFieldOf("time_label", "").forGetter(PortmasterMapSnapshot::timeLabel),
+		Codec.BOOL.optionalFieldOf("has_cartographer", false).forGetter(PortmasterMapSnapshot::hasCartographer),
 		BlockPos.CODEC.fieldOf("center").forGetter(PortmasterMapSnapshot::center),
 		Codec.INT.optionalFieldOf("radius", 128).forGetter(PortmasterMapSnapshot::radius),
 		Codec.INT.optionalFieldOf("terrain_radius", 128).forGetter(PortmasterMapSnapshot::terrainRadius),
@@ -39,7 +41,7 @@ public record PortmasterMapSnapshot(
 	}
 
 	public static PortmasterMapSnapshot unavailable(String statusMessage, BlockPos center) {
-		return new PortmasterMapSnapshot(statusMessage, "", "", center, 128, 128, List.of(), List.of());
+		return new PortmasterMapSnapshot(statusMessage, "", "", false, center, 128, 128, List.of(), List.of());
 	}
 
 	public boolean available() {

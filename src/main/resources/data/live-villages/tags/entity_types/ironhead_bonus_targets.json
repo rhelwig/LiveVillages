@@ -1,0 +1,19 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:armadillo",
+    "minecraft:drowned",
+    "minecraft:hoglin",
+    "minecraft:husk",
+    "minecraft:iron_golem",
+    "minecraft:piglin_brute",
+    "minecraft:ravager",
+    "minecraft:skeleton",
+    "minecraft:stray",
+    "minecraft:turtle",
+    "minecraft:wither_skeleton",
+    "minecraft:zoglin",
+    "minecraft:zombie",
+    "minecraft:zombified_piglin"
+  ]
+}

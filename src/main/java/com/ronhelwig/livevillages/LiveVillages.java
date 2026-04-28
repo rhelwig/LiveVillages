@@ -9,10 +9,12 @@ import org.slf4j.LoggerFactory;
 import com.ronhelwig.livevillages.command.LiveVillagesDebugCommands;
 import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.content.LiveVillagesItems;
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 import com.ronhelwig.livevillages.network.LiveVillagesNetworking;
 import com.ronhelwig.livevillages.sim.BuildSiteAssistedPlacement;
+import com.ronhelwig.livevillages.sim.FletchingTableInteraction;
 import com.ronhelwig.livevillages.sim.LiveVillagesScheduler;
 import com.ronhelwig.livevillages.sim.VillageAutodetector;
 
@@ -31,12 +33,14 @@ public class LiveVillages implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LiveVillagesGameRules.register();
+		LiveVillagesItems.register();
 		LiveVillagesBlocks.register();
 		LiveVillagesVillagerProfessions.register();
 		LiveVillagesBlockEntities.register();
 		LiveVillagesMenus.register();
 		LiveVillagesNetworking.register();
 		BuildSiteAssistedPlacement.register();
+		FletchingTableInteraction.register();
 		LiveVillagesDebugCommands.register();
 		LiveVillagesScheduler.register();
 		VillageAutodetector.register();

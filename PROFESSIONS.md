@@ -35,7 +35,7 @@ The vanilla profession list is still the starting point. Live Villages should no
 | Cleric | Brewing Stand | Alchemy, healing support, and rare-goods handling | Counted with trade/knowledge labor today |
 | Farmer | Composter | Garden management, crop rotation, seed handling, and soil fertility | Counted with food labor today |
 | Fisherman | Barrel | Fishing, shoreline food supply, and harbor-adjacent production | Counted with food labor today |
-| Fletcher | Fletching Table | Arrow supply, ranged-support goods, and wood byproducts | Loaded work now crafts arrows for town stock, provides ranged defense around the settlement, and anchors a two-bed hut build |
+| Fletcher | Fletching Table | Arrow supply, special ammunition, ranged-support goods, and wood byproducts | Loaded work now crafts arrows for town stock, provides ranged defense around the settlement, and anchors a two-bed hut build |
 | Leatherworker | Cauldron | Hides, utility gear, and transport-adjacent goods | Not yet grouped beyond vanilla behavior |
 | Librarian | Lectern | Books, records, and early knowledge work | Counted with trade/knowledge labor today |
 | Mason | Stonecutter | Stone shaping, masonry, shared construction labor, and structural repair | Counted with construction labor today |
@@ -131,9 +131,10 @@ These roles already exist in vanilla and should be expanded before adding unnece
 ### Fletcher
 
 - Workstation: `Fletching Table`
-- Loaded-world behavior: crafts arrow supply from stocked `stick`, `flint`, and `feather`, supports ranged defense with skeleton-strength bow fire against visible nearby threats, and carries a bow with profession-supplied unlimited arrows
-- Settlement behavior: turns wood, flint, and feathers into ranged gear and ammunition support
+- Loaded-world behavior: crafts arrow supply from stocked `stick`, `feather`, and arrowhead materials, supports ranged defense with skeleton-strength bow fire against visible nearby threats, and carries a bow with profession-supplied unlimited arrows
+- Settlement behavior: turns wood, feathers, and arrowhead materials into ranged gear and ammunition support; ordinary villages should prefer efficient `Copperhead Arrow` output, with `Ironhead Arrow` production gated behind real iron surplus or heightened defense demand
 - Housing/workstation note: a placed `Fletching Table` should anchor a `Fletcher's Hut` with `2` beds and can support up to `2` Fletchers in the same settlement
+- Player-use note: the `Fletching Table` should become a real arrow workstation for the player, with higher-yield batch recipes and a separate material-arrow family such as `Copperhead Arrow`, `Ironhead Arrow`, and `Diamondhead Arrow`; final item naming should avoid collision with vanilla potion `Tipped Arrow` terminology
 
 ### Leatherworker
 

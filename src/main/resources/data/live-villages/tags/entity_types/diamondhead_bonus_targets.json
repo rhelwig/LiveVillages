@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:blaze",
+    "minecraft:cave_spider",
+    "minecraft:creeper",
+    "minecraft:endermite",
+    "minecraft:phantom",
+    "minecraft:silverfish",
+    "minecraft:slime",
+    "minecraft:spider"
+  ]
+}

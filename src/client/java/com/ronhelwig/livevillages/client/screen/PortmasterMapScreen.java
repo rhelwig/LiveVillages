@@ -23,6 +23,7 @@ public class PortmasterMapScreen extends Screen {
 	private static final int LEGEND_WIDTH = 104;
 	private static final int COMPASS_SIZE = 26;
 	private static final int PADDING = 10;
+	private static final Component NO_CARTOGRAPHER_HINT = Component.literal("Hire a cartographer to expand the map.");
 	private static final String MARKER_LOCAL_PORT = "local_port";
 	private static final String MARKER_KNOWN_PORT = "known_port";
 	private static final String MARKER_KNOWN_SETTLEMENT = "known_settlement";
@@ -94,6 +95,7 @@ public class PortmasterMapScreen extends Screen {
 		drawCompassRose(graphics, font, compassLeft, compassTop);
 		drawLegend(graphics, font, legendLeft, legendTop);
 		drawHoveredLabel(graphics, font, mapLeft, mapTop, mouseX, mouseY);
+		drawFooterHint(graphics, font, left, top, panelWidth, panelHeight);
 	}
 
 	@Override
@@ -237,6 +239,17 @@ public class PortmasterMapScreen extends Screen {
 		graphics.fill(x, y + 2, x + 8, y + 8, color);
 		graphics.text(font, label, x + 12, y, 0xFFE6D9C0, false);
 		return y + 10;
+	}
+
+	private void drawFooterHint(GuiGraphicsExtractor graphics, Font font, int left, int top, int panelWidth, int panelHeight) {
+		if (!snapshot.available() || snapshot.hasCartographer()) {
+			return;
+		}
+
+		int textWidth = font.width(NO_CARTOGRAPHER_HINT);
+		int textX = left + (panelWidth - textWidth) / 2;
+		int textY = top + panelHeight - PADDING - 2;
+		graphics.text(font, NO_CARTOGRAPHER_HINT, textX, textY, 0xFFCFB98E, false);
 	}
 
 	private void drawHoveredLabel(GuiGraphicsExtractor graphics, Font font, int mapLeft, int mapTop, int mouseX, int mouseY) {

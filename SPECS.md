@@ -622,6 +622,7 @@ Additional shared or planned workstations and civic structures include:
 - `Carpenter` is the wood-focused member of the broader settlement construction category, while `Mason` handles stone-heavy work
 - The `Carpenter` should prefer the bed in the workshop house, should get first claim on it over other villagers, and should be able to evict another villager from that bed when reclaiming it; only a player should be able to force the `Carpenter` out
 - The `Carpenter's Bench` should act like a wood-specialized optimized crafting station, similar in spirit to the `Stonecutter`
+- The `Carpenter's Bench` should eventually offer at least a modest efficiency edge over ordinary manual crafting on common wood outputs, so using the bench is materially beneficial instead of only faster to navigate.
 - The `Carpenter's Bench` should cover recipes where wood is the dominant material, such as logs to planks, planks to stairs or slabs, fences, doors, trapdoors, signs, composters, and similar wood-heavy conversions
 - Loaded Carpenters should turn excess village log stock into useful reserves such as planks, slabs, stairs, and sticks while leaving enough logs for direct construction and upkeep.
 - Mixed recipes should be allowed only when wood is still clearly the primary material rather than turning the bench into a universal crafting-table replacement
@@ -703,13 +704,32 @@ Additional shared or planned workstations and civic structures include:
 - `Beekeepers` wear mostly white protective suits and carry shears when available; their task loadout should also account for glass bottles and flowers.
 - `Fletchers` carry bows with profession-supplied unlimited arrows.
 - Loaded `Fletchers` should treat nearby hostile mobs as a village-defense priority, firing skeleton-strength bow shots while hostiles are inside the settlement.
-- Loaded `Fletchers` should use stocked `stick`, `flint`, and `feather` supplies at a `Fletching Table` to convert them into town `arrow` stock when no immediate defense target is present.
+- Loaded `Fletchers` should use stocked `stick`, `feather`, and arrowhead materials at a `Fletching Table` to convert them into town `arrow` stock when no immediate defense target is present.
 - A placed vanilla `Fletching Table` in a settlement should start a `Fletcher's Hut` build site when terrain allows, using cobblestone flooring, plank siding, and `2` beds.
 - Each settlement `Fletching Table` can support up to `2` Fletchers assigned to that workstation.
 - `Fletchers` should also contribute a smaller abstract security benefit than a dedicated `Guard`, so having one improves the settlement security rating even before the loaded-world combat loop is perfect.
 - `Leatherworkers` should wear leather armor and slowly distribute spare leather breastplates when stock allows.
 - `Weaponsmiths` and `Armorers` should equip the best gear available to their role and then upgrade other villagers over time.
 - `Guards` should be first priority for sword, breastplate, shield, and similar combat upgrades; `Roadwrights` should be the next priority after guards.
+
+### Fletching Table Use
+
+- The vanilla `Fletching Table` should become a real player-use workstation in Live Villages rather than a decorative placeholder.
+- The station should be the arrow-specialist equivalent of a `Stonecutter`: better throughput for ordinary ammunition and access to special arrow variants that are not available from the normal crafting table.
+- The vanilla crafting-table `flint` arrow recipe may remain for compatibility, but `Fletching Table` recipes should be materially more efficient so players have a reason to use the station.
+- The `Fletching Table` should also craft ordinary vanilla `Arrow` batches, not only the new material-arrow family, and the workstation version should clearly outperform the ordinary crafting-table recipe.
+- Since vanilla `Copper Nugget` exists in the target game version, the ordinary metal-arrow recipe family should use vanilla `copper nugget` instead of `flint` at the `Fletching Table`.
+- First-pass `Fletching Table` recipes should be batch recipes rather than shaped `3x3` crafting-grid recipes. Initial tuning target:
+  - `Arrow` batch: `1 stick`, `1 feather`, `1 flint` -> `8` arrows
+  - `Copperhead Arrow` batch: `1 stick`, `1 feather`, `1 copper nugget` -> `8` arrows
+  - `Ironhead Arrow` batch: `1 stick`, `1 feather`, `1 iron nugget` -> `8` arrows
+  - `Diamondhead Arrow` batch: `1 stick`, `1 feather`, `1 diamond` -> `4` arrows
+- Final item names should avoid colliding with vanilla potion `Tipped Arrow` terminology. `Copperhead Arrow`, `Ironhead Arrow`, and `Diamondhead Arrow` are acceptable working names until a naming pass decides otherwise.
+- `Copperhead Arrow` is the efficient general-purpose baseline and should be the default arrow stock a normal settlement `Fletcher` prefers to produce.
+- `Ironhead Arrow` should perform better against armored targets and naturally tough-skinned or thick-hided mobs. First-pass implementation should use partial armor bypass or a damage bonus keyed from explicit entity tags rather than a vague hardcoded mob list.
+- `Diamondhead Arrow` should deal substantially more raw damage to unarmored targets, but should not also be the best armor-piercing choice. It should be the premium flesh-damage arrow, not a universal upgrade in every combat case.
+- First-pass special arrows should be a separate material-arrow family from vanilla potion arrows. They should not also carry potion effects unless a later design explicitly adds combination recipes.
+- Settlement production should follow the same recipe family the player uses. Ordinary villages should prefer `Copperhead Arrow` output for stock, while `Ironhead Arrow` production should require actual iron surplus or elevated defense demand; `Diamondhead Arrow` production can remain player-crafted only in the first pass unless later economy rules justify automated use.
 
 ### Productivity Rules
 

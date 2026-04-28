@@ -196,6 +196,7 @@ public final class LiveVillagesNetworking {
 			"",
 			homeSettlement.name(),
 			buildSurveyTimeLabel(level),
+			hasCartographer,
 			portmasterAnchorPos.immutable(),
 			radius,
 			terrainRadius,
