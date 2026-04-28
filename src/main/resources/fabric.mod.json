@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "live-villages",
+	"version": "${version}",
+	"name": "Live Villages",
+	"description": "This mod makes villages, harbors, and hostile outposts behave like self-directed settlements with their own needs, plans, and trade networks. The player should influence those systems by building infrastructure and changing incentives, not by micromanaging every villager action.",
+	"authors": [
+		"Ron Helwig"
+	],
+	"contact": {
+		"homepage": "https://ronhelwig.com/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/live-villages/icon.png",
+	"environment": "*",
+	"mixins": [
+		"live-villages.mixins.json"
+	],
+	"entrypoints": {
+		"main": [
+			"com.ronhelwig.livevillages.LiveVillages"
+		],
+		"client": [
+			"com.ronhelwig.livevillages.client.LiveVillagesClient"
+		],
+		"fabric-datagen": [
+			"com.ronhelwig.livevillages.client.LiveVillagesDataGenerator"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.6",
+		"minecraft": "~26.1.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

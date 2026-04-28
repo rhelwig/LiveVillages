@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "live-villages:block/trade_board"
+    },
+    "facing=east": {
+      "model": "live-villages:block/trade_board",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "live-villages:block/trade_board",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "live-villages:block/trade_board",
+      "y": 270
+    }
+  }
+}

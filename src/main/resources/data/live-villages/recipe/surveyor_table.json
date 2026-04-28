@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "#minecraft:planks",
+    "S": "minecraft:stone_shovel",
+    "T": "minecraft:crafting_table",
+    "X": "minecraft:stick"
+  },
+  "pattern": [
+    "###",
+    "XTX",
+    "XSX"
+  ],
+  "result": {
+    "id": "live-villages:surveyor_table"
+  }
+}

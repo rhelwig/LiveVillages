@@ -1,0 +1,49 @@
+{
+  "variants": {
+    "facing=north,part=lower": {
+      "model": "live-villages:block/milepost_lower"
+    },
+    "facing=east,part=lower": {
+      "model": "live-villages:block/milepost_lower",
+      "y": 90
+    },
+    "facing=south,part=lower": {
+      "model": "live-villages:block/milepost_lower",
+      "y": 180
+    },
+    "facing=west,part=lower": {
+      "model": "live-villages:block/milepost_lower",
+      "y": 270
+    },
+    "facing=north,part=middle": {
+      "model": "live-villages:block/milepost_middle"
+    },
+    "facing=east,part=middle": {
+      "model": "live-villages:block/milepost_middle",
+      "y": 90
+    },
+    "facing=south,part=middle": {
+      "model": "live-villages:block/milepost_middle",
+      "y": 180
+    },
+    "facing=west,part=middle": {
+      "model": "live-villages:block/milepost_middle",
+      "y": 270
+    },
+    "facing=north,part=upper": {
+      "model": "live-villages:block/milepost_upper"
+    },
+    "facing=east,part=upper": {
+      "model": "live-villages:block/milepost_upper",
+      "y": 90
+    },
+    "facing=south,part=upper": {
+      "model": "live-villages:block/milepost_upper",
+      "y": 180
+    },
+    "facing=west,part=upper": {
+      "model": "live-villages:block/milepost_upper",
+      "y": 270
+    }
+  }
+}

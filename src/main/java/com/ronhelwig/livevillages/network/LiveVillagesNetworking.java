@@ -1,0 +1,959 @@
+package com.ronhelwig.livevillages.network;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Comparator;
+
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.Heightmap;
+
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.menu.TradeBoardLogic;
+import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
+import com.ronhelwig.livevillages.LiveVillagesGameRules;
+import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.RouteState;
+import com.ronhelwig.livevillages.sim.SettlementBuildBlockState;
+import com.ronhelwig.livevillages.sim.SettlementBuildBlockStatus;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
+import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
+import com.ronhelwig.livevillages.sim.SettlementConstruction;
+import com.ronhelwig.livevillages.sim.SettlementConstructionDelivery;
+import com.ronhelwig.livevillages.sim.SettlementKind;
+import com.ronhelwig.livevillages.sim.SettlementLoadedObservation;
+import com.ronhelwig.livevillages.sim.SettlementRoadwrightWork;
+import com.ronhelwig.livevillages.sim.SettlementState;
+import com.ronhelwig.livevillages.sim.SettlementVillagers;
+
+public final class LiveVillagesNetworking {
+	private static final double OVERLAY_MAX_DISTANCE_BLOCKS = 192.0D;
+	private static final double BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS = 192.0D;
+	private static final int SURVEYOR_MAP_RADIUS_BLOCKS = 96;
+	private static final int OVERLAY_STOCK_ROWS = 12;
+	private static final int OVERLAY_ROUTE_ROWS = 4;
+	private static final int OVERLAY_PROJECT_ROWS = 4;
+	private static final long BUILD_SITE_PREVIEW_ACTIVE_TICKS = 40L;
+	private static final long TICKS_PER_DAY = 24_000L;
+	private static final int PORTMASTER_MAP_MIN_RADIUS_BLOCKS = 128;
+	private static final int PORTMASTER_MAP_MAX_RADIUS_BLOCKS = 1_024;
+	private static final int PORTMASTER_MAP_TERRAIN_RADIUS_WITHOUT_CARTOGRAPHER = 320;
+	private static final int PORTMASTER_MAP_MAX_KNOWN_PORT_DISTANCE_BLOCKS = 2_048;
+	private static final int PORTMASTER_MAP_TERRAIN_GRID_SIZE = 184;
+	private static final String MAP_MARKER_LOCAL_PORT = "local_port";
+	private static final String MAP_MARKER_KNOWN_PORT = "known_port";
+	private static final String MAP_MARKER_KNOWN_SETTLEMENT = "known_settlement";
+	private static final Map<UUID, Long> ACTIVE_BUILD_SITE_PREVIEWS = new ConcurrentHashMap<>();
+
+	private LiveVillagesNetworking() {
+	}
+
+	public static void register() {
+		PayloadTypeRegistry.serverboundPlay().register(SettlementOverlayRequestPayload.TYPE, SettlementOverlayRequestPayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SettlementOverlayStatePayload.TYPE, SettlementOverlayStatePayload.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(BuildSitePreviewRequestPayload.TYPE, BuildSitePreviewRequestPayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(BuildSitePreviewStatePayload.TYPE, BuildSitePreviewStatePayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(TradeBoardRefreshPayload.TYPE, TradeBoardRefreshPayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SurveyorMapStatePayload.TYPE, SurveyorMapStatePayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(PortmasterMapStatePayload.TYPE, PortmasterMapStatePayload.STREAM_CODEC);
+
+		ServerPlayNetworking.registerGlobalReceiver(SettlementOverlayRequestPayload.TYPE, (payload, context) -> {
+			SettlementOverlaySnapshot snapshot = buildNearestSettlementSnapshot(context.player());
+			ServerPlayNetworking.send(context.player(), new SettlementOverlayStatePayload(snapshot));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(BuildSitePreviewRequestPayload.TYPE, (payload, context) -> {
+			if (!payload.active()) {
+				ACTIVE_BUILD_SITE_PREVIEWS.remove(context.player().getUUID());
+				return;
+			}
+
+			ACTIVE_BUILD_SITE_PREVIEWS.put(context.player().getUUID(), (long) context.player().level().getServer().getTickCount());
+			BuildSitePreviewSnapshot snapshot = buildBuildSitePreviewSnapshot(context.player(), payload.targetPos());
+			ServerPlayNetworking.send(context.player(), new BuildSitePreviewStatePayload(snapshot));
+		});
+	}
+
+	public static boolean isBuildSitePreviewActive(ServerPlayer player) {
+		Long lastPreviewTick = ACTIVE_BUILD_SITE_PREVIEWS.get(player.getUUID());
+
+		if (lastPreviewTick == null) {
+			return false;
+		}
+
+		return player.level().getServer().getTickCount() - lastPreviewTick <= BUILD_SITE_PREVIEW_ACTIVE_TICKS;
+	}
+
+	public static void sendSurveyorMap(ServerPlayer player, BlockPos surveyorTablePos) {
+		ServerPlayNetworking.send(player, new SurveyorMapStatePayload(buildSurveyorMapSnapshot(player, surveyorTablePos)));
+	}
+
+	public static void sendPortmasterMap(ServerPlayer player, BlockPos portmasterAnchorPos) {
+		ServerPlayNetworking.send(player, new PortmasterMapStatePayload(buildPortmasterMapSnapshot(player, portmasterAnchorPos)));
+	}
+
+	private static SurveyorMapSnapshot buildSurveyorMapSnapshot(ServerPlayer player, BlockPos surveyorTablePos) {
+		ServerLevel level = (ServerLevel) player.level();
+		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, surveyorTablePos);
+
+		if (settlement.isEmpty()) {
+			return SurveyorMapSnapshot.unavailable("No settlement found near this Surveyor's Table.", surveyorTablePos);
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		savedData.restoreSettlementMapMemory(level, settlement.get());
+		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.get().id());
+		int boundaryRadius = SettlementVillagers.settlementRadiusBlocks(settlement.get());
+		int mapRadius = Math.max(SURVEYOR_MAP_RADIUS_BLOCKS, boundaryRadius);
+		boolean fogOfWarEnabled = LiveVillagesGameRules.surveyorMapFogEnabled(level);
+		List<SettlementState> settlementsInDimension = savedData.getSettlements().stream()
+			.filter(candidate -> candidate.dimension().equals(settlement.get().dimension()))
+			.toList();
+		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.get().id());
+		SettlementRoadwrightWork.SurveyorMapForecast roadworkForecast = SettlementRoadwrightWork.surveyorMapForecast(
+			level,
+			settlement.get(),
+			buildSites,
+			settlementsInDimension,
+			routes
+		);
+		SettlementLoadedObservation.SurveyorObservation observation = SettlementLoadedObservation.captureSurveyorMapObservation(
+			level,
+			settlement.get(),
+			buildSites,
+			mapRadius,
+			fogOfWarEnabled
+		);
+		savedData.storeSurveyorObservation(settlement.get().id(), observation);
+		savedData.storeRoadworkPlans(
+			settlement.get().id(),
+			SettlementRoadwrightWork.persistentPlansForSettlement(level, settlement.get(), level.getServer().getTickCount())
+		);
+		return new SurveyorMapSnapshot(
+			"",
+			settlement.get().name(),
+			buildSurveyTimeLabel(level),
+			settlement.get().center(),
+			mapRadius,
+			boundaryRadius,
+			observation.roads().stream()
+				.map(road -> new SurveyorMapRoadView(road.pos(), road.quality()))
+				.toList(),
+			observation.points().stream()
+				.map(point -> new SurveyorMapPointView(point.pos(), point.kind(), point.label()))
+				.toList(),
+			SettlementVillagers.nearbyRoadwrights(level, settlement.get()).stream()
+				.map(villager -> villager.blockPosition().immutable())
+				.toList(),
+			roadworkForecast.routeTraceBlocks(),
+			roadworkForecast.plannedWorkBlocks(),
+			fogOfWarEnabled,
+			observation.observedAreas()
+		);
+	}
+
+	private static PortmasterMapSnapshot buildPortmasterMapSnapshot(ServerPlayer player, BlockPos portmasterAnchorPos) {
+		ServerLevel level = (ServerLevel) player.level();
+		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, portmasterAnchorPos);
+
+		if (settlement.isEmpty()) {
+			return PortmasterMapSnapshot.unavailable("No settlement found near this Portmaster's Anchor.", portmasterAnchorPos);
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		SettlementState homeSettlement = settlement.get();
+		boolean hasCartographer = SettlementVillagers.nearbyProfessionPopulation(level, homeSettlement).getOrDefault("cartographer", 0) > 0;
+		List<PortmasterMapPortView> ports = collectPortmasterMapPorts(level, savedData, homeSettlement, portmasterAnchorPos, hasCartographer);
+		int farthestPortDistance = ports.stream()
+			.mapToInt(PortmasterMapPortView::distanceBlocks)
+			.max()
+			.orElse(0);
+		int radius = roundUpToStep(clamp(
+			Math.max(PORTMASTER_MAP_MIN_RADIUS_BLOCKS, farthestPortDistance + 32),
+			PORTMASTER_MAP_MIN_RADIUS_BLOCKS,
+			PORTMASTER_MAP_MAX_RADIUS_BLOCKS
+		), 32);
+		int terrainRadius = hasCartographer ? radius : Math.min(radius, PORTMASTER_MAP_TERRAIN_RADIUS_WITHOUT_CARTOGRAPHER);
+		List<String> terrainRows = buildPortmasterTerrainRows(level, savedData, portmasterAnchorPos, terrainRadius, hasCartographer);
+		return new PortmasterMapSnapshot(
+			"",
+			homeSettlement.name(),
+			buildSurveyTimeLabel(level),
+			portmasterAnchorPos.immutable(),
+			radius,
+			terrainRadius,
+			terrainRows,
+			ports
+		);
+	}
+
+	private static List<PortmasterMapPortView> collectPortmasterMapPorts(
+		ServerLevel level,
+		LiveVillagesSavedData savedData,
+		SettlementState homeSettlement,
+		BlockPos anchorPos,
+		boolean hasCartographer
+	) {
+		return savedData.getSettlements().stream()
+			.filter(candidate -> candidate.dimension().equals(homeSettlement.dimension()))
+			.filter(candidate -> candidate.kind() != SettlementKind.OUTPOST)
+			.map(candidate -> buildKnownPortView(level, homeSettlement, candidate, anchorPos, hasCartographer))
+			.flatMap(Optional::stream)
+			.sorted(Comparator.<PortmasterMapPortView>comparingInt(
+					point -> portmasterMarkerPriority(point.kind())
+				)
+				.thenComparingInt(PortmasterMapPortView::distanceBlocks)
+				.thenComparing(PortmasterMapPortView::name))
+			.toList();
+	}
+
+	private static Optional<PortmasterMapPortView> buildKnownPortView(
+		ServerLevel level,
+		SettlementState homeSettlement,
+		SettlementState candidate,
+		BlockPos homeAnchorPos,
+		boolean hasCartographer
+	) {
+		boolean local = candidate.id().equals(homeSettlement.id());
+		int distanceBlocks = local
+			? 0
+			: (int) Math.round(Math.sqrt(homeSettlement.center().distSqr(candidate.center())));
+
+		if (!local && distanceBlocks > PORTMASTER_MAP_MAX_KNOWN_PORT_DISTANCE_BLOCKS) {
+			return Optional.empty();
+		}
+
+		SettlementConstruction.InfrastructureSurvey survey = SettlementConstruction.survey(level, candidate);
+		List<BlockPos> dockOrigins = survey.docks() > 0 ? SettlementConstruction.findDockOrigins(level, candidate) : List.of();
+		List<BlockPos> anchorPositions = dockOrigins.isEmpty() ? SettlementConstruction.findPlacedPortmasterAnchors(level, candidate) : List.of();
+		boolean hasPort = local || !dockOrigins.isEmpty() || !anchorPositions.isEmpty();
+
+		if (!hasPort && !hasCartographer) {
+			return Optional.empty();
+		}
+
+		BlockPos representativePos = local
+			? homeAnchorPos.immutable()
+			: hasPort
+				? dockOrigins.stream().findFirst()
+				.or(() -> anchorPositions.stream().findFirst())
+				.orElse(candidate.center())
+				.immutable()
+				: candidate.center().immutable();
+		int labelDistanceBlocks = local ? 0 : (int) Math.round(Math.sqrt(homeAnchorPos.distSqr(representativePos)));
+		String kind = local
+			? MAP_MARKER_LOCAL_PORT
+			: hasPort
+				? MAP_MARKER_KNOWN_PORT
+				: MAP_MARKER_KNOWN_SETTLEMENT;
+		return Optional.of(new PortmasterMapPortView(representativePos, candidate.name(), labelDistanceBlocks, kind));
+	}
+
+	private static int portmasterMarkerPriority(String kind) {
+		return switch (kind) {
+			case MAP_MARKER_LOCAL_PORT -> 0;
+			case MAP_MARKER_KNOWN_PORT -> 1;
+			default -> 2;
+		};
+	}
+
+	private static List<String> buildPortmasterTerrainRows(
+		ServerLevel level,
+		LiveVillagesSavedData savedData,
+		BlockPos center,
+		int radius,
+		boolean hasCartographer
+	) {
+		List<String> rows = new java.util.ArrayList<>(PORTMASTER_MAP_TERRAIN_GRID_SIZE);
+
+		for (int gridZ = 0; gridZ < PORTMASTER_MAP_TERRAIN_GRID_SIZE; gridZ++) {
+			StringBuilder row = new StringBuilder(PORTMASTER_MAP_TERRAIN_GRID_SIZE);
+
+			for (int gridX = 0; gridX < PORTMASTER_MAP_TERRAIN_GRID_SIZE; gridX++) {
+				int worldX = sampleWorldCoordinate(center.getX(), radius, gridX, PORTMASTER_MAP_TERRAIN_GRID_SIZE);
+				int worldZ = sampleWorldCoordinate(center.getZ(), radius, gridZ, PORTMASTER_MAP_TERRAIN_GRID_SIZE);
+				row.append(samplePortmasterTerrain(level, savedData, worldX, worldZ, hasCartographer));
+			}
+
+			rows.add(row.toString());
+		}
+
+		return rows;
+	}
+
+	private static char samplePortmasterTerrain(
+		ServerLevel level,
+		LiveVillagesSavedData savedData,
+		int worldX,
+		int worldZ,
+		boolean hasCartographer
+	) {
+		BlockPos columnPos = new BlockPos(worldX, level.getSeaLevel(), worldZ);
+
+		if (!level.hasChunkAt(columnPos)) {
+			char sharedTerrain = savedData.sharedTerrainAt(level.dimension(), worldX, worldZ);
+			if (sharedTerrain != 'U') {
+				return sharedTerrain;
+			}
+
+			return hasCartographer ? fallbackBiomeTerrain(level, worldX, worldZ) : 'U';
+		}
+
+		int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ) - 1;
+
+		if (surfaceY < level.getMinY() || surfaceY > level.getMaxY() - 1) {
+			return hasCartographer ? fallbackBiomeTerrain(level, worldX, worldZ) : 'U';
+		}
+
+		BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos(worldX, surfaceY, worldZ);
+
+		for (int depth = 0; depth < 5 && samplePos.getY() >= level.getMinY(); depth++) {
+			if (level.getBlockState(samplePos).is(Blocks.WATER)) {
+				return 'W';
+			}
+
+			samplePos.move(0, -1, 0);
+		}
+
+		return 'L';
+	}
+
+	private static char fallbackBiomeTerrain(ServerLevel level, int worldX, int worldZ) {
+		Holder<Biome> biome = level.getUncachedNoiseBiome(worldX >> 2, level.getSeaLevel() >> 2, worldZ >> 2);
+		return biome.is(BiomeTags.IS_OCEAN) || biome.is(BiomeTags.IS_RIVER) ? 'W' : 'L';
+	}
+
+	private static int sampleWorldCoordinate(int center, int radius, int gridIndex, int gridSize) {
+		double normalized = ((gridIndex + 0.5D) / gridSize) - 0.5D;
+		return center + (int) Math.round(normalized * radius * 2.0D);
+	}
+
+	private static String buildSurveyTimeLabel(ServerLevel level) {
+		long worldTime = level.getOverworldClockTime();
+		long day = Math.floorDiv(worldTime, TICKS_PER_DAY) + 1L;
+		long dayTime = Math.floorMod(worldTime, TICKS_PER_DAY);
+		return "Day " + day + ", " + approximateTimeLabel(dayTime);
+	}
+
+	private static String approximateTimeLabel(long dayTime) {
+		if (dayTime < 1_500L) {
+			return "Sunrise";
+		}
+
+		if (dayTime < 5_000L) {
+			return "Morning";
+		}
+
+		if (dayTime < 8_000L) {
+			return "Noon";
+		}
+
+		if (dayTime < 11_500L) {
+			return "Afternoon";
+		}
+
+		if (dayTime < 13_000L) {
+			return "Sunset";
+		}
+
+		if (dayTime < 16_000L) {
+			return "Dusk";
+		}
+
+		if (dayTime < 22_000L) {
+			return "Night";
+		}
+
+		return "Pre-dawn";
+	}
+
+	private static int clamp(int value, int min, int max) {
+		return Math.max(min, Math.min(max, value));
+	}
+
+	private static int roundUpToStep(int value, int step) {
+		if (step <= 0) {
+			return value;
+		}
+
+		return ((value + step - 1) / step) * step;
+	}
+
+	private static SettlementOverlaySnapshot buildNearestSettlementSnapshot(ServerPlayer player) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
+		var nearestSettlement = savedData.findNearestSettlement(
+			player.level().dimension(),
+			player.blockPosition(),
+			OVERLAY_MAX_DISTANCE_BLOCKS,
+			settlement -> true
+		);
+
+		if (nearestSettlement.isEmpty()) {
+			return SettlementOverlaySnapshot.unavailable("No nearby settlement.");
+		}
+
+		SettlementState settlement = nearestSettlement.get();
+		savedData.restoreSettlementMapMemory((ServerLevel) player.level(), settlement);
+		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
+		TradeBoardSettlementView view = TradeBoardLogic.createSettlementView(
+			settlement,
+			routes,
+			settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),
+			OVERLAY_STOCK_ROWS,
+			OVERLAY_ROUTE_ROWS,
+			OVERLAY_PROJECT_ROWS,
+			SettlementVillagers.nearbyProfessionPopulation((ServerLevel) player.level(), settlement),
+			TradeBoardLogic.constructionTradeDemand(savedData.getBuildSitesForSettlement(settlement.id()))
+		);
+		int distanceBlocks = (int) Math.round(Math.sqrt(settlement.center().distSqr(player.blockPosition())));
+		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
+		List<SettlementConstructionDelivery> deliveries = savedData.getConstructionDeliveries().stream()
+			.filter(delivery -> delivery.settlementId().equals(settlement.id()))
+			.toList();
+		Set<String> deliveryVillagers = deliveries.stream()
+			.map(SettlementConstructionDelivery::villagerId)
+			.collect(java.util.stream.Collectors.toSet());
+		SettlementOverlayConstructionView construction = createConstructionView((ServerLevel) player.level(), settlement, buildSites, deliveries);
+		Map<String, SettlementRoadwrightWork.RoadworkDebugPlan> roadworkDebugPlans = SettlementRoadwrightWork.loadedRoadworkDebugPlans(
+			(ServerLevel) player.level(),
+			settlement,
+			buildSites,
+			savedData.getSettlements().stream()
+				.filter(candidate -> candidate.dimension().equals(settlement.dimension()))
+				.toList(),
+			savedData.getRoutesForSettlement(settlement.id())
+		);
+		Map<String, String> roadworkTaskKeysByVillager = roadworkDebugPlans.entrySet().stream()
+			.collect(java.util.stream.Collectors.toMap(
+				Map.Entry::getKey,
+				entry -> entry.getValue().taskKey()
+			));
+		Map<String, SettlementVillagers.ProfessionDebugInfo> professionDebugByVillager = roadworkDebugPlans.entrySet().stream()
+			.collect(java.util.stream.Collectors.toMap(
+				Map.Entry::getKey,
+				entry -> new SettlementVillagers.ProfessionDebugInfo(
+					roadworkTargetLabel(entry.getValue()),
+					roadworkDetailLabel(entry.getValue())
+				)
+			));
+		List<SettlementOverlayTaskView> tasks = SettlementVillagers.nearbyVillagerTaskPopulation((ServerLevel) player.level(), settlement, deliveryVillagers, roadworkTaskKeysByVillager).stream()
+			.map(taskCount -> new SettlementOverlayTaskView(taskLabel(taskCount.roleKey(), taskCount.taskKey()), taskCount.count()))
+			.toList();
+		List<SettlementOverlayWorkerView> workers = SettlementVillagers.nearbyVillagerDebugViews(
+			(ServerLevel) player.level(),
+			settlement,
+			deliveryVillagers,
+			roadworkTaskKeysByVillager,
+			professionDebugByVillager
+		).stream()
+			.map(worker -> new SettlementOverlayWorkerView(worker.workerLabel(), worker.taskLabel(), worker.targetLabel(), worker.detailLabel()))
+			.toList();
+		return SettlementOverlaySnapshot.available(view, distanceBlocks, construction, tasks, workers);
+	}
+
+	private static SettlementOverlayConstructionView createConstructionView(
+		ServerLevel level,
+		SettlementState settlement,
+		List<SettlementBuildSite> buildSites,
+		List<SettlementConstructionDelivery> deliveries
+	) {
+		int activeBuildSites = 0;
+		int pendingBlocks = 0;
+		int missingMaterialBlocks = 0;
+		int blockedBlocks = 0;
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			activeBuildSites++;
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (block.status() == SettlementBuildBlockStatus.PENDING) {
+					pendingBlocks++;
+				} else if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL) {
+					missingMaterialBlocks++;
+				} else if (block.status() == SettlementBuildBlockStatus.BLOCKED) {
+					blockedBlocks++;
+				}
+			}
+		}
+
+		return new SettlementOverlayConstructionView(
+			activeBuildSites,
+			SettlementVillagers.nearbyConstructionWorkers(level, settlement).size(),
+			pendingBlocks,
+			missingMaterialBlocks,
+			blockedBlocks,
+			deliveries.size()
+		);
+	}
+
+	private static String taskLabel(String roleKey, String taskKey) {
+		return humanizeKey(roleKey) + ": " + SettlementVillagers.taskDescription(taskKey);
+	}
+
+	private static String roadworkTargetLabel(SettlementRoadwrightWork.RoadworkDebugPlan plan) {
+		return "Target: " + humanizeKey(plan.targetKind()) + " @ " + plan.targetPos().getX() + "," + plan.targetPos().getZ();
+	}
+
+	private static String roadworkDetailLabel(SettlementRoadwrightWork.RoadworkDebugPlan plan) {
+		String cacheText = plan.cached() ? "cached" : "fresh";
+		return "Route: " + plan.routeTrace().size() + "b, " + humanizeKey(plan.actionKey().toLowerCase(Locale.ROOT)) + ", " + cacheText;
+	}
+
+	private static BuildSitePreviewSnapshot buildBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
+		Optional<BuildSitePreviewSnapshot> workstationPreview = buildProspectiveWorkstationPreviewSnapshot(player, targetPos);
+
+		if (workstationPreview.isPresent()) {
+			return workstationPreview.get();
+		}
+
+		Optional<BuildSitePreviewSnapshot> infrastructurePreview = buildPlacedInfrastructurePreviewSnapshot(player, targetPos);
+
+		if (infrastructurePreview.isPresent()) {
+			return infrastructurePreview.get();
+		}
+
+		return buildNearestBuildSitePreviewSnapshot(player, targetPos);
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> buildProspectiveWorkstationPreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
+		ServerLevel level = (ServerLevel) player.level();
+		BlockPos placementPos = targetPos.orElse(null);
+		ItemStack previewStack = heldPreviewWorkstationStack(player);
+
+		if (placementPos == null || previewStack.isEmpty()) {
+			return Optional.empty();
+		}
+
+		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, placementPos);
+		if (settlement.isEmpty()) {
+			return Optional.empty();
+		}
+
+		SettlementConstruction.StructurePreview preview = structurePreviewForHeldWorkstation(level, settlement.get(), placementPos, player.getDirection(), previewStack);
+		if (preview == null || preview.blocks().isEmpty()) {
+			return Optional.empty();
+		}
+
+		int distanceBlocks = (int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition())));
+		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			settlement.get().name(),
+			preview.previewId(),
+			preview.previewType(),
+			distanceBlocks,
+			preview.placementValid(),
+			preview.blocks().stream()
+				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
+				.toList()
+			));
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> buildPlacedInfrastructurePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
+		ServerLevel level = (ServerLevel) player.level();
+		Optional<BuildSitePreviewSnapshot> targetedAnchorPreview = targetPos.flatMap(pos -> targetedPortmasterAnchorPreview(player, level, pos));
+
+		if (targetedAnchorPreview.isPresent()) {
+			return targetedAnchorPreview;
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		double maxDistanceSquared = BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS * BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS;
+		PlacedInfrastructurePreviewCandidate bestCandidate = null;
+
+		for (SettlementState settlement : savedData.getSettlements()) {
+			if (!settlement.dimension().equals(level.dimension())) {
+				continue;
+			}
+
+			for (BlockPos anchorPos : SettlementConstruction.findPlacedPortmasterAnchors(level, settlement)) {
+				if (savedData.findBuildSite(settlement.id(), SettlementBuildSiteType.DOCK, anchorPos).isPresent()) {
+					continue;
+				}
+
+				double distanceSquared = anchorPos.distSqr(player.blockPosition());
+
+				if (distanceSquared > maxDistanceSquared) {
+					continue;
+				}
+
+				SettlementConstruction.StructurePreview preview = SettlementConstruction.previewDockAtPortmasterAnchor(
+					level,
+					settlement.id(),
+					anchorPos,
+					SettlementConstruction.portmasterAnchorFacingFor(level, anchorPos)
+				);
+				if (preview.blocks().isEmpty()) {
+					continue;
+				}
+
+				boolean targeted = targetPos.filter(pos -> placedInfrastructureContains(anchorPos, preview, pos)).isPresent();
+				PlacedInfrastructurePreviewCandidate candidate = new PlacedInfrastructurePreviewCandidate(
+					settlement,
+					anchorPos.immutable(),
+					preview,
+					distanceSquared,
+					targeted
+				);
+
+				if (isBetterInfrastructurePreviewCandidate(candidate, bestCandidate)) {
+					bestCandidate = candidate;
+				}
+			}
+		}
+
+		if (bestCandidate == null || (!bestCandidate.targeted() && targetPos.isPresent())) {
+			return Optional.empty();
+		}
+
+		int distanceBlocks = (int) Math.round(Math.sqrt(bestCandidate.distanceSquared()));
+		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			bestCandidate.settlement().name(),
+			bestCandidate.preview().previewId(),
+			bestCandidate.preview().previewType(),
+			distanceBlocks,
+			bestCandidate.preview().placementValid(),
+			bestCandidate.preview().blocks().stream()
+				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
+					.toList()
+			));
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> targetedPortmasterAnchorPreview(ServerPlayer player, ServerLevel level, BlockPos targetPos) {
+		if (level.getBlockState(targetPos).is(LiveVillagesBlocks.PORTMASTER_ANCHOR)) {
+			return portmasterAnchorPreviewAt(player, level, targetPos);
+		}
+
+		for (Direction direction : Direction.values()) {
+			BlockPos neighborPos = targetPos.relative(direction);
+			if (level.getBlockState(neighborPos).is(LiveVillagesBlocks.PORTMASTER_ANCHOR)) {
+				Optional<BuildSitePreviewSnapshot> preview = portmasterAnchorPreviewAt(player, level, neighborPos);
+				if (preview.isPresent()) {
+					return preview;
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> portmasterAnchorPreviewAt(ServerPlayer player, ServerLevel level, BlockPos anchorPos) {
+		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, anchorPos);
+		if (settlement.isEmpty()) {
+			return Optional.empty();
+		}
+
+		if (LiveVillagesSavedData.get(level.getServer()).findBuildSite(settlement.get().id(), SettlementBuildSiteType.DOCK, anchorPos).isPresent()) {
+			return Optional.empty();
+		}
+
+		SettlementConstruction.StructurePreview preview = SettlementConstruction.previewDockAtPortmasterAnchor(
+			level,
+			settlement.get().id(),
+			anchorPos,
+			SettlementConstruction.portmasterAnchorFacingFor(level, anchorPos)
+		);
+		if (preview.blocks().isEmpty()) {
+			return Optional.empty();
+		}
+
+		int distanceBlocks = (int) Math.round(Math.sqrt(anchorPos.distSqr(player.blockPosition())));
+		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			settlement.get().name(),
+			preview.previewId(),
+			preview.previewType(),
+			distanceBlocks,
+			preview.placementValid(),
+			preview.blocks().stream()
+				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
+					.toList()
+		));
+	}
+
+	private static ItemStack heldPreviewWorkstationStack(ServerPlayer player) {
+		if (isPreviewWorkstationItem(player.getMainHandItem().getItem())) {
+			return player.getMainHandItem();
+		}
+
+		if (isPreviewWorkstationItem(player.getOffhandItem().getItem())) {
+			return player.getOffhandItem();
+		}
+
+		return ItemStack.EMPTY;
+	}
+
+	private static boolean isPreviewWorkstationItem(Item item) {
+		return item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
+			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
+			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
+			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
+			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
+			|| item == Items.CARTOGRAPHY_TABLE
+			|| item == Items.FLETCHING_TABLE;
+	}
+
+	private static SettlementConstruction.StructurePreview structurePreviewForHeldWorkstation(
+		ServerLevel level,
+		SettlementState settlement,
+		BlockPos placementPos,
+		Direction playerFacing,
+		ItemStack stack
+	) {
+		Direction placementFacing = playerFacing.getAxis() == Direction.Axis.Y ? Direction.NORTH : playerFacing.getOpposite();
+		Item item = stack.getItem();
+
+		if (item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM) {
+			return SettlementConstruction.previewCarpenterWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM) {
+			return SettlementConstruction.previewRoadwrightWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.FORESTER_TABLE_ITEM) {
+			return SettlementConstruction.previewForesterWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.TRADE_BOARD_ITEM) {
+			return SettlementConstruction.previewTradingPostAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM) {
+			return SettlementConstruction.previewDockAtPortmasterAnchor(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.CARTOGRAPHY_TABLE) {
+			return SettlementConstruction.previewCartographerHouseAtWorkstation(level, settlement, placementPos);
+		}
+
+		if (item == Items.FLETCHING_TABLE) {
+			return SettlementConstruction.previewFletcherHutAtWorkstation(level, settlement.id(), placementPos, SettlementConstruction.fletcherHutFacingFor(settlement, placementPos));
+		}
+
+		return null;
+	}
+
+	private static BuildSitePreviewSnapshot buildNearestBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
+		double maxDistanceSquared = BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS * BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS;
+		BuildSitePreviewCandidate bestCandidate = null;
+
+		for (SettlementBuildSite buildSite : savedData.getBuildSites()) {
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			Optional<SettlementState> settlement = savedData.getSettlement(buildSite.settlementId());
+			if (settlement.isEmpty() || !settlement.get().dimension().equals(player.level().dimension())) {
+				continue;
+			}
+
+			List<BuildSitePreviewBlockView> previewBlocks = previewBlocks(buildSite);
+			if (previewBlocks.isEmpty()) {
+				continue;
+			}
+
+			double distanceSquared = Math.min(
+				buildSite.origin().distSqr(player.blockPosition()),
+				buildSite.workstationPos().distSqr(player.blockPosition())
+			);
+			if (distanceSquared > maxDistanceSquared) {
+				continue;
+			}
+
+			boolean targeted = targetPos.filter(pos -> buildSiteContains(buildSite, pos)).isPresent();
+			BuildSitePreviewCandidate candidate = new BuildSitePreviewCandidate(
+				buildSite,
+				settlement.get(),
+				previewBlocks,
+				distanceSquared,
+				targeted
+			);
+
+			if (isBetterPreviewCandidate(candidate, bestCandidate)) {
+				bestCandidate = candidate;
+			}
+		}
+
+		if (bestCandidate == null) {
+			return BuildSitePreviewSnapshot.unavailable("No active build site nearby.");
+		}
+
+		int distanceBlocks = (int) Math.round(Math.sqrt(bestCandidate.distanceSquared()));
+		return BuildSitePreviewSnapshot.active(
+			bestCandidate.settlement().name(),
+			bestCandidate.buildSite().id(),
+			buildSiteTypeLabel(bestCandidate.buildSite().blueprintId()),
+			distanceBlocks,
+			bestCandidate.previewBlocks()
+		);
+	}
+
+	private static boolean isBetterPreviewCandidate(BuildSitePreviewCandidate candidate, BuildSitePreviewCandidate bestCandidate) {
+		if (bestCandidate == null) {
+			return true;
+		}
+
+		if (candidate.targeted() != bestCandidate.targeted()) {
+			return candidate.targeted();
+		}
+
+		return candidate.distanceSquared() < bestCandidate.distanceSquared();
+	}
+
+	private static boolean isBetterInfrastructurePreviewCandidate(
+		PlacedInfrastructurePreviewCandidate candidate,
+		PlacedInfrastructurePreviewCandidate bestCandidate
+	) {
+		if (bestCandidate == null) {
+			return true;
+		}
+
+		if (candidate.targeted() != bestCandidate.targeted()) {
+			return candidate.targeted();
+		}
+
+		return candidate.distanceSquared() < bestCandidate.distanceSquared();
+	}
+
+	private static List<BuildSitePreviewBlockView> previewBlocks(SettlementBuildSite buildSite) {
+		return buildSite.blocks().stream()
+			.filter(LiveVillagesNetworking::shouldPreviewBlock)
+			.map(block -> previewBlock(buildSite, block))
+			.flatMap(Optional::stream)
+			.toList();
+	}
+
+	private static Optional<BuildSitePreviewBlockView> previewBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		Optional<BlockPos> pos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+
+		if (pos.isEmpty() || plannedState == null) {
+			return Optional.empty();
+		}
+
+		return Optional.of(new BuildSitePreviewBlockView(
+			pos.get(),
+			block.expectedMaterialKey(),
+			BuiltInRegistries.BLOCK.getKey(plannedState.getBlock()).toString()
+		));
+	}
+
+	private static boolean shouldPreviewBlock(SettlementBuildBlockState block) {
+		return block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED;
+	}
+
+	private static boolean buildSiteContains(SettlementBuildSite buildSite, BlockPos pos) {
+		if (buildSite.workstationPos().equals(pos) || buildSite.origin().equals(pos)) {
+			return true;
+		}
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+			if (blockPos.isPresent() && blockPos.get().equals(pos)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean placedInfrastructureContains(BlockPos anchorPos, SettlementConstruction.StructurePreview preview, BlockPos pos) {
+		if (anchorPos.equals(pos)) {
+			return true;
+		}
+
+		if ("Dock".equals(preview.previewType()) && dockPreviewContains(preview, pos)) {
+			return true;
+		}
+
+		for (SettlementConstruction.StructurePreviewBlock block : preview.blocks()) {
+			if (block.pos().equals(pos)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean dockPreviewContains(SettlementConstruction.StructurePreview preview, BlockPos pos) {
+		for (SettlementConstruction.StructurePreviewBlock block : preview.blocks()) {
+			if (block.pos().getX() == pos.getX() && block.pos().getZ() == pos.getZ()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
+		return switch (type) {
+			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
+			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
+			case DOCK -> "Dock";
+			case FLETCHER_HUT -> "Fletcher's Hut";
+			case FORESTER_WORKSHOP -> "Forester's Workshop";
+			case ROADWRIGHT_WORKSHOP -> "Roadwright's Workshop";
+			case TRADING_POST -> "Trade Post";
+		};
+	}
+
+	private static String humanizeKey(String key) {
+		String[] parts = key.split("_");
+		StringBuilder result = new StringBuilder();
+
+		for (String part : parts) {
+			if (part.isBlank()) {
+				continue;
+			}
+
+			if (!result.isEmpty()) {
+				result.append(' ');
+			}
+
+			result.append(part.substring(0, 1).toUpperCase(Locale.ROOT));
+			if (part.length() > 1) {
+				result.append(part.substring(1));
+			}
+		}
+
+		return result.toString();
+	}
+
+	private record BuildSitePreviewCandidate(
+		SettlementBuildSite buildSite,
+		SettlementState settlement,
+		List<BuildSitePreviewBlockView> previewBlocks,
+		double distanceSquared,
+		boolean targeted
+	) {
+	}
+
+	private record PlacedInfrastructurePreviewCandidate(
+		SettlementState settlement,
+		BlockPos anchorPos,
+		SettlementConstruction.StructurePreview preview,
+		double distanceSquared,
+		boolean targeted
+	) {
+	}
+}

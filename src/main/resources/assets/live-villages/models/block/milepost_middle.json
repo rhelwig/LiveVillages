@@ -1,0 +1,21 @@
+{
+  "textures": {
+    "particle": "live-villages:block/milepost_face",
+    "body": "live-villages:block/milepost_body",
+    "face": "live-villages:block/milepost_face"
+  },
+  "elements": [
+    {
+      "from": [3, 0, 3],
+      "to": [13, 16, 13],
+      "faces": {
+        "down": { "texture": "#body" },
+        "up": { "texture": "#body" },
+        "north": { "texture": "#face" },
+        "south": { "texture": "#face" },
+        "west": { "texture": "#face" },
+        "east": { "texture": "#face" }
+      }
+    }
+  ]
+}

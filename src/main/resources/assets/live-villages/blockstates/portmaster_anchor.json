@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "live-villages:block/portmaster_anchor"
+    },
+    "facing=east": {
+      "model": "live-villages:block/portmaster_anchor",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "live-villages:block/portmaster_anchor",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "live-villages:block/portmaster_anchor",
+      "y": 270
+    }
+  }
+}

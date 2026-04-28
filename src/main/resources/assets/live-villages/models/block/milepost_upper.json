@@ -1,0 +1,47 @@
+{
+  "textures": {
+    "particle": "live-villages:block/milepost_face",
+    "body": "live-villages:block/milepost_body",
+    "face": "live-villages:block/milepost_face",
+    "cap": "live-villages:block/milepost_cap",
+    "top": "live-villages:block/milepost_top"
+  },
+  "elements": [
+    {
+      "from": [3, 0, 3],
+      "to": [13, 12, 13],
+      "faces": {
+        "down": { "texture": "#body" },
+        "up": { "texture": "#cap" },
+        "north": { "texture": "#face" },
+        "south": { "texture": "#face" },
+        "west": { "texture": "#face" },
+        "east": { "texture": "#face" }
+      }
+    },
+    {
+      "from": [2, 12, 2],
+      "to": [14, 14, 14],
+      "faces": {
+        "down": { "texture": "#cap" },
+        "up": { "texture": "#cap" },
+        "north": { "texture": "#cap" },
+        "south": { "texture": "#cap" },
+        "west": { "texture": "#cap" },
+        "east": { "texture": "#cap" }
+      }
+    },
+    {
+      "from": [4, 14, 4],
+      "to": [12, 16, 12],
+      "faces": {
+        "down": { "texture": "#cap" },
+        "up": { "texture": "#top" },
+        "north": { "texture": "#top" },
+        "south": { "texture": "#top" },
+        "west": { "texture": "#top" },
+        "east": { "texture": "#top" }
+      }
+    }
+  ]
+}

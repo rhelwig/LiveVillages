@@ -1,0 +1,30 @@
+package com.ronhelwig.livevillages.content;
+
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
+
+import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.entity.MilepostBlockEntity;
+import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
+
+public final class LiveVillagesBlockEntities {
+	public static final BlockEntityType<TradeBoardBlockEntity> TRADE_BOARD = Registry.register(
+		BuiltInRegistries.BLOCK_ENTITY_TYPE,
+		LiveVillages.id("trade_board"),
+		FabricBlockEntityTypeBuilder.create(TradeBoardBlockEntity::new, LiveVillagesBlocks.TRADE_BOARD).build()
+	);
+	public static final BlockEntityType<MilepostBlockEntity> MILEPOST = Registry.register(
+		BuiltInRegistries.BLOCK_ENTITY_TYPE,
+		LiveVillages.id("milepost"),
+		FabricBlockEntityTypeBuilder.create(MilepostBlockEntity::new, LiveVillagesBlocks.MILEPOST).build()
+	);
+
+	private LiveVillagesBlockEntities() {
+	}
+
+	public static void register() {
+	}
+}

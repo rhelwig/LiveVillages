@@ -1,0 +1,23 @@
+{
+  "block.live-villages.carpenter_bench": "Carpenter's Bench",
+  "block.live-villages.forester_table": "Forester's Table",
+  "block.live-villages.milepost": "Milepost",
+  "block.live-villages.portmaster_anchor": "Portmaster's Anchor",
+  "block.live-villages.surveyor_table": "Surveyor's Table",
+  "block.live-villages.trade_board": "Trade Board",
+  "container.live-villages.carpenter_bench": "Carpenter's Bench",
+  "entity.minecraft.villager.live-villages.carpenter": "Carpenter",
+  "entity.minecraft.villager.live-villages.forester": "Forester",
+  "entity.minecraft.villager.live-villages.portmaster": "Portmaster",
+  "entity.minecraft.villager.live-villages.roadwright": "Roadwright",
+  "entity.minecraft.villager.live-villages.trademaster": "Trademaster",
+  "item.live-villages.carpenter_bench": "Carpenter's Bench",
+  "item.live-villages.forester_table": "Forester's Table",
+  "item.live-villages.milepost": "Milepost",
+  "item.live-villages.portmaster_anchor": "Portmaster's Anchor",
+  "item.live-villages.surveyor_table": "Surveyor's Table",
+  "item.live-villages.trade_board": "Trade Board",
+  "key.categories.live-villages.controls": "Live Villages",
+  "key.live-villages.toggle_build_site_preview": "Toggle Build Preview",
+  "key.live-villages.toggle_settlement_overlay": "Toggle Settlement Inventory Overlay"
+}

@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "live-villages:trademaster",
+    "live-villages:carpenter",
+    "live-villages:roadwright",
+    "live-villages:forester",
+    "live-villages:portmaster"
+  ]
+}

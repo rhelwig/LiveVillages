@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "minecraft:block/oak_planks",
+    "east": "live-villages:block/surveyor_table_side",
+    "north": "live-villages:block/surveyor_table_front",
+    "particle": "live-villages:block/surveyor_table_front",
+    "south": "live-villages:block/surveyor_table_side",
+    "up": "live-villages:block/surveyor_table_top",
+    "west": "live-villages:block/surveyor_table_front"
+  }
+}

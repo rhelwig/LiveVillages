@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "minecraft:oak_log",
+    "C": "minecraft:iron_bars",
+    "I": "minecraft:iron_ingot"
+  },
+  "pattern": [
+    " I ",
+    "ICI",
+    "# #"
+  ],
+  "result": {
+    "id": "live-villages:portmaster_anchor"
+  }
+}

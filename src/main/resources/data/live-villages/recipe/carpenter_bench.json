@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "#minecraft:planks",
+    "T": "minecraft:crafting_table",
+    "X": "minecraft:stick"
+  },
+  "pattern": [
+    "###",
+    "XTX",
+    "X X"
+  ],
+  "result": {
+    "id": "live-villages:carpenter_bench"
+  }
+}
