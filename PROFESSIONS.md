@@ -30,7 +30,7 @@ The vanilla profession list is still the starting point. Live Villages should no
 | Profession | Vanilla workstation | Live Villages purpose | Current code note |
 | --- | --- | --- | --- |
 | Armorer | Blast Furnace | Metal gear, heavy craft support, and defensive equipment supply | Counted with construction-support labor today |
-| Butcher | Smoker | Presented in design-facing docs as `Rancher`: herd growth, culling, meat and leather supply, and livestock trade surplus | Counted with food labor today |
+| Butcher | Smoker | Herd growth, culling, meat and leather supply, and livestock trade surplus | Counted with food labor today |
 | Cartographer | Cartography Table | Route intelligence, long-range surveying, and far-distance trade support | Counted with trade/knowledge labor today |
 | Cleric | Brewing Stand | Alchemy, healing support, and rare-goods handling | Counted with trade/knowledge labor today |
 | Farmer | Composter | Garden management, crop rotation, seed handling, and soil fertility | Counted with food labor today |
@@ -55,7 +55,7 @@ The vanilla profession list is still the starting point. Live Villages should no
 
 Until every vanilla profession has distinct job AI, the simulation can group them into broader settlement functions:
 
-- Food and husbandry workers: `Farmer`, `Rancher`, `Fisherman`, `Shepherd`
+- Food and husbandry workers: `Farmer`, `Butcher`, `Fisherman`, `Shepherd`
 - Core construction workers: `Mason`, plus the planned custom `Carpenter`
 - Supporting craft workers: `Armorer`, `Toolsmith`, `Weaponsmith`
 - Trade and knowledge workers: `Cartographer`, `Cleric`, `Librarian`, plus the custom `Trademaster`
@@ -99,13 +99,14 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Settlement behavior: turns accessible farm territory, seed availability, compost output, and labor into stable food output; requests or trades for missing seed stock such as potatoes or beetroot seeds, then folds those crops into rotation when under-supplied
 - Farm-territory definition: the default territory can start as the raised-bed footprint around the composter, but the system should treat nearby farmland, dropped farm goods, loose leaf litter, and natural grass around that composter as part of the same managed work area so the player can extend it naturally
 
-### Rancher
+### Butcher
 
 - Workstation: `Smoker`
-- Design-facing name: `Rancher`; this remains the expanded vanilla `Butcher` profession slot rather than a separate duplicate role
-- Loaded-world behavior: manages fenced pig and cow herd space, feeds breeding stock, breeds animals when below target, culls adults when above target, and expands pens when crowding and terrain allow
-- Settlement behavior: aims for enough pig and cow capacity to satisfy village food needs plus useful trade surplus; produces pork, beef, leather, and husbandry value from culling and herd management
-- Pen definition: player-built fenced pasture expansions should be claimable by the settlement when they connect cleanly to the rancher's existing work area
+- Associated structure: `Butcher Shop`, using the current small workstation-house footprint family for the first pass and staging around the placed `Smoker`
+- Loaded-world behavior: manages fenced pig and cow herd space across the whole settlement, shears sheep across the settlement's livestock territory, feeds breeding stock, breeds animals when below target, culls adults when above target, and expands pens when crowding and terrain allow
+- Settlement behavior: aims for enough herd capacity to satisfy village food needs plus useful trade surplus; produces beef, mutton, leather, and husbandry value from culling and herd management, and should be able to export meat surpluses to other villages over active routes
+- Territory rule: the `Smoker` is the profession anchor, not the boundary of the work area; butchers should be able to shear sheep, feed animals, breed herds, and cull stock anywhere inside the settlement's managed livestock space
+- Pen definition: player-built fenced pasture expansions anywhere in the settlement should be claimable by the livestock-management system when they connect cleanly to an existing managed herd area or otherwise qualify as village pasture
 
 ### Mason
 
@@ -203,6 +204,7 @@ These are the professions the mod adds or explicitly plans beyond vanilla's base
 - Construction planning should use explicit `Carpenter` and `Mason` roles rather than a single generic profession
 - Shared construction support from armorers, toolsmiths, and weaponsmiths should contribute through `construction_support`
 - Workstation-associated construction should be a staged job. Villagers and helping players complete one planned block at a time, and the associated structure should not affect trade or profession bonuses until complete.
+- A workstation structure may move the workstation from the player's original placement block to the blueprint's intended final block, including elevation changes, without canceling the build site. The original anchor block should remain linked to that build until villagers remove or relocate it as part of construction.
 - Worker-profession workstations generally support one or two villagers rather than exactly one; their associated structures should prefer assigning internal beds to matching professionals and can use a second bed when the village needs another worker. Guard Posts are the larger exception and should support up to five Guards.
 - Construction material should come from settlement stock or villager inventories, with basic conversion from adaptable raw materials such as logs into planks, stairs, slabs, fences, gates, or doors.
 - Adult non-Nitwit villagers may help with general construction once higher-priority profession work is satisfied. Unemployed villagers should be available immediately, while specialists can later get faster placement or carry bonuses for matching materials.
@@ -218,7 +220,7 @@ These are the professions the mod adds or explicitly plans beyond vanilla's base
 - `Baker` structures can trade baked goods for inputs such as eggs, wheat, milk, sugar, or fruit.
 - `Beekeeper` structures can trade honey bottles, honeycomb, candles, or related hive goods for glass bottles, shears, flowers, campfires, or wood inputs.
 - `Carpenter` structures can trade wood outputs such as stairs, slabs, fences, gates, and doors for logs or planks, with deals at least as good as direct crafting and faster for the player.
-- `Butcher` / `Rancher` structures can trade animal outputs such as beef, pork, or leather for feed such as wheat.
+- `Butcher` structures can trade animal outputs such as beef, pork, or leather for feed such as wheat.
 - `Mason` structures can trade processed stone outputs such as polished blocks, stairs, or slabs for rough stone-family inputs such as granite or diorite.
 
 ## Planned Professions
@@ -230,7 +232,7 @@ Workstation names such as `Miner Workstation` are current working names carried 
 - Workstation: `Baker Workstation` / `Bakery` block name to be finalized
 - Associated structure: `Bakery`
 - Loaded-world behavior: works in the bakery, collects or requests food inputs, bakes bread, cakes, pies, cookies, and similar baked goods when supplies are available, and visibly trades food with visitors through the profession structure
-- Settlement behavior: converts farm and ranch supplies into higher-value or more varied food stock, improving food security and trade options without overloading the central `Trade Board`
+- Settlement behavior: converts farm and livestock supplies into higher-value or more varied food stock, improving food security and trade options without overloading the central `Trade Board`
 - Physical form: the `Bakery` should use the same `5x8` overall footprint and broad layout as the `Trading Post`, but replace fence openings with glass panes behind vertical shelves of baked goods if that presentation works; gates should remain
 - Change introduced by Live Villages: creates a specialist food-processing and food-trade role instead of treating all prepared food as generic farmer output
 
@@ -240,7 +242,7 @@ Workstation names such as `Miner Workstation` are current working names carried 
 - Associated structure: `Forester's Workshop`, using the Carpenter/Roadwright workshop layout family but built almost entirely from wood with heavy log use
 - Equipment: carries axes and hoes
 - Status: First loaded-world forestry pass implemented
-- Loaded-world behavior: manages groves beyond the village core, chops mature natural trees only when enough nearby trees remain, avoids trees with bee nests or bee hives, replants from carried or village seedling stock, keeps village interiors relatively sparse while allowing thicker exterior woods, collects forest drops such as saplings, apples, sticks, and leaf litter, and uses hoes where ground preparation helps managed groves
+- Loaded-world behavior: manages groves beyond the village core, chops mature natural trees only when enough nearby trees remain, avoids trees with bee nests or bee hives, replants from carried or village seedling stock, keeps village interiors relatively sparse while allowing thicker exterior woods, collects forest drops such as saplings, apples, sticks, and leaf litter, opportunistically picks up nearby dropped logs and saplings left by the player, and uses hoes where ground preparation helps managed groves
 - Settlement behavior: adds logs, sticks, apples, saplings, and similar wood outputs to stock; keeps a small reserve of diverse seedlings; requests tools and saplings when needed; and can surface trade demand for missing saplings through the Trademaster / Trade Board economy
 - Change introduced by Live Villages: gives timber its own dedicated production role instead of treating wood as passive world scenery
 
@@ -346,7 +348,7 @@ Not every important workstation-like block needs to represent a separate village
 
 - Vanilla professions remain part of the workforce and should be mapped into useful settlement labor instead of being ignored.
 - `Trademaster` and `Carpenter` are real custom professions; `Mason` should still take on more explicit shared construction labor.
-- `Cartographer`, `Farmer`, `Rancher`, and `Mason` should all gain stronger settlement-specific behavior before adding redundant replacement professions.
+- `Cartographer`, `Farmer`, `Butcher`, and `Mason` should all gain stronger settlement-specific behavior before adding redundant replacement professions.
 - `Roadwright` should own both route creation and route improvement, while `Cartographer` provides the long-range survey gate for distant trade.
 - The next wave of custom roles should cover the missing settlement-scale jobs that vanilla does not model well: timber, mining, beauty/comfort work, security, roads, harbors, and knowledge.
 - Every profession design should answer the same two questions: what the villager visibly does in the world, and what that job changes in the settlement ledger.

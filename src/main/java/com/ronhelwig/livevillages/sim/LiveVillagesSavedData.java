@@ -215,7 +215,7 @@ public class LiveVillagesSavedData extends SavedData {
 		return buildSites.values().stream()
 			.filter(buildSite -> buildSite.settlementId().equals(settlementId))
 			.filter(buildSite -> buildSite.blueprintId() == blueprintId)
-			.filter(buildSite -> buildSite.workstationPos().equals(workstationPos))
+			.filter(buildSite -> buildSite.referencesWorkstation(workstationPos))
 			.findFirst();
 	}
 
@@ -684,6 +684,7 @@ public class LiveVillagesSavedData extends SavedData {
 				activeBuildSites,
 				constructionDeliveryVillagerIds
 			);
+			SettlementButcherWork.maintainLoadedButchery(level, workingSettlement);
 			SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
@@ -765,6 +766,7 @@ public class LiveVillagesSavedData extends SavedData {
 			changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
@@ -914,6 +916,30 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
 				changed |= SettlementVillagers.ensureTrademaster(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaButcherShopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos smokerPos : SettlementConstruction.findPlacedSmokers(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BUTCHER_SHOP, smokerPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartButcherShopAtWorkstation(
+				level,
+				smokerPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, smokerPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
 			}
 		}
 

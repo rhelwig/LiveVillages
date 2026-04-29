@@ -32,6 +32,14 @@ public final class SettlementGoods {
 			return "wheat";
 		}
 
+		if (stack.is(Items.BEEF)) {
+			return "beef";
+		}
+
+		if (stack.is(Items.MUTTON)) {
+			return "mutton";
+		}
+
 		if (stack.is(Items.WHEAT_SEEDS)) {
 			return "wheat_seeds";
 		}
@@ -46,6 +54,10 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.BEETROOT)) {
 			return "beetroot";
+		}
+
+		if (stack.is(net.minecraft.tags.ItemTags.WOOL)) {
+			return "wool";
 		}
 
 		if (stack.is(Items.BEETROOT_SEEDS)) {
@@ -142,6 +154,10 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.TORCH)) {
 			return "torch";
+		}
+
+		if (stack.is(Items.LANTERN)) {
+			return "lantern";
 		}
 
 		if (stack.is(Items.IRON_INGOT)) {

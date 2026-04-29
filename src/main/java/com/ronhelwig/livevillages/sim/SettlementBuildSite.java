@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.sim;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -15,6 +16,7 @@ public record SettlementBuildSite(
 	SettlementBuildSiteType blueprintId,
 	BlockPos origin,
 	BlockPos workstationPos,
+	BlockPos anchorPos,
 	Direction facing,
 	String woodFamily,
 	String stoneMaterial,
@@ -29,6 +31,7 @@ public record SettlementBuildSite(
 		SettlementBuildSiteType.CODEC.fieldOf("blueprint_id").forGetter(SettlementBuildSite::blueprintId),
 		BlockPos.CODEC.fieldOf("origin").forGetter(SettlementBuildSite::origin),
 		BlockPos.CODEC.fieldOf("workstation_pos").forGetter(SettlementBuildSite::workstationPos),
+		BlockPos.CODEC.optionalFieldOf("anchor_pos").forGetter(buildSite -> Optional.of(buildSite.anchorPos())),
 		Direction.CODEC.fieldOf("facing").forGetter(SettlementBuildSite::facing),
 		Codec.STRING.optionalFieldOf("wood_family", "oak").forGetter(SettlementBuildSite::woodFamily),
 		Codec.STRING.optionalFieldOf("stone_material", "cobblestone").forGetter(SettlementBuildSite::stoneMaterial),
@@ -36,7 +39,39 @@ public record SettlementBuildSite(
 		Codec.BOOL.optionalFieldOf("complete", false).forGetter(SettlementBuildSite::complete),
 		Codec.LONG.optionalFieldOf("created_tick", 0L).forGetter(SettlementBuildSite::createdTick),
 		Codec.LONG.optionalFieldOf("updated_tick", 0L).forGetter(SettlementBuildSite::updatedTick)
-	).apply(instance, SettlementBuildSite::new));
+	).apply(instance, SettlementBuildSite::decode));
+
+	private static SettlementBuildSite decode(
+		String id,
+		String settlementId,
+		SettlementBuildSiteType blueprintId,
+		BlockPos origin,
+		BlockPos workstationPos,
+		Optional<BlockPos> anchorPos,
+		Direction facing,
+		String woodFamily,
+		String stoneMaterial,
+		List<SettlementBuildBlockState> blocks,
+		boolean complete,
+		long createdTick,
+		long updatedTick
+	) {
+		return new SettlementBuildSite(
+			id,
+			settlementId,
+			blueprintId,
+			origin,
+			workstationPos,
+			anchorPos.orElse(workstationPos),
+			facing,
+			woodFamily,
+			stoneMaterial,
+			blocks,
+			complete,
+			createdTick,
+			updatedTick
+		);
+	}
 
 	public SettlementBuildSite {
 		Objects.requireNonNull(id, "id");
@@ -44,6 +79,7 @@ public record SettlementBuildSite(
 		Objects.requireNonNull(blueprintId, "blueprintId");
 		Objects.requireNonNull(origin, "origin");
 		Objects.requireNonNull(workstationPos, "workstationPos");
+		Objects.requireNonNull(anchorPos, "anchorPos");
 		Objects.requireNonNull(facing, "facing");
 		Objects.requireNonNull(woodFamily, "woodFamily");
 		Objects.requireNonNull(stoneMaterial, "stoneMaterial");
@@ -57,6 +93,7 @@ public record SettlementBuildSite(
 			blueprintId,
 			origin,
 			workstationPos,
+			anchorPos,
 			facing,
 			woodFamily,
 			stoneMaterial,
@@ -65,5 +102,9 @@ public record SettlementBuildSite(
 			createdTick,
 			tick
 		);
+	}
+
+	public boolean referencesWorkstation(BlockPos pos) {
+		return anchorPos.equals(pos) || workstationPos.equals(pos);
 	}
 }

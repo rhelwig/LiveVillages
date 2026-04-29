@@ -12,6 +12,7 @@ public final class TradeBoardTradeRules {
 	private static final List<String> TRADEABLE_GOODS_KEYS = List.of(
 		"bread",
 		"beef",
+		"mutton",
 		"wheat",
 		"carrot",
 		"potato",
@@ -42,6 +43,7 @@ public final class TradeBoardTradeRules {
 		"glass",
 		"coal",
 		"torch",
+		"lantern",
 		"iron_ingot"
 	);
 
@@ -60,6 +62,7 @@ public final class TradeBoardTradeRules {
 		return switch (goodsKey) {
 			case "bread" -> 6;
 			case "beef" -> 4;
+			case "mutton" -> 4;
 			case "wheat" -> 12;
 			case "carrot", "potato", "beetroot" -> 10;
 			case "wool" -> 6;
@@ -79,6 +82,7 @@ public final class TradeBoardTradeRules {
 			case "glass" -> 8;
 			case "coal" -> 8;
 			case "torch" -> 8;
+			case "lantern" -> 4;
 			case "iron_ingot" -> 4;
 			default -> 0;
 		};
@@ -186,6 +190,7 @@ public final class TradeBoardTradeRules {
 		return new ItemStack(switch (goodsKey) {
 			case "bread" -> Items.BREAD;
 			case "beef" -> Items.BEEF;
+			case "mutton" -> Items.MUTTON;
 			case "wheat" -> Items.WHEAT;
 			case "carrot" -> Items.CARROT;
 			case "potato" -> Items.POTATO;
@@ -216,6 +221,7 @@ public final class TradeBoardTradeRules {
 			case "glass" -> Items.GLASS;
 			case "coal" -> Items.COAL;
 			case "torch" -> Items.TORCH;
+			case "lantern" -> Items.LANTERN;
 			case "iron_ingot" -> Items.IRON_INGOT;
 			case "emerald" -> Items.EMERALD;
 			default -> Items.AIR;
@@ -235,8 +241,9 @@ public final class TradeBoardTradeRules {
 			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "sand", "torch" -> 1;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
 			case "chest" -> 1;
-			case "glass", "bed" -> 2;
+			case "glass", "bed", "lantern" -> 2;
 			case "beef" -> 2;
+			case "mutton" -> 2;
 			case "coal" -> 2;
 			case "iron_ingot" -> 2;
 			default -> 0;
@@ -251,6 +258,7 @@ public final class TradeBoardTradeRules {
 		return switch (goodsKey) {
 			case "bread" -> stack.is(Items.BREAD);
 			case "beef" -> stack.is(Items.BEEF);
+			case "mutton" -> stack.is(Items.MUTTON);
 			case "wheat" -> stack.is(Items.WHEAT);
 			case "carrot" -> stack.is(Items.CARROT);
 			case "potato" -> stack.is(Items.POTATO);
@@ -281,6 +289,7 @@ public final class TradeBoardTradeRules {
 			case "glass" -> stack.is(Items.GLASS);
 			case "coal" -> stack.is(Items.COAL) || stack.is(Items.CHARCOAL);
 			case "torch" -> stack.is(Items.TORCH);
+			case "lantern" -> stack.is(Items.LANTERN);
 			case "iron_ingot" -> stack.is(Items.IRON_INGOT);
 			case "emerald" -> stack.is(Items.EMERALD);
 			default -> false;

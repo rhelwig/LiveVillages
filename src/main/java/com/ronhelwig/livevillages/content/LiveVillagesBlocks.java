@@ -15,8 +15,10 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.CarpenterBenchBlock;
 import com.ronhelwig.livevillages.block.ForesterTableBlock;
+import com.ronhelwig.livevillages.block.HousingShelterBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
+import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
 import com.ronhelwig.livevillages.block.SurveyorTableBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 
@@ -102,6 +104,32 @@ public final class LiveVillagesBlocks {
 	public static final Item PORTMASTER_ANCHOR_ITEM = registerItem(
 		"portmaster_anchor",
 		new BlockItem(PORTMASTER_ANCHOR, new Item.Properties().setId(itemKey("portmaster_anchor")).useBlockDescriptionPrefix())
+	);
+	public static final SimpleHousingShelterBlock SIMPLE_HOUSING_SHELTER = registerBlock(
+		"simple_housing_shelter",
+		new SimpleHousingShelterBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+				.setId(blockKey("simple_housing_shelter"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item SIMPLE_HOUSING_SHELTER_ITEM = registerItem(
+		"simple_housing_shelter",
+		new BlockItem(SIMPLE_HOUSING_SHELTER, new Item.Properties().setId(itemKey("simple_housing_shelter")).useBlockDescriptionPrefix())
+	);
+	public static final HousingShelterBlock HOUSING_SHELTER = registerBlock(
+		"housing_shelter",
+		new HousingShelterBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+				.setId(blockKey("housing_shelter"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item HOUSING_SHELTER_ITEM = registerItem(
+		"housing_shelter",
+		new BlockItem(HOUSING_SHELTER, new Item.Properties().setId(itemKey("housing_shelter")).useBlockDescriptionPrefix())
 	);
 
 	private LiveVillagesBlocks() {

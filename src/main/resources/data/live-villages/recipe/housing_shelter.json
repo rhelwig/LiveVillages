@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "#minecraft:planks",
+    "B": "minecraft:red_bed",
+    "G": "minecraft:glass",
+    "L": "#minecraft:logs",
+    "N": "minecraft:lantern"
+  },
+  "pattern": [
+    "LGL",
+    "BNB",
+    "L#L"
+  ],
+  "result": {
+    "id": "live-villages:housing_shelter"
+  }
+}

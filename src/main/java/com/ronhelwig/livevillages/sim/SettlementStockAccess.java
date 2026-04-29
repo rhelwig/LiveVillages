@@ -27,8 +27,9 @@ final class SettlementStockAccess {
 	static Optional<BlockPos> findStockAccessPos(ServerLevel level, SettlementState settlement, List<SettlementBuildSite> buildSites) {
 		for (SettlementBuildSite buildSite : buildSites) {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
-				&& level.hasChunkAt(buildSite.workstationPos())) {
-				return stockAccessStandPos(level, buildSite.workstationPos()).or(() -> Optional.of(settlement.center()));
+				&& (level.hasChunkAt(buildSite.workstationPos()) || level.hasChunkAt(buildSite.anchorPos()))) {
+				BlockPos workstationPos = SettlementConstruction.currentPlacedWorkstationPos(level, buildSite);
+				return stockAccessStandPos(level, workstationPos).or(() -> Optional.of(settlement.center()));
 			}
 		}
 

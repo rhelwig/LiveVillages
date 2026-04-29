@@ -18,7 +18,10 @@ Already in code:
 - Trading Post front-cap stair orientation is now explicit in the blueprint, and Trade Boards now periodically re-sync their settlement label server-side so the face text survives construction/state normalization
 - workshop roof crest rows now use a symmetric top-stair pattern, and the Trading Post front cap now uses outward-facing stair orientation instead of sideways rotation
 - simple fallback housing shelters now keep the center bed lane open and use top slabs on the door-to-bed roof strip so villagers can enter and sleep without the ceiling blocking the bed
+- both shelter layouts now use `StructureBlueprint` placement, and the simple fallback shelter has a wider first-pass interior with a side standing space next to the bed plus an interior torch
+- players can now craft and place dedicated `Simple Housing Shelter` and `Housing Shelter` anchor blocks, and those items use the held-item structure preview to start or resume real staged shelter build sites instead of placing the whole hut instantly; their recipe goods are added into the shelter build before the remaining materials are drawn from settlement stock over time
 - village structure siting now enforces a shared `3`-block spacing buffer around housing and workstation-linked buildings, and both shelter layouts now use a lower center roof lane plus an upside-down stair lintel above the door for better headroom
+- the shelter anchor items now use proper item-model definitions instead of missing-texture placeholders, freestanding blueprint siting now uses the same spacing buffer rules as anchored builds, `Housing Shelter` now has windows plus a taller two-bed interior with a centered lantern, and shelter marker blocks are treated as disposable anchors so villagers can replace them with real doors early in staged construction
 
 Known design shifts now locked in:
 
@@ -29,11 +32,13 @@ Known design shifts now locked in:
 - `Milepost` is route infrastructure, not a workstation
 - `Cartographer` gates efficient long-range route planning and trade beyond about `32` chunks / `512` blocks
 - player-placed vanilla `Cartography Table` blocks should anchor a staged `Cartographer's House`; the first implementation uses a simplified plains vanilla cartographer house blueprint with explicit orientation rows for roof stairs
+- player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`; the first implementation can reuse the current small workstation-house footprint family while the broader herd-management loop continues to evolve
 - `Farmer` uses composter-anchored, player-extensible gardens with harvesting and reseeding
-- `Rancher` is the design-facing name for the vanilla `Butcher` / `Smoker` role and manages herd growth, culling, pasture expansion, meat, and leather output
+- `Butcher` remains the vanilla `Smoker` role name and manages herd growth, culling, pasture expansion, meat, and leather output across the settlement's full managed livestock territory
 - `Baker` is a planned food-processing profession with a bakery structure based on the `Trading Post` footprint and specialist baked-good trades
 - `Beekeeper` is a planned honey and hive-management profession with a `Honey Separator`, a village-edge `Beekeeper's Apiary`, and an all-white protective suit outfit
 - recognized placed workstations should anchor their associated profession structures when possible, with a nearby `can't build here` sign when the site is blocked
+- craftable structure-anchor blocks should be the default trigger for blueprint-friendly non-workstation structures where there is no better vanilla workstation anchor; reserve special-case placement code for structures such as docks that genuinely need it
 - the `Trade Board`'s associated structure is a `Trading Post` / `Trade Post`, with a future `Shopping Mall` upgrade on the same site
 - the `Trade Board` should list the highest-priority settlement-wide wants; profession structures should handle narrower lower-priority trades such as eggs to bakers, logs to carpenters, feed to butchers, or raw stone to masons
 - the `Trade Board` trading screen now uses two selection flows: `Your Goods`, where the player selects a tradable inventory good and then chooses one settlement payout option, and `Village Goods`, where the player selects a settlement offer and then chooses which wanted player good to pay with
@@ -43,8 +48,10 @@ Known design shifts now locked in:
 - the `Carpenter's Bench` should get a follow-up efficiency pass so it offers a clearer material benefit over ordinary crafting, similar to the `Fletching Table` throughput advantage
 - loaded settlement maintenance should retry existing placed `Trade Board` anchors that do not yet have a `Trading Post` build site, so blocked or older boards can start construction after the world state changes without requiring the player to break and replace the board
 - workstation-associated structures should be visible staged construction jobs, not instant block placement, and they should count as trade or profession improvements only after complete
+- workstation-associated build sites should survive workstation relocation inside the planned footprint, including elevation changes, so villagers can remove the original placed anchor block and place that workstation at the blueprint's intended final position without canceling the structure
 - staged construction can begin with missing materials, then pause on unavailable block types until stock, villager inventory, player help, or basic auto-crafting supplies the missing blocks
 - loaded villagers should visibly visit a standable adjacent access tile at the `Trade Board` or completed `Trading Post` to deposit gathered items or retrieve needed materials
+- loaded Foresters now opportunistically pick up nearby player-left logs and saplings when those drops are reachable inside managed forestry territory
 - once a settlement has a `Roadwright`, internal paths should connect workstation buildings into the trade network and connected specialty buildings should bias the kinds of goods traded
 - profession heuristics should move toward data-driven priorities and thresholds rather than a bespoke scripting language in the first pass
 - field-worker loadouts matter, while deskworker professions stay unarmed and flee
@@ -168,16 +175,19 @@ First playtest target:
 - verify reseeding works
 - verify extending the beds by the player increases usable garden area
 
-### 2. Rancher and Herd Management
+### 2. Butcher and Herd Management
 
-Status: Planned
+Status: First simulation pass implemented; first loaded-world shearing pass implemented; first `Smoker`-anchored `Butcher Shop` preview/build pass implemented; broader loaded-world herd task AI still planned
 
 Goal:
-Split livestock management out of generic farmer output and make the vanilla `Butcher` slot, presented as `Rancher`, maintain herd size for both local needs and trade surplus.
+Split livestock management out of generic farmer output and make the vanilla `Butcher` slot maintain herd size for both local needs and trade surplus.
 
 Primary changes:
 
-- detect rancher-managed pig and cow pens and pasture capacity
+- detect butcher-managed pig and cow pens and pasture capacity
+- treat the butcher's livestock territory as settlement-wide rather than limited to blocks near the `Smoker`
+- shear sheep across the settlement's livestock territory so wool comes from visible loaded-world husbandry instead of only abstract stock math
+- gate herd-meat production behind actual `Butcher` population instead of generic farmer output, with first-pass beef and mutton stock able to flow into settlement trade surpluses
 - feed breeding stock from settlement goods
 - breed when herd size is below target
 - cull adults for `beef`, `pork`, and `leather` when above target
@@ -206,6 +216,7 @@ Primary changes:
 - define the `Trade Board`'s associated `Trading Post` structure from the exact `5x8` blueprint in `SPECS.md`, with a future `Shopping Mall` upgrade path
 - define the `Carpenter's Workshop` structure from the exact `5x8` blueprint in `SPECS.md`
 - replace instant anchored builds with staged build sites that store planned block positions, completion state, selected wood family, stone quality, workstation anchor, and missing-material blockers
+- separate the player-placed workstation anchor from the blueprint's final workstation block so staged builds can relocate workstations vertically or laterally inside the planned structure without canceling the site
 - make loaded workers place or remove one block per construction task action, allowing players to place correct blocks into the same footprint to advance completion
 - require completed associated structures before they provide trade enhancements or profession-building bonuses
 - route construction materials through settlement stock or villager inventories, with basic auto-crafting from raw materials such as logs into planks, stairs, slabs, fences, gates, and doors

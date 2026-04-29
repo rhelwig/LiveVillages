@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "live-villages:block/housing_shelter"
+    },
+    "facing=east": {
+      "model": "live-villages:block/housing_shelter",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "live-villages:block/housing_shelter",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "live-villages:block/housing_shelter",
+      "y": 270
+    }
+  }
+}

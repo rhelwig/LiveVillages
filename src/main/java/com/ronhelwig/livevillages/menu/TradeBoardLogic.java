@@ -183,6 +183,9 @@ public final class TradeBoardLogic {
 					addConstructionDemand(demand, "coal", 1);
 					addConstructionDemand(demand, "stick", 1);
 					addConstructionDemand(demand, "planks", 1);
+				} else if (block.expectedMaterialKey().equals("lantern")) {
+					addConstructionDemand(demand, "torch", 1);
+					addConstructionDemand(demand, "iron_ingot", 1);
 				} else if (block.expectedMaterialKey().equals("chest")) {
 					addConstructionDemand(demand, "planks", 8);
 				}
@@ -277,6 +280,7 @@ public final class TradeBoardLogic {
 		int freeHousing = settlement.housingCapacity() - population;
 		int storedFood = settlement.stock().getOrDefault("bread", 0)
 			+ settlement.stock().getOrDefault("beef", 0)
+			+ settlement.stock().getOrDefault("mutton", 0)
 			+ settlement.stock().getOrDefault("cod", 0)
 			+ settlement.stock().getOrDefault("carrot", 0)
 			+ settlement.stock().getOrDefault("potato", 0)
@@ -284,6 +288,7 @@ public final class TradeBoardLogic {
 			+ settlement.stock().getOrDefault("wheat", 0);
 		int targetFood = SettlementEconomyRules.targetForGoods("bread", population)
 			+ SettlementEconomyRules.targetForGoods("beef", population)
+			+ SettlementEconomyRules.targetForGoods("mutton", population)
 			+ SettlementEconomyRules.targetForGoods("cod", population)
 			+ SettlementEconomyRules.targetForGoods("carrot", population)
 			+ SettlementEconomyRules.targetForGoods("potato", population)

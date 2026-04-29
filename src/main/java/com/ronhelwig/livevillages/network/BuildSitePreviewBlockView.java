@@ -57,6 +57,7 @@ public record BuildSitePreviewBlockView(
 			case "fence_gate" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.FENCE_GATES);
 			case "bed" -> blockItem != null && blockItem.getBlock() instanceof BedBlock && stack.is(ItemTags.BEDS);
 			case "torch" -> stack.is(Items.TORCH);
+			case "lantern" -> stack.is(Items.LANTERN);
 			default -> false;
 		};
 	}

@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "live-villages:block/housing_shelter"
+  }
+}

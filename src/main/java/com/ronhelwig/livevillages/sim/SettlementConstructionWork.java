@@ -222,6 +222,28 @@ public final class SettlementConstructionWork {
 			char currentSymbol = SettlementConstruction.currentBlueprintSymbol(buildSite, block);
 
 			if (currentSymbol == 'A') {
+				if ("A".equals(block.blueprintSymbol())) {
+					SettlementBuildBlockState updatedBlock = block;
+
+					if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+						if (!currentState.isAir()) {
+							updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
+						}
+					} else if (currentState.isAir()) {
+						updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
+					} else if (block.status() == SettlementBuildBlockStatus.BLOCKED && SettlementConstruction.isBuildSiteReplaceable(currentState)) {
+						updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
+					}
+
+					if (!updatedBlock.equals(block)) {
+						changed = true;
+					}
+
+					updatedBlocks.add(updatedBlock);
+					retainedPositions.add(updatedBlock.position());
+					continue;
+				}
+
 				if (isCompatiblePlacedBlock(currentState, plannedState) && SettlementConstruction.tryClearBuildSiteBlock(level, blockPos.get(), stock)) {
 					changed = true;
 				}
@@ -352,8 +374,9 @@ public final class SettlementConstructionWork {
 	private static Optional<BlockPos> findStockAccessPos(ServerLevel level, SettlementState settlement, List<SettlementBuildSite> buildSites) {
 		for (SettlementBuildSite buildSite : buildSites) {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
-				&& level.hasChunkAt(buildSite.workstationPos())) {
-				return stockAccessStandPos(level, buildSite.workstationPos()).or(() -> Optional.of(settlement.center()));
+				&& (level.hasChunkAt(buildSite.workstationPos()) || level.hasChunkAt(buildSite.anchorPos()))) {
+				BlockPos workstationPos = SettlementConstruction.currentPlacedWorkstationPos(level, buildSite);
+				return stockAccessStandPos(level, workstationPos).or(() -> Optional.of(settlement.center()));
 			}
 		}
 
@@ -1025,14 +1048,17 @@ public final class SettlementConstructionWork {
 			pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
 		} else if (isBedFoot(buildSite, relativePos)) {
 				pairedPosition = switch (buildSite.blueprintId()) {
+					case BUTCHER_SHOP -> relativePosition(relativePos.right(), -3, 1);
 					case CARTOGRAPHER_HOUSE -> null;
 					case CARPENTER_WORKSHOP -> relativePosition(-1, -3, 1);
 					case DOCK -> null;
 					case FLETCHER_HUT -> relativePosition(relativePos.right(), -3, 1);
-				case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
-				case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
-				case TRADING_POST -> relativePosition(2, -1, 1);
-			};
+					case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
+					case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
+					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
+					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
+					case TRADING_POST -> relativePosition(2, -1, 1);
+				};
 		}
 
 		if (pairedPosition == null) {
@@ -1074,9 +1100,21 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.BUTCHER_SHOP
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.FORESTER_WORKSHOP
 				&& relativePos.right() == -1
 				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == 0
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER
+				&& relativePos.right() == -1
+				&& relativePos.forward() == 1
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
 				&& relativePos.right() == 1
@@ -1097,9 +1135,21 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.BUTCHER_SHOP
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.FORESTER_WORKSHOP
 				&& relativePos.right() == -1
 				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -1
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER
+				&& relativePos.right() == -1
+				&& relativePos.forward() == 0
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
 				&& relativePos.right() == 2

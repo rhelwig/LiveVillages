@@ -88,6 +88,12 @@ public final class SettlementVillagers {
 			.toList();
 	}
 
+	public static List<Villager> nearbyButchers(ServerLevel level, SettlementState settlement) {
+		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.BUTCHER))
+			.toList();
+	}
+
 	public static List<Villager> nearbyAdultVillagers(ServerLevel level, SettlementState settlement) {
 		return nearbyAdultVillagers(level, settlement, villagerRadius(settlement));
 	}
@@ -1430,6 +1436,14 @@ public final class SettlementVillagers {
 
 			if (forestryTask.isPresent()) {
 				return forestryTask.get();
+			}
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
+			Optional<String> butcherTask = SettlementButcherWork.loadedButcherTaskKey(level, villager);
+
+			if (butcherTask.isPresent()) {
+				return butcherTask.get();
 			}
 		}
 

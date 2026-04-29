@@ -129,6 +129,7 @@ What has already been tried:
 - Added another code pass that gives the simple fallback shelter a door and front footprint.
 - Tightened both shelter site-selection paths to require more stable terrain-like support instead of treating shallow artificial platforms as valid building ground.
 - Lowered the simple shelter's center roof lane by replacing the door-to-bed roof strip with top slabs and removing the low full-block ceiling directly over the bed path.
+- Converted both shelter variants to `StructureBlueprint` placement and shared blueprint footprint siting, and widened the simple fallback shelter so it now has a side standing space next to the bed plus an interior torch.
 
 Notes:
 

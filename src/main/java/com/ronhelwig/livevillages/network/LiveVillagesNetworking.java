@@ -708,7 +708,10 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
 			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
+			|| item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM
+			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
 			|| item == Items.CARTOGRAPHY_TABLE
+			|| item == Items.SMOKER
 			|| item == Items.FLETCHING_TABLE;
 	}
 
@@ -742,8 +745,20 @@ public final class LiveVillagesNetworking {
 			return SettlementConstruction.previewDockAtPortmasterAnchor(level, settlement.id(), placementPos, placementFacing);
 		}
 
+		if (item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM) {
+			return SettlementConstruction.previewSimpleHousingShelterAtDoor(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM) {
+			return SettlementConstruction.previewHousingShelterAtDoor(level, settlement.id(), placementPos, placementFacing);
+		}
+
 		if (item == Items.CARTOGRAPHY_TABLE) {
 			return SettlementConstruction.previewCartographerHouseAtWorkstation(level, settlement, placementPos);
+		}
+
+		if (item == Items.SMOKER) {
+			return SettlementConstruction.previewButcherShopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		if (item == Items.FLETCHING_TABLE) {
@@ -774,8 +789,11 @@ public final class LiveVillagesNetworking {
 			}
 
 			double distanceSquared = Math.min(
-				buildSite.origin().distSqr(player.blockPosition()),
-				buildSite.workstationPos().distSqr(player.blockPosition())
+				Math.min(
+					buildSite.origin().distSqr(player.blockPosition()),
+					buildSite.workstationPos().distSqr(player.blockPosition())
+				),
+				buildSite.anchorPos().distSqr(player.blockPosition())
 			);
 			if (distanceSquared > maxDistanceSquared) {
 				continue;
@@ -848,7 +866,7 @@ public final class LiveVillagesNetworking {
 		Optional<BlockPos> pos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
 		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
-		if (pos.isEmpty() || plannedState == null) {
+		if (pos.isEmpty() || plannedState == null || plannedState.isAir()) {
 			return Optional.empty();
 		}
 
@@ -864,7 +882,7 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static boolean buildSiteContains(SettlementBuildSite buildSite, BlockPos pos) {
-		if (buildSite.workstationPos().equals(pos) || buildSite.origin().equals(pos)) {
+		if (buildSite.anchorPos().equals(pos) || buildSite.workstationPos().equals(pos) || buildSite.origin().equals(pos)) {
 			return true;
 		}
 
@@ -908,12 +926,15 @@ public final class LiveVillagesNetworking {
 
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
 		return switch (type) {
+			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
 			case DOCK -> "Dock";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
+			case HOUSING_SHELTER -> "Housing Shelter";
 			case ROADWRIGHT_WORKSHOP -> "Roadwright's Workshop";
+			case SIMPLE_HOUSING_SHELTER -> "Simple Housing Shelter";
 			case TRADING_POST -> "Trade Post";
 		};
 	}

@@ -155,18 +155,38 @@ public final class SettlementForesterWork {
 
 	private static Optional<ForestryTask> nearestCollectableItemTask(ServerLevel level, SettlementState settlement, Villager forester) {
 		AABB bounds = new AABB(forester.blockPosition()).inflate(FORESTRY_ITEM_SCAN_RADIUS_BLOCKS);
-		return level.getEntitiesOfClass(ItemEntity.class, bounds, entity -> !entity.isRemoved() && isForestryDrop(entity))
-			.stream()
-			.filter(entity -> isWithinForestryRange(settlement, entity.blockPosition()))
-			.min(Comparator.comparingDouble(entity -> entity.blockPosition().distSqr(forester.blockPosition())))
-			.map(entity -> new ForestryTask(
-				ForestryAction.COLLECT_DROP,
-				entity.blockPosition(),
-				entity.blockPosition(),
-				"",
-				entity.getId(),
-				"collecting_forest_drops"
-			));
+		ForestryTask bestTask = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, bounds, entity -> !entity.isRemoved() && isForestryDrop(entity))) {
+			BlockPos itemPos = itemEntity.blockPosition();
+
+			if (!isWithinForestryRange(settlement, itemPos)) {
+				continue;
+			}
+
+			Optional<BlockPos> standPos = standableDropPickupPos(level, itemPos);
+
+			if (standPos.isEmpty()) {
+				continue;
+			}
+
+			double distanceSquared = standPos.get().distSqr(forester.blockPosition());
+
+			if (bestTask == null || distanceSquared < bestDistanceSquared) {
+				bestTask = new ForestryTask(
+					ForestryAction.COLLECT_DROP,
+					itemPos,
+					standPos.get(),
+					"",
+					itemEntity.getId(),
+					"collecting_forest_drops"
+				);
+				bestDistanceSquared = distanceSquared;
+			}
+		}
+
+		return Optional.ofNullable(bestTask);
 	}
 
 	private static Optional<ForestryTask> nearestPlantTask(
@@ -570,6 +590,34 @@ public final class SettlementForesterWork {
 		}
 
 		return Optional.ofNullable(fallback);
+	}
+
+	private static Optional<BlockPos> standableDropPickupPos(ServerLevel level, BlockPos itemPos) {
+		if (isStandable(level, itemPos)) {
+			return Optional.of(itemPos);
+		}
+
+		if (isStandable(level, itemPos.below())) {
+			return Optional.of(itemPos.below());
+		}
+
+		if (isStandable(level, itemPos.above())) {
+			return Optional.of(itemPos.above());
+		}
+
+		Optional<BlockPos> sameLevelStandPos = standableAround(level, itemPos);
+
+		if (sameLevelStandPos.isPresent()) {
+			return sameLevelStandPos;
+		}
+
+		Optional<BlockPos> lowerStandPos = standableAround(level, itemPos.below());
+
+		if (lowerStandPos.isPresent()) {
+			return lowerStandPos;
+		}
+
+		return standableAround(level, itemPos.above());
 	}
 
 	private static boolean isStandable(ServerLevel level, BlockPos pos) {
