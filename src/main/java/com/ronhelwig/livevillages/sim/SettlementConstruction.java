@@ -67,6 +67,31 @@ public final class SettlementConstruction {
 	private static final int MIN_HARBOR_WATER_SURFACE_COLUMNS = 32;
 	private static final int MIN_HARBOR_DEEP_WATER_COLUMNS = 12;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
+	/*
+	 * Blueprint legend:
+	 *
+	 * Placement symbols:
+	 * A = empty space
+	 * B = bed at bed-designated coordinates, otherwise slab
+	 * C = structure-specific wall/foundation material
+	 * D = door
+	 * F = fence
+	 * G = fence gate
+	 * H = chest
+	 * L = log
+	 * M = stone / cobblestone-family block
+	 * N = hanging lantern
+	 * P = planks
+	 * S = stairs
+	 * T = wall torch
+	 * V = glass / window block
+	 * W = workstation
+	 *
+	 * Orientation symbols:
+	 * . = no explicit orientation
+	 * F/B/R/L = face forward / backward / right / left
+	 * f/b/r/l = same facing, but use top-half stairs
+	 */
 	private static final StructureBlueprint CARPENTER_WORKSHOP_BLUEPRINT = new StructureBlueprint(
 		-2,
 		-4,
@@ -84,11 +109,11 @@ public final class SettlementConstruction {
 			},
 			{
 				"LPPPL",
-				"PBAAP",
-				"PBAAP",
+				"PBABP",
+				"PBABP",
 				"PAAAP",
 				"LPDPL",
-				"AAAAA",
+				"HAAAA",
 				"AAAAA",
 				"LAWAL"
 			},
@@ -161,8 +186,8 @@ public final class SettlementConstruction {
 			},
 			{
 				"LMMML",
-				"MBAAM",
-				"MBAAM",
+				"MBABM",
+				"MBABM",
 				"MAAAM",
 				"LMDML",
 				"AAAAA",
@@ -238,8 +263,8 @@ public final class SettlementConstruction {
 			},
 			{
 				"LLLLL",
-				"LBAAL",
-				"LBAAL",
+				"LBABL",
+				"LBABL",
 				"LAAAL",
 				"LLDLL",
 				"AAAAA",
@@ -313,16 +338,16 @@ public final class SettlementConstruction {
 				"CCCCC",
 				"CCCCC"
 			},
-				{
-					"LPPPL",
-					"PBABP",
-					"PBABP",
-					"PAAAP",
-					"LPDPL",
-					"PAAAP",
-					"PAAAP",
-					"LAWAL"
-				},
+			{
+				"LPPPL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
+				"LPDPL",
+				"PAAAP",
+				"PAAAP",
+				"LAWAL"
+			},
 			{
 				"LPVPL",
 				"PAAAP",
@@ -335,7 +360,7 @@ public final class SettlementConstruction {
 			},
 			{
 				"LPPPL",
-				"PAAAP",
+				"PATAP",
 				"PAAAP",
 				"PAAAP",
 				"LPPPL",
@@ -382,11 +407,11 @@ public final class SettlementConstruction {
 		new String[][] {
 			{
 				"AAAAAAAAAA",
-				"AAAAAAAAAA",
-				"AAAPPPPPAA",
-				"AACPPPPPAA",
-				"AAAPPPPPAA",
-				"AAAAAAAAAA",
+				"AACCCCCCCA",
+				"AACPPPPPCA",
+				"AACPPPPPCA",
+				"AACPPPPPCA",
+				"AACCCCCCCA",
 				"AAAAAAAAAA"
 			},
 			{
@@ -418,19 +443,19 @@ public final class SettlementConstruction {
 			},
 			{
 				"ASSSSSSSSS",
-				"AULLLLLLLU",
+				"ASLLLLLLLS",
 				"AALAAAAALA",
 				"ATLTAAATLA",
 				"AALAAAAALA",
-				"AULLLLLLLU",
+				"ASLLLLLLLS",
 				"ASSSSSSSSS"
 			},
 			{
 				"AAAAAAAAAA",
 				"ASSSSSSSSS",
-				"AUCAAAAACU",
+				"ASCAAAAACS",
 				"AACAAAAACA",
-				"AUCAAAAACU",
+				"ASCAAAAACS",
 				"ASSSSSSSSS",
 				"AAAAAAAAAA"
 			},
@@ -492,19 +517,19 @@ public final class SettlementConstruction {
 			},
 			{
 				".FFFFFFFFF",
-				".B.......B",
+				".b.......b",
 				"..........",
 				"..........",
 				"..........",
-				".F.......F",
+				".f.......f",
 				".BBBBBBBBB"
 			},
 			{
 				"..........",
 				".FFFFFFFFF",
-				".B.......B",
+				".b.......b",
 				"..........",
-				".F.......F",
+				".f.......f",
 				".BBBBBBBBB",
 				".........."
 			},
@@ -544,7 +569,7 @@ public final class SettlementConstruction {
 				"LFGLCCCL",
 				"FAACABBC",
 				"WAADAAAC",
-				"FAACAAAC",
+				"FAACAHHC",
 				"LFGLCCCL"
 			},
 			{
@@ -649,14 +674,14 @@ public final class SettlementConstruction {
 			},
 			{
 				"LPPPL",
-				"LBABL",
-				"LBABL",
-				"LAAAL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
 				"LPDPL"
 			},
 			{
 				"LPVPL",
-				"VAPAV",
+				"VAAAV",
 				"VAAAV",
 				"VAAAV",
 				"LVDVL"
@@ -710,7 +735,7 @@ public final class SettlementConstruction {
 				".....",
 				".....",
 				".....",
-				"..F.."
+				"..f.."
 			}
 		}
 	);
@@ -741,7 +766,7 @@ public final class SettlementConstruction {
 				"PPPPP",
 				"PBBBP",
 				"PBBBP",
-				"PPUPP"
+				"PPSPP"
 			}
 		},
 		new String[][] {
@@ -767,7 +792,7 @@ public final class SettlementConstruction {
 				".....",
 				".....",
 				".....",
-				"..F.."
+				"..f.."
 			}
 		}
 	);
@@ -2593,7 +2618,6 @@ public final class SettlementConstruction {
 			case 'W' -> workstationStateFor(structureKind, facing);
 			case 'B' -> slabStateFor(structureKind, up);
 			case 'S' -> stairStateFor(blueprint, structureKind, facing, right, forward, up);
-			case 'U' -> stairStateFor(blueprint, structureKind, facing, right, forward, up).setValue(StairBlock.HALF, Half.TOP);
 			default -> null;
 		};
 	}
@@ -2680,7 +2704,7 @@ public final class SettlementConstruction {
 		BlockState state = Blocks.OAK_STAIRS.defaultBlockState()
 			.setValue(StairBlock.FACING, blueprintStairFacing(blueprint, structureKind, facing, right, forward, up));
 
-		if (up == 3) {
+		if (explicitBlueprintTopHalf(blueprint, right, forward, up) || up == 3) {
 			state = state.setValue(StairBlock.HALF, Half.TOP);
 		}
 
@@ -2739,12 +2763,17 @@ public final class SettlementConstruction {
 		char orientation = blueprintOrientationAt(blueprint, right, forward, up);
 
 		return switch (orientation) {
-			case 'F' -> facing;
-			case 'B' -> facing.getOpposite();
-			case 'R' -> facing.getClockWise();
-			case 'L' -> facing.getCounterClockWise();
+			case 'F', 'f' -> facing;
+			case 'B', 'b' -> facing.getOpposite();
+			case 'R', 'r' -> facing.getClockWise();
+			case 'L', 'l' -> facing.getCounterClockWise();
 			default -> null;
 		};
+	}
+
+	private static boolean explicitBlueprintTopHalf(StructureBlueprint blueprint, int right, int forward, int up) {
+		char orientation = blueprintOrientationAt(blueprint, right, forward, up);
+		return orientation == 'f' || orientation == 'b' || orientation == 'r' || orientation == 'l';
 	}
 
 	private static Direction blueprintTorchFacing(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
@@ -2792,7 +2821,7 @@ public final class SettlementConstruction {
 		BlueprintRelativeStep step = relativeStepForDirection(facing, supportDirection);
 		char adjacentSymbol = blueprintSymbolAt(blueprint, right + step.right(), forward + step.forward(), up);
 		return switch (adjacentSymbol) {
-			case 'C', 'L', 'P', 'S', 'U', 'H', 'W', 'B' -> true;
+			case 'C', 'L', 'P', 'S', 'H', 'W', 'B' -> true;
 			default -> false;
 		};
 	}
@@ -3166,7 +3195,6 @@ public final class SettlementConstruction {
 			case 'P' -> "planks";
 			case 'S' -> "stairs";
 			case 'T' -> "torch";
-			case 'U' -> "stairs";
 			case 'V' -> "glass";
 			case 'W' -> switch (structureKind) {
 				case TRADING_POST -> "trade_board";
