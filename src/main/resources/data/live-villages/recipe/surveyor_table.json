@@ -3,7 +3,7 @@
   "category": "misc",
   "key": {
     "#": "#minecraft:planks",
-    "S": "minecraft:stone_shovel",
+    "S": "#minecraft:shovels",
     "T": "minecraft:crafting_table",
     "X": "minecraft:stick"
   },

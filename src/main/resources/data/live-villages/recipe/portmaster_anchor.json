@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "#": "minecraft:oak_log",
+    "#": "#minecraft:logs",
     "C": "minecraft:iron_bars",
     "I": "minecraft:iron_ingot"
   },

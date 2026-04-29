@@ -3,14 +3,14 @@
   "category": "misc",
   "key": {
     "#": "#minecraft:planks",
-    "B": "minecraft:red_bed",
+    "B": "#minecraft:beds",
     "G": "minecraft:glass",
     "L": "#minecraft:logs",
     "N": "minecraft:lantern"
   },
   "pattern": [
     "LGL",
-    "BNB",
+    "BN#",
     "L#L"
   ],
   "result": {

@@ -3,7 +3,7 @@
   "category": "misc",
   "key": {
     "#": "#minecraft:planks",
-    "B": "minecraft:white_bed"
+    "B": "#minecraft:beds"
   },
   "pattern": [
     "###",

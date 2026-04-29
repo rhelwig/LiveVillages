@@ -3,7 +3,7 @@
   "category": "misc",
   "key": {
     "#": "#minecraft:planks",
-    "A": "minecraft:stone_axe",
+    "A": "#minecraft:axes",
     "L": "#minecraft:logs",
     "T": "minecraft:crafting_table"
   },
