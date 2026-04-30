@@ -177,7 +177,7 @@ First playtest target:
 
 ### 2. Butcher and Herd Management
 
-Status: First simulation pass implemented; first loaded-world shearing pass implemented; first `Smoker`-anchored `Butcher Shop` preview/build pass implemented; broader loaded-world herd task AI still planned
+Status: First simulation pass implemented; first loaded-world shearing, breeding, visible culling, pig/pork, simple pen-building, and stray-herding pass implemented; first `Smoker`-anchored `Butcher Shop` preview/build pass implemented; broader loaded-world herd task AI still planned
 
 Goal:
 Split livestock management out of generic farmer output and make the vanilla `Butcher` slot maintain herd size for both local needs and trade surplus.
@@ -187,12 +187,13 @@ Primary changes:
 - detect butcher-managed pig and cow pens and pasture capacity
 - treat the butcher's livestock territory as settlement-wide rather than limited to blocks near the `Smoker`
 - shear sheep across the settlement's livestock territory so wool comes from visible loaded-world husbandry instead of only abstract stock math
-- gate herd-meat production behind actual `Butcher` population instead of generic farmer output, with first-pass beef and mutton stock able to flow into settlement trade surpluses
+- gate herd-meat production behind actual `Butcher` population instead of generic farmer output, with first-pass beef, mutton, and pork stock able to flow into settlement trade surpluses
 - feed breeding stock from settlement goods
 - breed when herd size is below target
 - cull adults for `beef`, `pork`, and `leather` when above target
+- build first-pass fenced pens with gates from settlement stock when a species needs managed pasture space, and herd nearby stray animals toward those pens
 - expand fenced pasture when crowding is high and valid terrain is adjacent
-- tune target herd size from settlement population, food demand, and export goals
+- tune target herd size from settlement population, food demand, and export goals; first loaded pass now scales cow, sheep, and pig targets from population and adds up to a `50%` route-driven export buffer
 
 ### 3. Carpenter and Mason Construction Refactor
 

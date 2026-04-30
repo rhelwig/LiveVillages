@@ -1850,6 +1850,10 @@ public final class SettlementVillagers {
 			case "sleeping_in_bed" -> "sleeping in bed";
 			case "stonework" -> "stonework";
 			case "defending_village" -> "defending village";
+			case "breeding_herds" -> "breeding herds";
+			case "building_pens" -> "building pens";
+			case "culling_herds" -> "culling herds";
+			case "herding_animals" -> "herding animals";
 			case "planting_seedlings" -> "planting seedlings";
 			case "stocking_arrows" -> "stocking arrows";
 			case "stocking_carpentry" -> "stocking carpentry";

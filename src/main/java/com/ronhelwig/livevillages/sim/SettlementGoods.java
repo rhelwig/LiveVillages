@@ -40,6 +40,14 @@ public final class SettlementGoods {
 			return "mutton";
 		}
 
+		if (stack.is(Items.PORKCHOP)) {
+			return "pork";
+		}
+
+		if (stack.is(Items.LEATHER)) {
+			return "leather";
+		}
+
 		if (stack.is(Items.WHEAT_SEEDS)) {
 			return "wheat_seeds";
 		}

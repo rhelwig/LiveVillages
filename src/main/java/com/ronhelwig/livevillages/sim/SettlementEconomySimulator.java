@@ -10,7 +10,7 @@ import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 
 public final class SettlementEconomySimulator {
-	private static final List<String> FOOD_PRIORITY = List.of("bread", "carrot", "potato", "beetroot", "wheat", "beef", "mutton");
+	private static final List<String> FOOD_PRIORITY = List.of("bread", "carrot", "potato", "beetroot", "wheat", "beef", "mutton", "pork");
 	private static final double FOOD_ITEMS_PER_PERSON_PER_DAY = 2.0D;
 	private static final double MAX_ROUTE_DISTANCE_BLOCKS = 1_024.0D;
 
@@ -157,6 +157,7 @@ public final class SettlementEconomySimulator {
 		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 0.9D) + gardeners * 1.5D, elapsedDays));
 		addGoods(stock, "beef", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.5D * civilianScale, elapsedDays));
 		addGoods(stock, "mutton", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
+		addGoods(stock, "pork", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
 		addGoods(stock, "cod", scaledAmount(fishermanCatchRate(fishermen, infrastructure), elapsedDays));
 		addGoods(stock, "logs", scaledAmount((population * 0.5D) + foresters * 5.0D + carpenters * 1.0D + constructionSupport * 1.0D, elapsedDays));
 		addGoods(stock, "planks", scaledAmount((population * 0.35D) + foresters * 2.0D + carpenters * 4.0D + constructionSupport * 4.0D, elapsedDays));

@@ -81,19 +81,6 @@ public final class SettlementFarmerWork {
 
 		tendGardens(level, settlement, stock, gardens, activeFarmers, elapsedDays);
 
-		int requiredWheatFeed = scaledAmount(Math.min(activeFarmers * 0.75D, survey.sheep() * 0.25D), elapsedDays);
-		int wheatFeedCost = Math.min(stock.getOrDefault("wheat", 0), requiredWheatFeed);
-		double feedCoverage = requiredWheatFeed <= 0 ? 1.0D : wheatFeedCost / (double) requiredWheatFeed;
-
-		if (wheatFeedCost > 0) {
-			stock.put("wheat", stock.getOrDefault("wheat", 0) - wheatFeedCost);
-		}
-
-		addGoods(stock, "wool", scaledAmount(
-			Math.min(activeFarmers * 1.5D, survey.sheep() * 0.5D) * feedCoverage,
-			elapsedDays
-		));
-
 		int breadBakeCapacity = scaledAmount(Math.min(
 			activeFarmers * 3.0D,
 			(gardens.size() * 1.5D) + (survey.hayBales() * 0.35D) + (survey.wheatCrops() * 0.05D) + 1.0D

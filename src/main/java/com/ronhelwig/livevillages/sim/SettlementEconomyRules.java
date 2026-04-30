@@ -8,11 +8,13 @@ public final class SettlementEconomyRules {
 	public static final double TICKS_PER_DAY = 24_000.0D;
 	public static final long MIN_SIMULATION_TICKS = 6_000L;
 	public static final double MAX_CATCH_UP_DAYS = 5.0D;
-	private static final List<String> FOOD_GOODS = List.of("bread", "beef", "mutton", "cod", "carrot", "potato", "beetroot", "wheat");
+	private static final List<String> FOOD_GOODS = List.of("bread", "beef", "mutton", "pork", "cod", "carrot", "potato", "beetroot", "wheat");
 	private static final List<TargetRule> TARGET_RULES = List.of(
 		new TargetRule("bread", population -> 8 + population * 4),
 		new TargetRule("beef", population -> 4 + population * 2),
 		new TargetRule("mutton", population -> 3 + population),
+		new TargetRule("pork", population -> 3 + population),
+		new TargetRule("leather", population -> 0),
 		new TargetRule("cod", population -> 6 + population * 2),
 		new TargetRule("wheat", population -> 16 + population * 6),
 		new TargetRule("carrot", population -> 8 + population * 3),
@@ -81,7 +83,7 @@ public final class SettlementEconomyRules {
 		if (shouldPrioritizeFoodGrowth(settlement) && isFoodGoods(goodsKey)) {
 			priority += 120;
 
-			if (goodsKey.equals("beef") || goodsKey.equals("mutton")) {
+			if (goodsKey.equals("beef") || goodsKey.equals("mutton") || goodsKey.equals("pork")) {
 				priority += 20;
 			}
 		}

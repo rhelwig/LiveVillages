@@ -103,8 +103,8 @@ These roles already exist in vanilla and should be expanded before adding unnece
 
 - Workstation: `Smoker`
 - Associated structure: `Butcher Shop`, using the current small workstation-house footprint family for the first pass and staging around the placed `Smoker`
-- Loaded-world behavior: manages fenced pig and cow herd space across the whole settlement, shears sheep across the settlement's livestock territory, feeds breeding stock, breeds animals when below target, culls adults when above target, and expands pens when crowding and terrain allow
-- Settlement behavior: aims for enough herd capacity to satisfy village food needs plus useful trade surplus; produces beef, mutton, leather, and husbandry value from culling and herd management, and should be able to export meat surpluses to other villages over active routes
+- Loaded-world behavior: manages fenced pig and cow herd space across the whole settlement, shears sheep across the settlement's livestock territory, feeds breeding stock, breeds cows, sheep, and pigs when below target, culls adults when above target, can build first-pass fenced pens with gates from settlement materials, and can herd nearby stray livestock toward those pens
+- Settlement behavior: aims for herd sizes that scale with settlement population, then grows them up to a capped trade buffer when active routes exist; first pass should allow as much as about `50%` surplus herd capacity above local needs when the village can actually export the excess. Produces beef, mutton, pork, leather, and husbandry value from culling and herd management, and should be able to export meat surpluses to other villages over active routes
 - Territory rule: the `Smoker` is the profession anchor, not the boundary of the work area; butchers should be able to shear sheep, feed animals, breed herds, and cull stock anywhere inside the settlement's managed livestock space
 - Pen definition: player-built fenced pasture expansions anywhere in the settlement should be claimable by the livestock-management system when they connect cleanly to an existing managed herd area or otherwise qualify as village pasture
 

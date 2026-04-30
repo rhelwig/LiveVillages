@@ -13,6 +13,8 @@ public final class TradeBoardTradeRules {
 		"bread",
 		"beef",
 		"mutton",
+		"pork",
+		"leather",
 		"wheat",
 		"carrot",
 		"potato",
@@ -63,6 +65,8 @@ public final class TradeBoardTradeRules {
 			case "bread" -> 6;
 			case "beef" -> 4;
 			case "mutton" -> 4;
+			case "pork" -> 4;
+			case "leather" -> 4;
 			case "wheat" -> 12;
 			case "carrot", "potato", "beetroot" -> 10;
 			case "wool" -> 6;
@@ -191,6 +195,8 @@ public final class TradeBoardTradeRules {
 			case "bread" -> Items.BREAD;
 			case "beef" -> Items.BEEF;
 			case "mutton" -> Items.MUTTON;
+			case "pork" -> Items.PORKCHOP;
+			case "leather" -> Items.LEATHER;
 			case "wheat" -> Items.WHEAT;
 			case "carrot" -> Items.CARROT;
 			case "potato" -> Items.POTATO;
@@ -244,6 +250,8 @@ public final class TradeBoardTradeRules {
 			case "glass", "bed", "lantern" -> 2;
 			case "beef" -> 2;
 			case "mutton" -> 2;
+			case "pork" -> 2;
+			case "leather" -> 2;
 			case "coal" -> 2;
 			case "iron_ingot" -> 2;
 			default -> 0;
@@ -259,6 +267,8 @@ public final class TradeBoardTradeRules {
 			case "bread" -> stack.is(Items.BREAD);
 			case "beef" -> stack.is(Items.BEEF);
 			case "mutton" -> stack.is(Items.MUTTON);
+			case "pork" -> stack.is(Items.PORKCHOP);
+			case "leather" -> stack.is(Items.LEATHER);
 			case "wheat" -> stack.is(Items.WHEAT);
 			case "carrot" -> stack.is(Items.CARROT);
 			case "potato" -> stack.is(Items.POTATO);

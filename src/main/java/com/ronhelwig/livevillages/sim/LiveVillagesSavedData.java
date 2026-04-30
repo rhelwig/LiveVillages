@@ -684,7 +684,12 @@ public class LiveVillagesSavedData extends SavedData {
 				activeBuildSites,
 				constructionDeliveryVillagerIds
 			);
-			SettlementButcherWork.maintainLoadedButchery(level, workingSettlement);
+			SettlementButcherWork.maintainLoadedButchery(
+				level,
+				workingSettlement,
+				stock,
+				getRoutesForSettlement(workingSettlement.id()).size()
+			);
 			SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
