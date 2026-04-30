@@ -527,6 +527,7 @@ public final class SettlementVillagers {
 		}
 
 		LinkedHashMap<String, Integer> population = new LinkedHashMap<>();
+		int cartographers = 0;
 		int farmers = 0;
 		int fletchers = 0;
 		int foresters = 0;
@@ -546,7 +547,9 @@ public final class SettlementVillagers {
 
 			var profession = villager.getVillagerData().profession();
 
-			if (isFoodWorker(profession)) {
+			if (profession.is(VillagerProfession.CARTOGRAPHER)) {
+				cartographers++;
+			} else if (isFoodWorker(profession)) {
 				farmers++;
 			} else if (profession.is(VillagerProfession.FLETCHER)) {
 				fletchers++;
@@ -569,7 +572,7 @@ public final class SettlementVillagers {
 			}
 		}
 
-		int remaining = villagers.size() - farmers - fletchers - foresters - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
+		int remaining = villagers.size() - cartographers - farmers - fletchers - foresters - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
 		unemployed += Math.max(0, remaining);
 
 		if (trademasters <= 0 && !villagers.isEmpty()) {
@@ -589,6 +592,10 @@ public final class SettlementVillagers {
 				trademasters = 1;
 				farmers--;
 			}
+		}
+
+		if (cartographers > 0) {
+			population.put(SettlementRoleKeys.CARTOGRAPHER, cartographers);
 		}
 
 		if (trademasters > 0) {
@@ -1407,6 +1414,12 @@ public final class SettlementVillagers {
 			return "waking_breakfast";
 		}
 
+		Optional<String> defenseTask = SettlementDefenseWork.loadedDefenseTaskKey(level, villager);
+
+		if (defenseTask.isPresent()) {
+			return defenseTask.get();
+		}
+
 		Optional<String> carriedGoodsTask = SettlementVillagerItemPickupWork.villagerTaskKey(level, villager);
 
 		if (carriedGoodsTask.isPresent()) {
@@ -1744,6 +1757,10 @@ public final class SettlementVillagers {
 
 		if (profession.is(LiveVillagesVillagerProfessions.CARPENTER)) {
 			return SettlementRoleKeys.CARPENTER;
+		}
+
+		if (profession.is(VillagerProfession.CARTOGRAPHER)) {
+			return SettlementRoleKeys.CARTOGRAPHER;
 		}
 
 		if (profession.is(VillagerProfession.FLETCHER)) {

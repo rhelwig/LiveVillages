@@ -242,6 +242,29 @@ public class LiveVillagesSavedData extends SavedData {
 		return Optional.ofNullable(nearestSettlement);
 	}
 
+	public Optional<SettlementState> findSettlementForPosition(net.minecraft.resources.ResourceKey<Level> dimension, net.minecraft.core.BlockPos position, Predicate<SettlementState> filter) {
+		SettlementState nearestSettlement = null;
+		double nearestDistanceSquared = Double.MAX_VALUE;
+
+		for (SettlementState settlement : settlements.values()) {
+			if (!settlement.dimension().equals(dimension) || !filter.test(settlement)) {
+				continue;
+			}
+
+			double distanceSquared = settlement.center().distSqr(position);
+			int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
+
+			if (distanceSquared > (double) settlementRadius * settlementRadius || distanceSquared >= nearestDistanceSquared) {
+				continue;
+			}
+
+			nearestSettlement = settlement;
+			nearestDistanceSquared = distanceSquared;
+		}
+
+		return Optional.ofNullable(nearestSettlement);
+	}
+
 	public int settlementCount() {
 		return settlements.size();
 	}
@@ -727,7 +750,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
 				: settlement.withPopulation(actualPopulation);
-			SettlementFletcherWork.maintainLoadedDefense(level, workingSettlement);
+			SettlementDefenseWork.maintainLoadedDefense(level, workingSettlement);
 
 			if (!workingSettlement.equals(settlement)) {
 				entry.setValue(workingSettlement);

@@ -719,6 +719,8 @@ Additional shared or planned workstations and civic structures include:
 - `Fletchers` carry bows with profession-supplied unlimited arrows.
 - Loaded `Fletchers` should treat nearby hostile mobs as a village-defense priority, firing skeleton-strength bow shots while hostiles are inside the settlement.
 - Loaded `Fletchers` should use stocked `stick`, `feather`, and arrowhead materials at a `Fletching Table` to convert them into town `arrow` stock when no immediate defense target is present.
+- When a village bell rings, civilians and other non-combatants should keep the default vanilla panic/hide response, while combat-capable villagers inside `max(25, half settlement radius)` of that bell should rally toward the detected nearby hostile instead of fleeing.
+- In the current first pass, that bell-rally group should at least include loaded `Fletchers`, `Butchers`, `Foresters`, and `Roadwrights`, with other armed field workers joining as their role behavior comes online.
 - A placed vanilla `Fletching Table` in a settlement should start a `Fletcher's Hut` build site when terrain allows, using cobblestone flooring, plank siding, and `2` beds.
 - Each settlement `Fletching Table` can support up to `2` Fletchers assigned to that workstation.
 - `Fletchers` should also contribute a smaller abstract security benefit than a dedicated `Guard`, so having one improves the settlement security rating even before the loaded-world combat loop is perfect.

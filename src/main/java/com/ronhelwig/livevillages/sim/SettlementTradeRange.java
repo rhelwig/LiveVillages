@@ -37,7 +37,7 @@ public final class SettlementTradeRange {
 	}
 
 	public static TradeRangeProfile profile(SettlementState settlement, SettlementConstruction.InfrastructureSurvey infrastructure) {
-		int cartographers = roleCount(settlement, "cartographer");
+		int cartographers = roleCount(settlement, SettlementRoleKeys.CARTOGRAPHER);
 		int scribes = roleCount(settlement, SettlementRoleKeys.SCRIBE);
 		int landRouteRangeBlocks = BASE_LAND_ROUTE_RANGE_BLOCKS
 			+ rangeBonus(cartographers, CARTOGRAPHER_ROUTE_RANGE_BONUS_BLOCKS)

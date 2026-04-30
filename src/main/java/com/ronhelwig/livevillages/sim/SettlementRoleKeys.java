@@ -3,6 +3,7 @@ package com.ronhelwig.livevillages.sim;
 public final class SettlementRoleKeys {
 	public static final String BUTCHER = "butcher";
 	public static final String CARPENTER = "carpenter";
+	public static final String CARTOGRAPHER = "cartographer";
 	public static final String CONSTRUCTION_SUPPORT = "construction_support";
 	public static final String FARMER = "farmer";
 	public static final String FISHERMAN = "fisherman";

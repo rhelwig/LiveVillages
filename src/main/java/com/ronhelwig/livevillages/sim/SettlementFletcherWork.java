@@ -81,7 +81,11 @@ public final class SettlementFletcherWork {
 		return stockChanged;
 	}
 
-	public static void maintainLoadedDefense(ServerLevel level, SettlementState settlement) {
+	public static void maintainLoadedDefense(
+		ServerLevel level,
+		SettlementState settlement,
+		Optional<SettlementDefenseWork.ActiveBellAlarm> activeAlarm
+	) {
 		List<Villager> fletchers = SettlementVillagers.nearbyFletchers(level, settlement);
 
 		if (fletchers.isEmpty()) {
@@ -92,14 +96,10 @@ public final class SettlementFletcherWork {
 
 		for (Villager fletcher : fletchers) {
 			List<Monster> hostiles = nearbyHostiles(level, settlement, fletcher);
+			Optional<Monster> target = bellAlarmTarget(fletcher, activeAlarm)
+				.or(() -> nearestHostile(fletcher, hostiles));
 			showBow(fletcher);
-			fletcher.setAggressive(!hostiles.isEmpty());
-
-			if (hostiles.isEmpty()) {
-				continue;
-			}
-
-			Optional<Monster> target = nearestHostile(fletcher, hostiles);
+			fletcher.setAggressive(target.isPresent() || !hostiles.isEmpty());
 
 			if (target.isEmpty()) {
 				continue;
@@ -109,16 +109,12 @@ public final class SettlementFletcherWork {
 			ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("defending_village", tick));
 			fletcher.lookAt(hostile, 30.0F, 30.0F);
 
-			if (!fletcher.hasLineOfSight(hostile)) {
+			if (!fletcher.hasLineOfSight(hostile) || fletcher.distanceToSqr(hostile) > DEFENSE_RANGE_SQUARED) {
 				fletcher.getNavigation().moveTo(hostile.getX(), hostile.getY(), hostile.getZ(), DEFENSE_WALK_SPEED);
 				continue;
 			}
 
 			fletcher.getNavigation().stop();
-
-			if (fletcher.distanceToSqr(hostile) > DEFENSE_RANGE_SQUARED) {
-				continue;
-			}
 
 			if (tick - LAST_ATTACK_TICKS.getOrDefault(fletcher.getUUID().toString(), Long.MIN_VALUE) < DEFENSE_ATTACK_COOLDOWN_TICKS) {
 				continue;
@@ -191,6 +187,16 @@ public final class SettlementFletcherWork {
 
 		return hostiles.stream()
 			.min(Comparator.comparingDouble(fletcher::distanceToSqr));
+	}
+
+	private static Optional<Monster> bellAlarmTarget(
+		Villager fletcher,
+		Optional<SettlementDefenseWork.ActiveBellAlarm> activeAlarm
+	) {
+		return activeAlarm
+			.filter(alarm -> fletcher.blockPosition().distSqr(alarm.bellPos()) <= (double) alarm.responseRadius() * alarm.responseRadius())
+			.map(SettlementDefenseWork.ActiveBellAlarm::target)
+			.filter(hostile -> hostile.isAlive() && !hostile.isRemoved());
 	}
 
 	private static void fireSkeletonStrengthArrow(ServerLevel level, Villager fletcher, Monster hostile) {
