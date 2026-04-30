@@ -425,6 +425,7 @@ public final class SettlementLoadedObservation {
 		return switch (buildSite.blueprintId()) {
 			case BUTCHER_SHOP -> "Butcher";
 			case DOCK -> "Dock";
+			case LIGHTHOUSE -> "Lighthouse";
 			case TRADING_POST -> "Trading Post";
 			case CARPENTER_WORKSHOP -> "Carpenter";
 			case FLETCHER_HUT -> "Fletcher";

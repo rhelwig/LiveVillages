@@ -1833,8 +1833,10 @@ public final class SettlementVillagers {
 			case "helping_roadwright" -> "helping Roadwright";
 			case "idle" -> "idle";
 			case "improving_paths" -> "improving paths";
+			case "lighting_lighthouse" -> "lighting lighthouse";
 			case "inspecting_docks" -> "inspecting docks";
 			case "checking_lighthouse" -> "checking lighthouse";
+			case "extinguishing_lighthouse" -> "extinguishing lighthouse";
 			case "maintaining_tools" -> "maintaining tools";
 			case "maintaining_workshop" -> "maintaining workshop";
 			case "managing_harbor" -> "managing harbor";
@@ -1848,6 +1850,7 @@ public final class SettlementVillagers {
 			case "seeking_bed" -> "seeking bed";
 			case "sleeping" -> "sleeping";
 			case "sleeping_in_bed" -> "sleeping in bed";
+			case "warning_harbor" -> "warning harbor";
 			case "stonework" -> "stonework";
 			case "defending_village" -> "defending village";
 			case "breeding_herds" -> "breeding herds";

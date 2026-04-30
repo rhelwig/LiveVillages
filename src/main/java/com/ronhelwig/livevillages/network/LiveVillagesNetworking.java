@@ -42,6 +42,7 @@ import com.ronhelwig.livevillages.sim.SettlementKind;
 import com.ronhelwig.livevillages.sim.SettlementLoadedObservation;
 import com.ronhelwig.livevillages.sim.SettlementRoadwrightWork;
 import com.ronhelwig.livevillages.sim.SettlementState;
+import com.ronhelwig.livevillages.sim.SettlementTradeRange;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
 public final class LiveVillagesNetworking {
@@ -54,11 +55,12 @@ public final class LiveVillagesNetworking {
 	private static final long BUILD_SITE_PREVIEW_ACTIVE_TICKS = 40L;
 	private static final long TICKS_PER_DAY = 24_000L;
 	private static final int PORTMASTER_MAP_MIN_RADIUS_BLOCKS = 128;
-	private static final int PORTMASTER_MAP_MAX_RADIUS_BLOCKS = 1_024;
+	private static final int PORTMASTER_MAP_MAX_RADIUS_BLOCKS = 2_048;
 	private static final int PORTMASTER_MAP_TERRAIN_RADIUS_WITHOUT_CARTOGRAPHER = 320;
-	private static final int PORTMASTER_MAP_MAX_KNOWN_PORT_DISTANCE_BLOCKS = 2_048;
 	private static final int PORTMASTER_MAP_TERRAIN_GRID_SIZE = 184;
+	private static final String MAP_MARKER_LOCAL_LIGHTHOUSE = "local_lighthouse";
 	private static final String MAP_MARKER_LOCAL_PORT = "local_port";
+	private static final String MAP_MARKER_KNOWN_LIGHTHOUSE = "known_lighthouse";
 	private static final String MAP_MARKER_KNOWN_PORT = "known_port";
 	private static final String MAP_MARKER_KNOWN_SETTLEMENT = "known_settlement";
 	private static final Map<UUID, Long> ACTIVE_BUILD_SITE_PREVIEWS = new ConcurrentHashMap<>();
@@ -179,14 +181,22 @@ public final class LiveVillagesNetworking {
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
 		SettlementState homeSettlement = settlement.get();
-		boolean hasCartographer = SettlementVillagers.nearbyProfessionPopulation(level, homeSettlement).getOrDefault("cartographer", 0) > 0;
-		List<PortmasterMapPortView> ports = collectPortmasterMapPorts(level, savedData, homeSettlement, portmasterAnchorPos, hasCartographer);
+		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(homeSettlement, SettlementConstruction.survey(level, homeSettlement));
+		boolean hasCartographer = tradeRange.hasCartographerSupport();
+		List<PortmasterMapPortView> ports = collectPortmasterMapPorts(
+			level,
+			savedData,
+			homeSettlement,
+			portmasterAnchorPos,
+			hasCartographer,
+			tradeRange.portmasterMapDistanceBlocks()
+		);
 		int farthestPortDistance = ports.stream()
 			.mapToInt(PortmasterMapPortView::distanceBlocks)
 			.max()
 			.orElse(0);
 		int radius = roundUpToStep(clamp(
-			Math.max(PORTMASTER_MAP_MIN_RADIUS_BLOCKS, farthestPortDistance + 32),
+			Math.max(PORTMASTER_MAP_MIN_RADIUS_BLOCKS, Math.max(tradeRange.portmasterMapDistanceBlocks(), farthestPortDistance + 32)),
 			PORTMASTER_MAP_MIN_RADIUS_BLOCKS,
 			PORTMASTER_MAP_MAX_RADIUS_BLOCKS
 		), 32);
@@ -210,12 +220,13 @@ public final class LiveVillagesNetworking {
 		LiveVillagesSavedData savedData,
 		SettlementState homeSettlement,
 		BlockPos anchorPos,
-		boolean hasCartographer
+		boolean hasCartographer,
+		int maxKnownPortDistanceBlocks
 	) {
 		return savedData.getSettlements().stream()
 			.filter(candidate -> candidate.dimension().equals(homeSettlement.dimension()))
 			.filter(candidate -> candidate.kind() != SettlementKind.OUTPOST)
-			.map(candidate -> buildKnownPortView(level, homeSettlement, candidate, anchorPos, hasCartographer))
+			.map(candidate -> buildKnownPortView(level, homeSettlement, candidate, anchorPos, hasCartographer, maxKnownPortDistanceBlocks))
 			.flatMap(Optional::stream)
 			.sorted(Comparator.<PortmasterMapPortView>comparingInt(
 					point -> portmasterMarkerPriority(point.kind())
@@ -230,29 +241,36 @@ public final class LiveVillagesNetworking {
 		SettlementState homeSettlement,
 		SettlementState candidate,
 		BlockPos homeAnchorPos,
-		boolean hasCartographer
+		boolean hasCartographer,
+		int maxKnownPortDistanceBlocks
 	) {
 		boolean local = candidate.id().equals(homeSettlement.id());
 		int distanceBlocks = local
 			? 0
 			: (int) Math.round(Math.sqrt(homeSettlement.center().distSqr(candidate.center())));
 
-		if (!local && distanceBlocks > PORTMASTER_MAP_MAX_KNOWN_PORT_DISTANCE_BLOCKS) {
+		if (!local && distanceBlocks > maxKnownPortDistanceBlocks) {
 			return Optional.empty();
 		}
 
 		SettlementConstruction.InfrastructureSurvey survey = SettlementConstruction.survey(level, candidate);
 		List<BlockPos> dockOrigins = survey.docks() > 0 ? SettlementConstruction.findDockOrigins(level, candidate) : List.of();
+		List<BlockPos> lighthousePositions = survey.lighthouses() > 0 ? SettlementConstruction.findLighthouseTops(level, candidate) : List.of();
 		List<BlockPos> anchorPositions = dockOrigins.isEmpty() ? SettlementConstruction.findPlacedPortmasterAnchors(level, candidate) : List.of();
 		boolean hasPort = local || !dockOrigins.isEmpty() || !anchorPositions.isEmpty();
+		boolean hasLighthouse = local || !lighthousePositions.isEmpty();
 
-		if (!hasPort && !hasCartographer) {
+		if (!hasPort && !hasLighthouse && !hasCartographer) {
 			return Optional.empty();
 		}
 
 		BlockPos representativePos = local
 			? homeAnchorPos.immutable()
-			: hasPort
+			: hasLighthouse
+				? lighthousePositions.stream().findFirst()
+				.orElse(candidate.center())
+				.immutable()
+				: hasPort
 				? dockOrigins.stream().findFirst()
 				.or(() -> anchorPositions.stream().findFirst())
 				.orElse(candidate.center())
@@ -260,7 +278,9 @@ public final class LiveVillagesNetworking {
 				: candidate.center().immutable();
 		int labelDistanceBlocks = local ? 0 : (int) Math.round(Math.sqrt(homeAnchorPos.distSqr(representativePos)));
 		String kind = local
-			? MAP_MARKER_LOCAL_PORT
+			? hasLighthouse ? MAP_MARKER_LOCAL_LIGHTHOUSE : MAP_MARKER_LOCAL_PORT
+			: hasLighthouse
+				? MAP_MARKER_KNOWN_LIGHTHOUSE
 			: hasPort
 				? MAP_MARKER_KNOWN_PORT
 				: MAP_MARKER_KNOWN_SETTLEMENT;
@@ -269,9 +289,11 @@ public final class LiveVillagesNetworking {
 
 	private static int portmasterMarkerPriority(String kind) {
 		return switch (kind) {
-			case MAP_MARKER_LOCAL_PORT -> 0;
-			case MAP_MARKER_KNOWN_PORT -> 1;
-			default -> 2;
+			case MAP_MARKER_LOCAL_LIGHTHOUSE -> 0;
+			case MAP_MARKER_LOCAL_PORT -> 1;
+			case MAP_MARKER_KNOWN_LIGHTHOUSE -> 2;
+			case MAP_MARKER_KNOWN_PORT -> 3;
+			default -> 4;
 		};
 	}
 
@@ -704,6 +726,7 @@ public final class LiveVillagesNetworking {
 
 	private static boolean isPreviewWorkstationItem(Item item) {
 		return item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
+			|| item == LiveVillagesBlocks.LIGHTHOUSE_ITEM
 			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
@@ -727,6 +750,10 @@ public final class LiveVillagesNetworking {
 
 		if (item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM) {
 			return SettlementConstruction.previewCarpenterWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.LIGHTHOUSE_ITEM) {
+			return SettlementConstruction.previewLighthouseAtMarker(level, settlement.id(), placementPos);
 		}
 
 		if (item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM) {
@@ -930,6 +957,7 @@ public final class LiveVillagesNetworking {
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
 			case DOCK -> "Dock";
+			case LIGHTHOUSE -> "Lighthouse";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
 			case HOUSING_SHELTER -> "Housing Shelter";

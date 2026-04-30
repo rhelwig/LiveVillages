@@ -24,7 +24,9 @@ public class PortmasterMapScreen extends Screen {
 	private static final int COMPASS_SIZE = 26;
 	private static final int PADDING = 10;
 	private static final Component NO_CARTOGRAPHER_HINT = Component.literal("Hire a cartographer to expand the map.");
+	private static final String MARKER_LOCAL_LIGHTHOUSE = "local_lighthouse";
 	private static final String MARKER_LOCAL_PORT = "local_port";
+	private static final String MARKER_KNOWN_LIGHTHOUSE = "known_lighthouse";
 	private static final String MARKER_KNOWN_PORT = "known_port";
 	private static final String MARKER_KNOWN_SETTLEMENT = "known_settlement";
 
@@ -215,8 +217,14 @@ public class PortmasterMapScreen extends Screen {
 		y = legendRow(graphics, font, x, y, 0xFF6F7B5B, "Land");
 		y = legendRow(graphics, font, x, y, 0xFF24211C, "Uncharted");
 		y += 4;
+		drawPortSymbol(graphics, x + 4, y + 5, MARKER_LOCAL_LIGHTHOUSE);
+		graphics.text(font, "Local lighthouse", x + 12, y, 0xFFE6D9C0, false);
+		y += 10;
 		drawPortSymbol(graphics, x + 4, y + 5, MARKER_LOCAL_PORT);
 		graphics.text(font, "Local port", x + 12, y, 0xFFE6D9C0, false);
+		y += 10;
+		drawPortSymbol(graphics, x + 4, y + 5, MARKER_KNOWN_LIGHTHOUSE);
+		graphics.text(font, "Lighthouse", x + 12, y, 0xFFE6D9C0, false);
 		y += 10;
 		drawPortSymbol(graphics, x + 4, y + 5, MARKER_KNOWN_PORT);
 		graphics.text(font, "Known port", x + 12, y, 0xFFE6D9C0, false);
@@ -310,6 +318,15 @@ public class PortmasterMapScreen extends Screen {
 			return;
 		}
 
+		if (MARKER_LOCAL_LIGHTHOUSE.equals(kind) || MARKER_KNOWN_LIGHTHOUSE.equals(kind)) {
+			int color = MARKER_LOCAL_LIGHTHOUSE.equals(kind) ? 0xFFF9D982 : 0xFFD7C9A6;
+			graphics.fill(x - 1, y - 3, x + 2, y + 2, color);
+			graphics.fill(x - 2, y + 1, x + 3, y + 2, color);
+			graphics.fill(x - 1, y - 4, x + 2, y - 3, 0xFFB13D3D);
+			graphics.fill(x, y - 5, x + 1, y - 4, 0xFFF8E6BE);
+			return;
+		}
+
 		int color = MARKER_LOCAL_PORT.equals(kind) ? 0xFFFFE19A : 0xFFF6E9C8;
 		graphics.fill(x, y - 3, x + 1, y - 2, color);
 		graphics.fill(x - 1, y - 2, x + 2, y - 1, color);
@@ -320,8 +337,12 @@ public class PortmasterMapScreen extends Screen {
 	}
 
 	private String markerLabel(PortmasterMapPortView port) {
-		String suffix = MARKER_KNOWN_SETTLEMENT.equals(port.kind()) ? "settlement" : "port";
-		if (MARKER_LOCAL_PORT.equals(port.kind())) {
+		String suffix = switch (port.kind()) {
+			case MARKER_LOCAL_LIGHTHOUSE, MARKER_KNOWN_LIGHTHOUSE -> "lighthouse";
+			case MARKER_KNOWN_SETTLEMENT -> "settlement";
+			default -> "port";
+		};
+		if (MARKER_LOCAL_PORT.equals(port.kind()) || MARKER_LOCAL_LIGHTHOUSE.equals(port.kind())) {
 			return port.name() + " (" + suffix + ")";
 		}
 

@@ -127,7 +127,8 @@ These roles already exist in vanilla and should be expanded before adding unnece
 
 - Workstation: `Barrel`
 - Loaded-world behavior: works shorelines, rivers, docks, and harbor edges; gathers fish; and carries a spear or trident
-- Settlement behavior: adds fish and shoreline food output, especially in water-linked settlements
+- Settlement behavior: adds fish and shoreline food output, especially in water-linked settlements; `Docks` and `Lighthouses` should both improve catch volume
+- Structure note: keep `Fisherman` close to vanilla for now. The `Barrel` remains the workstation, and no special Fisherman housing or bespoke staged workstation structure is required in this pass
 
 ### Fletcher
 
@@ -288,7 +289,7 @@ Workstation names such as `Miner Workstation` are current working names carried 
 
 - Workstation: `Portmaster's Anchor`
 - Associated structure note: no dedicated house or office; the anchor is the job-site and shoreline placement signal, and nearby `Dock` construction should prefer that anchor's facing when the harbor allows it
-- Loaded-world behavior: patrols between the anchor, docks, and lighthouses; validates harbors; and keeps dock-and-lighthouse infrastructure visibly staffed while deeper cargo, dredging, and canal work remain future expansion
+- Loaded-world behavior: patrols between the anchor, docks, and lighthouses; validates harbors; keeps dock-and-lighthouse infrastructure visibly staffed; extinguishes lighthouse fires in the morning; relights them shortly before the village gathering period; and uses threatened lighthouses as harbor-warning points when nearby hostiles approach
 - Settlement behavior: improves harbor trade value and route throughput where docks or lighthouses already exist, and prepares the settlement-side role needed for later true water-route logic
 - Visual identity: should read immediately as harbor staff, with a blue-and-brass maritime palette that works with the wide hat and spyglass silhouette already used for the role
 - Change introduced by Live Villages: creates a true harbor-logistics role instead of treating water trade as ordinary villager travel
@@ -339,10 +340,14 @@ Not every important workstation-like block needs to represent a separate village
 ### Lighthouse
 
 - Role: harbor landmark and water-trade amplifier rather than a villager workstation
+- Placement block: players place a dedicated `Lighthouse` marker block; villagers then build the real tower around it with that marker kept at the center of the bottom `3x3` level
 - Primary builders: `Mason` handles the cobblestone tower and `Portmaster` treats it as harbor infrastructure
 - Physical form: the minimal tower is four `3x3` cobblestone levels, then four `1x1` cobblestone levels, with a `Campfire` on top
 - Placement rule: should appear near a dock or shoreline vantage point with enough nearby water to justify harbor traffic
-- Use: makes harbor settlements legible, signals the water-facing side of town, and adds a significant bonus to water-route throughput or route quality compared with a dock alone
+- Use: makes harbor settlements legible, signals the water-facing side of town, widens the `Portmaster's Anchor` map, adds a significant bonus to water-route throughput, quality, and trade distance compared with a dock alone, and contributes a modest harbor-security and raid-warning benefit
+- Daily behavior: the lighthouse fire should be off during the daytime after morning harbor work, then relit shortly before villagers head to the village gathering
+- Trade-range stacking: trade extensions should be cumulative. `Dock` unlocks water-route trade support, `Cartographer` extends land and water trade range, `Scribe` extends land and water trade range, and `Lighthouse` extends water-route trade range
+- Multiple lighthouses: a settlement may have more than one lighthouse, but only the first should provide the large harbor-range and trade bonus. Additional lighthouses should add only small extra water-trade, map-range, and security value
 
 ## Immediate Planning Takeaways
 

@@ -57,6 +57,7 @@ public final class SettlementConstructionMaterials {
 
 	private static ConstructionMaterialResult craftMaterial(Map<String, Integer> goods, String materialKey) {
 		return switch (materialKey) {
+			case "campfire" -> craftCampfire(goods);
 			case "planks" -> craftPlanks(goods);
 			case "stairs" -> craftWoodPart(goods, "stairs", 6, 4);
 			case "slab" -> craftWoodPart(goods, "slab", 3, 6);
@@ -146,6 +147,31 @@ public final class SettlementConstructionMaterials {
 		}
 
 		addGoods(workingGoods, "torch", 3);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftCampfire(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = ensureSticks(workingGoods, 3);
+
+		if (craftingSteps < 0) {
+			return ConstructionMaterialResult.missing("stick");
+		}
+
+		if (!consumeDirect(workingGoods, "logs", 3)) {
+			return ConstructionMaterialResult.missing("logs");
+		}
+
+		if (!consumeDirect(workingGoods, "stick", 3)) {
+			return ConstructionMaterialResult.missing("stick");
+		}
+
+		if (!consumeDirect(workingGoods, "coal", 1)) {
+			return ConstructionMaterialResult.missing("coal");
+		}
+
 		goods.clear();
 		goods.putAll(workingGoods);
 		return ConstructionMaterialResult.supplied(craftingSteps + 1);

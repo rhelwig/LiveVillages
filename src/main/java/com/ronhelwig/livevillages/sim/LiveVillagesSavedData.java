@@ -775,6 +775,7 @@ public class LiveVillagesSavedData extends SavedData {
 				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
 				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			restoreSettlementMapMemory(level, workingSettlement);
 			if (LiveVillagesGameRules.surveyorMapFogEnabled(level)
@@ -969,6 +970,28 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
 				changed |= SettlementVillagers.ensurePortmaster(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedLighthouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos markerPos : SettlementConstruction.findPlacedLighthouses(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIGHTHOUSE, markerPos);
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLighthouseAtMarker(
+				level,
+				markerPos,
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
 			}
 		}
 

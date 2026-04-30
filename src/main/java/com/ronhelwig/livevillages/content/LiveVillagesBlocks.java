@@ -16,6 +16,7 @@ import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.CarpenterBenchBlock;
 import com.ronhelwig.livevillages.block.ForesterTableBlock;
 import com.ronhelwig.livevillages.block.HousingShelterBlock;
+import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
@@ -104,6 +105,19 @@ public final class LiveVillagesBlocks {
 	public static final Item PORTMASTER_ANCHOR_ITEM = registerItem(
 		"portmaster_anchor",
 		new BlockItem(PORTMASTER_ANCHOR, new Item.Properties().setId(itemKey("portmaster_anchor")).useBlockDescriptionPrefix())
+	);
+	public static final LighthouseBlock LIGHTHOUSE = registerBlock(
+		"lighthouse",
+		new LighthouseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.STONE_BRICKS)
+				.setId(blockKey("lighthouse"))
+				.strength(2.5F)
+				.sound(SoundType.STONE)
+		)
+	);
+	public static final Item LIGHTHOUSE_ITEM = registerItem(
+		"lighthouse",
+		new BlockItem(LIGHTHOUSE, new Item.Properties().setId(itemKey("lighthouse")).useBlockDescriptionPrefix())
 	);
 	public static final SimpleHousingShelterBlock SIMPLE_HOUSING_SHELTER = registerBlock(
 		"simple_housing_shelter",

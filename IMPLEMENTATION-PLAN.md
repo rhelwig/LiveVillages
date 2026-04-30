@@ -2,6 +2,10 @@
 
 This file tracks the intended implementation order for the next major profession and world-behavior changes. It should stay aligned with [SPECS.md](SPECS.md) and [PROFESSIONS.md](PROFESSIONS.md).
 
+## Current Focus
+
+- Fold the new harbor trade-range model into actual trade cadence and quality, fix the custom recipe data path so new recipes appear in-game, and give `Fisherman` consistent simulation output with extra dock and lighthouse seafood bonuses while keeping the role otherwise close to vanilla.
+
 ## Current Foundations
 
 Already in code:
@@ -13,6 +17,9 @@ Already in code:
 - current Trade Board visual pass: syncing a client-rendered settlement-name label onto the placed board faces
 - the `Portmaster's Anchor` now opens a first-pass harbor trade map centered on the anchor, showing rotated land/sea context plus known ports with fitted default scale, client-side zoom, Cartographer-enabled inland settlement markers, broader Cartographer terrain charting beyond the smaller local harbor view, and a saved shared terrain cache that improves as loaded exploration observes more coast and sea
 - the `Portmaster's Anchor` harbor map now shows a footer hint to hire a `Cartographer` when the village has not unlocked the wider charted view yet
+- the craftable `Lighthouse` marker block now starts or resumes a staged lighthouse build anchored on the placed marker, and harbor trade range now uses cumulative land/water bonuses instead of one fixed distance cap
+- loaded `Portmasters` now relight and extinguish lighthouse fires on a daily schedule, can use threatened lighthouses as harbor-warning points, lighthouse markers render distinctly on the harbor map, and extra lighthouses only add minor follow-on trade, map-range, and security benefits beyond the first tower
+- trade-range infrastructure now also improves real trade cadence and route quality, `Fisherman` output now persists in the abstract simulation instead of only when nearby villagers are loaded, and docks plus lighthouses both increase seafood catch
 - Surveyor fog-of-war observations and remembered Roadwright route-plan intent now have save/restore hooks so those map views do not need to rebuild entirely from scratch after a world reload
 - staged construction now preserves the anchored workstation while replacing the support block directly beneath it, so the Trade Board stays usable during Trading Post construction
 - Trading Post front-cap stair orientation is now explicit in the blueprint, and Trade Boards now periodically re-sync their settlement label server-side so the face text survives construction/state normalization

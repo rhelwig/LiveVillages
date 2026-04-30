@@ -1055,6 +1055,7 @@ public final class SettlementConstructionWork {
 					case FLETCHER_HUT -> relativePosition(relativePos.right(), -3, 1);
 					case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
 					case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
+					case LIGHTHOUSE -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
 					case TRADING_POST -> relativePosition(2, -1, 1);

@@ -420,16 +420,25 @@ A dock consists of planks extending from land into the water until the water is 
 - In the water there must be logs supporting the planks at least every `4` blocks. An `8`-block dock therefore needs two pairs of support logs.
 - Villages with a large enough body of water inside their footprint should want at least one dock.
 - Docks should improve `Fisherman` catch and add a modest water-trade bonus.
+- Dock, `Cartographer`, `Scribe`, and `Lighthouse` trade-range improvements should also improve actual trade cadence and trade quality, not only the maximum reachable distance.
 
 #### Lighthouse
 
 A lighthouse is a harbor structure rather than a workstation. It should be visually simple in the early tier and readable from a distance.
 
+- Players should be able to craft and place a dedicated `Lighthouse` marker block that looks like a stone block with a lighthouse emblem or miniature on it.
+- Placing that marker should start or resume a staged lighthouse build with the placed marker kept at the center of the bottom `3x3` level.
 - The basic lighthouse must be at least `8` cobblestone blocks tall with a `Campfire` on top.
 - The minimal/basic form is four levels of `3x3` cobblestone, then four levels of a single cobblestone block, then the `Campfire` on the highest block.
 - The basic version should use only `Cobblestone` for the tower body.
 - Lighthouses should be placed near docks or shoreline vantage points.
-- A lighthouse should significantly improve water-route quality or throughput compared with a dock alone.
+- A dock should unlock water-route trading support for a harbor settlement.
+- A lighthouse should significantly improve water-route quality, throughput, and reachable trade distance compared with a dock alone.
+- A lighthouse should also improve `Fisherman` catch for nearby harbor settlements, though less dramatically than it improves water trade.
+- Trade-range extensions should be cumulative so future harbor or knowledge infrastructure can stack with existing range bonuses.
+- Multiple lighthouses should be allowed in the same settlement, but only the first lighthouse should provide the major harbor-range and trade boost. Additional lighthouses should add only minor extra water-range and trade-value gains.
+- Lighthouses should also add a modest security benefit for harbor settlements and act as a visible harbor-warning point during nearby hostile pressure.
+- Loaded `Portmasters` should extinguish lighthouse fires in the morning, relight them shortly before the daily gathering window, and use threatened lighthouses as a raid-warning point when hostiles approach the harbor.
 
 ## Worker Roles and Workstations
 
@@ -595,8 +604,10 @@ Key planned settlement-specific roles:
   - The harbor trade map should use the same player-facing rotation and compass-rose behavior as the survey map.
   - Known ports should use a recognizable port-chart symbol and should show the port name plus distance when hovered.
   - The linked local port does not need to repeat a `0`-distance readout in its hover label.
+  - Settlements with lighthouses should render lighthouse-specific harbor-map markers distinct from ordinary ports, with the local lighthouse marker prioritized ahead of other harbor symbols.
   - If the settlement has a `Cartographer`, the harbor trade map should also show known settlements that do not yet have ports.
   - Cartographer knowledge should also expand broader land/sea charting beyond the shorter local harbor view, while non-Cartographer maps may keep a smaller terrain knowledge radius.
+  - Harbor-range bonuses from docks, cartographic knowledge, scribal knowledge, and lighthouses should widen the map's known-port coverage cumulatively.
   - Harbor terrain knowledge should accumulate over time from loaded exploration instead of being rebuilt only from the chunks currently loaded when the map opens.
   - Shared harbor charting should come from a saved dimension-wide knowledge cache so different anchors can benefit from previously explored coastlines and sea lanes.
 - `Scribe`: handles recipe and knowledge exchange.

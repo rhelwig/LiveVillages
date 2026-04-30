@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 public final class SettlementEconomySimulator {
 	private static final List<String> FOOD_PRIORITY = List.of("bread", "carrot", "potato", "beetroot", "wheat", "beef", "mutton", "pork");
 	private static final double FOOD_ITEMS_PER_PERSON_PER_DAY = 2.0D;
-	private static final double MAX_ROUTE_DISTANCE_BLOCKS = 1_024.0D;
 
 	private SettlementEconomySimulator() {
 	}
@@ -68,7 +67,7 @@ public final class SettlementEconomySimulator {
 		SupplyState foodSupply = consumeFood(stock, population, elapsedDays);
 		SupplyState upkeepSupply = consumeUpkeep(stock, simulationSettlement.housingCapacity(), population, elapsedDays);
 
-		List<SettlementProject> plannedProjects = planProjects(simulationSettlement, routes, allSettlements, infrastructure);
+		List<SettlementProject> plannedProjects = planProjects(simulationSettlement, routes, allSettlements, infrastructure, level);
 		ProjectAdvanceResult projectResult = advanceProjects(
 			simulationSettlement,
 			plannedProjects,
@@ -83,7 +82,7 @@ public final class SettlementEconomySimulator {
 		List<RouteState> activeRoutes = new ArrayList<>(routes);
 		activeRoutes.addAll(projectResult.createdRoutes());
 
-		double security = computeSecurity(simulationSettlement, activeRoutes, projectResult.defenseLevel(), population, elapsedDays);
+		double security = computeSecurity(simulationSettlement, infrastructure, activeRoutes, projectResult.defenseLevel(), population, elapsedDays);
 		double comfort = computeComfort(
 			simulationSettlement,
 			projectResult.housingCapacity(),
@@ -140,7 +139,7 @@ public final class SettlementEconomySimulator {
 		int carpenters = roleCount(settlement, SettlementRoleKeys.CARPENTER);
 		int masons = roleCount(settlement, SettlementRoleKeys.MASON);
 		int constructionSupport = roleCount(settlement, SettlementRoleKeys.CONSTRUCTION_SUPPORT);
-		int fishermen = roleCount(nearbyProfessions, "fisherman");
+		int fishermen = roleCount(settlement, SettlementRoleKeys.FISHERMAN);
 		int gardeners = roleCount(settlement, "gardener");
 		int foresters = roleCount(settlement, "forester");
 		int miners = roleCount(settlement, "miner");
@@ -149,6 +148,7 @@ public final class SettlementEconomySimulator {
 		double civilianScale = settlement.kind() == SettlementKind.OUTPOST ? 0.65D : 1.0D;
 		double tradeScale = settlement.kind() == SettlementKind.HARBOR ? 1.2D : 1.0D;
 		boolean useLoadedFarmerWork = level != null && SettlementVillagers.usesActualVillagers(settlement);
+		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(settlement, infrastructure);
 
 		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
 		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
@@ -172,7 +172,8 @@ public final class SettlementEconomySimulator {
 			scaledAmount(
 				(population * 0.3D)
 					+ trademasters * 2.0D
-					+ routes.size() * (tradeScale + harborRouteTradeBonus(infrastructure, portmasters) + tradingPostRouteTradeBonus(infrastructure))
+					+ routes.size() * (tradeScale + tradeRange.routeTradeBonus() + harborRouteTradeBonus(infrastructure, portmasters) + tradingPostRouteTradeBonus(infrastructure))
+					+ tradeRange.localTradeBonus()
 					+ harborLocalTradeBonus(infrastructure, portmasters),
 				elapsedDays
 			)
@@ -240,7 +241,8 @@ public final class SettlementEconomySimulator {
 		SettlementState settlement,
 		List<RouteState> routes,
 		Collection<SettlementState> allSettlements,
-		SettlementConstruction.InfrastructureSurvey infrastructure
+		SettlementConstruction.InfrastructureSurvey infrastructure,
+		ServerLevel level
 	) {
 		List<SettlementProject> projects = new ArrayList<>();
 
@@ -301,7 +303,7 @@ public final class SettlementEconomySimulator {
 			if (infrastructure.hasLargeWaterBody()
 				&& infrastructure.docks() > 0
 				&& population >= 6
-				&& infrastructure.lighthouses() + countProjectType(projects, SettlementProjectType.LIGHTHOUSE) < 1) {
+				&& infrastructure.lighthouses() + infrastructure.incompleteLighthouses() + countProjectType(projects, SettlementProjectType.LIGHTHOUSE) < 1) {
 				projects.add(new SettlementProject(nextProjectId(projects, "lighthouse"), SettlementProjectType.LIGHTHOUSE, "", 0.0D, 1.1D));
 			}
 		}
@@ -310,7 +312,7 @@ public final class SettlementEconomySimulator {
 			projects.add(new SettlementProject(nextProjectId(projects, "defense"), SettlementProjectType.DEFENSE, "", 0.0D, 0.8D));
 		}
 
-		maybeQueueRoadProject(settlement, projects, routes, allSettlements);
+		maybeQueueRoadProject(settlement, projects, routes, allSettlements, infrastructure, level);
 		return projects;
 	}
 
@@ -318,9 +320,13 @@ public final class SettlementEconomySimulator {
 		SettlementState settlement,
 		List<SettlementProject> projects,
 		List<RouteState> routes,
-		Collection<SettlementState> allSettlements
+		Collection<SettlementState> allSettlements,
+		SettlementConstruction.InfrastructureSurvey infrastructure,
+		ServerLevel level
 	) {
-		if (!canPlanRoutes(settlement)) {
+		SettlementTradeRange.TradeRangeProfile sourceRange = SettlementTradeRange.profile(settlement, infrastructure);
+
+		if (!canPlanLandRoutes(settlement) && !canPlanWaterRoutes(settlement, sourceRange)) {
 			return;
 		}
 
@@ -350,8 +356,12 @@ public final class SettlementEconomySimulator {
 			}
 
 			double distance = Math.sqrt(settlement.center().distSqr(candidate.center()));
+			SettlementConstruction.InfrastructureSurvey candidateInfrastructure = level != null
+				? SettlementConstruction.survey(level, candidate)
+				: SettlementConstruction.InfrastructureSurvey.empty();
+			SettlementTradeRange.TradeRangeProfile candidateRange = SettlementTradeRange.profile(candidate, candidateInfrastructure);
 
-			if (distance > MAX_ROUTE_DISTANCE_BLOCKS || distance >= nearestDistance) {
+			if (!canReachCandidate(settlement, candidate, distance, sourceRange, candidateRange) || distance >= nearestDistance) {
 				continue;
 			}
 
@@ -431,7 +441,7 @@ public final class SettlementEconomySimulator {
 					int distanceBlocks = (int) Math.round(Math.sqrt(settlement.center().distSqr(target.get().center())));
 
 					if (tryConsumeCost(stock, roadProjectCost(distanceBlocks))) {
-						createdRoutes.add(createLandRoute(settlement, target.get(), distanceBlocks, currentTick));
+						createdRoutes.add(createRoute(settlement, target.get(), distanceBlocks, currentTick, level));
 						continue;
 					}
 				}
@@ -443,14 +453,22 @@ public final class SettlementEconomySimulator {
 		return new ProjectAdvanceResult(remainingProjects, createdRoutes, housingCapacity, defenseLevel);
 	}
 
-	private static double computeSecurity(SettlementState settlement, List<RouteState> routes, int defenseLevel, int population, double elapsedDays) {
+	private static double computeSecurity(
+		SettlementState settlement,
+		SettlementConstruction.InfrastructureSurvey infrastructure,
+		List<RouteState> routes,
+		int defenseLevel,
+		int population,
+		double elapsedDays
+	) {
 		int guards = roleCount(settlement, "guard");
 		int fletchers = roleCount(settlement, SettlementRoleKeys.FLETCHER);
 		double baseSecurity = settlement.kind() == SettlementKind.OUTPOST ? 0.35D : 0.12D;
 		double defenderPressure = population <= 0 ? 0.0D : ((guards * 0.7D) + (fletchers * 0.45D)) / population;
 		double routeSupport = Math.min(0.18D, routes.size() * 0.03D);
 		double fortificationSupport = defenseLevel * 0.08D;
-		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport, 0.05D, 0.95D);
+		double lighthouseSupport = lighthouseSecurityBonus(infrastructure);
+		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport + lighthouseSupport, 0.05D, 0.95D);
 		double blend = clamp(elapsedDays * 0.4D, 0.15D, 1.0D);
 		return clamp(settlement.security() + (targetSecurity - settlement.security()) * blend, 0.0D, 1.0D);
 	}
@@ -504,10 +522,19 @@ public final class SettlementEconomySimulator {
 		return new GrowthResult(progress, requestedVillagerSpawns);
 	}
 
-	private static RouteState createLandRoute(SettlementState from, SettlementState to, int distanceBlocks, long currentTick) {
-		double initialQuality = clamp(0.46D - Math.min(0.16D, distanceBlocks / 8_192.0D), 0.30D, 0.46D);
+	private static RouteState createLandRoute(
+		SettlementState from,
+		SettlementState to,
+		int distanceBlocks,
+		long currentTick,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
+		double tradeQualityBonus = average(fromRange.landTradeQualityBonus(), toRange.landTradeQualityBonus());
+		double routeTradeBonus = average(fromRange.routeTradeBonus(), toRange.routeTradeBonus());
+		double initialQuality = clamp(0.46D - Math.min(0.16D, distanceBlocks / 8_192.0D) + tradeQualityBonus, 0.30D, 0.65D);
 		double initialSecurity = clamp((from.security() + to.security()) * 0.5D, 0.20D, 0.95D);
-		int throughputBase = 64 + Math.max(0, 128 - (distanceBlocks / 8));
+		int throughputBase = 64 + Math.max(0, 128 - (distanceBlocks / 8)) + (int) Math.round(routeTradeBonus * 24.0D);
 		return new RouteState(
 			routeIdForSettlements(from.id(), to.id()),
 			from.dimension(),
@@ -526,10 +553,108 @@ public final class SettlementEconomySimulator {
 		);
 	}
 
-	private static boolean canPlanRoutes(SettlementState settlement) {
+	private static RouteState createWaterRoute(
+		SettlementState from,
+		SettlementState to,
+		int distanceBlocks,
+		long currentTick,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
+		double tradeQualityBonus = average(fromRange.waterTradeQualityBonus(), toRange.waterTradeQualityBonus());
+		double routeTradeBonus = average(fromRange.routeTradeBonus(), toRange.routeTradeBonus());
+		double initialQuality = clamp(0.82D - Math.min(0.10D, distanceBlocks / 12_288.0D) + tradeQualityBonus, 0.70D, 0.97D);
+		double initialSecurity = clamp((from.security() + to.security()) * 0.5D + 0.08D, 0.25D, 0.95D);
+		int throughputBase = 112 + Math.max(0, 160 - (distanceBlocks / 12)) + (int) Math.round(routeTradeBonus * 36.0D);
+		return new RouteState(
+			routeIdForSettlements(from.id(), to.id()),
+			from.dimension(),
+			from.id(),
+			to.id(),
+			RouteType.WATER,
+			RouteTier.SEA_LANE,
+			distanceBlocks,
+			initialQuality,
+			initialSecurity,
+			throughputBase,
+			"",
+			0L,
+			currentTick,
+			currentTick
+		);
+	}
+
+	private static RouteState createRoute(SettlementState from, SettlementState to, int distanceBlocks, long currentTick, ServerLevel level) {
+		SettlementConstruction.InfrastructureSurvey fromInfrastructure = level != null
+			? SettlementConstruction.survey(level, from)
+			: SettlementConstruction.InfrastructureSurvey.empty();
+		SettlementConstruction.InfrastructureSurvey toInfrastructure = level != null
+			? SettlementConstruction.survey(level, to)
+			: SettlementConstruction.InfrastructureSurvey.empty();
+		SettlementTradeRange.TradeRangeProfile fromRange = SettlementTradeRange.profile(from, fromInfrastructure);
+		SettlementTradeRange.TradeRangeProfile toRange = SettlementTradeRange.profile(to, toInfrastructure);
+		boolean waterRoute = canReachByWater(from, to, distanceBlocks, fromRange, toRange)
+			&& (!canReachByLand(distanceBlocks, fromRange, toRange) || preferredWaterRoute(fromInfrastructure, toInfrastructure, fromRange, toRange));
+			return waterRoute
+				? createWaterRoute(from, to, distanceBlocks, currentTick, fromRange, toRange)
+				: createLandRoute(from, to, distanceBlocks, currentTick, fromRange, toRange);
+	}
+
+	private static boolean canPlanLandRoutes(SettlementState settlement) {
 		return settlement.kind() != SettlementKind.OUTPOST
 			&& roleCount(settlement, SettlementRoleKeys.TRADEMASTER) > 0
 			&& roleCount(settlement, SettlementRoleKeys.ROADWRIGHT) > 0;
+	}
+
+	private static boolean canPlanWaterRoutes(SettlementState settlement, SettlementTradeRange.TradeRangeProfile tradeRange) {
+		return settlement.kind() != SettlementKind.OUTPOST
+			&& roleCount(settlement, SettlementRoleKeys.TRADEMASTER) > 0
+			&& tradeRange.waterRoutesUnlocked();
+	}
+
+	private static boolean canReachCandidate(
+		SettlementState source,
+		SettlementState candidate,
+		double distanceBlocks,
+		SettlementTradeRange.TradeRangeProfile sourceRange,
+		SettlementTradeRange.TradeRangeProfile candidateRange
+	) {
+		if (canPlanLandRoutes(source) && canReachByLand(distanceBlocks, sourceRange, candidateRange)) {
+			return true;
+		}
+
+		return canPlanWaterRoutes(source, sourceRange) && canReachByWater(source, candidate, distanceBlocks, sourceRange, candidateRange);
+	}
+
+	private static boolean canReachByLand(
+		double distanceBlocks,
+		SettlementTradeRange.TradeRangeProfile sourceRange,
+		SettlementTradeRange.TradeRangeProfile candidateRange
+	) {
+		return distanceBlocks <= Math.max(sourceRange.landRouteRangeBlocks(), candidateRange.landRouteRangeBlocks());
+	}
+
+	private static boolean canReachByWater(
+		SettlementState source,
+		SettlementState candidate,
+		double distanceBlocks,
+		SettlementTradeRange.TradeRangeProfile sourceRange,
+		SettlementTradeRange.TradeRangeProfile candidateRange
+	) {
+		return sourceRange.waterRoutesUnlocked()
+			&& candidateRange.waterRoutesUnlocked()
+			&& distanceBlocks <= Math.max(sourceRange.waterRouteRangeBlocks(), candidateRange.waterRouteRangeBlocks());
+	}
+
+	private static boolean preferredWaterRoute(
+		SettlementConstruction.InfrastructureSurvey fromInfrastructure,
+		SettlementConstruction.InfrastructureSurvey toInfrastructure,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
+		return fromInfrastructure.lighthouses() + toInfrastructure.lighthouses() > 0
+			|| Math.max(fromRange.waterRouteRangeBlocks(), toRange.waterRouteRangeBlocks())
+				> Math.max(fromRange.landRouteRangeBlocks(), toRange.landRouteRangeBlocks());
 	}
 
 	private static boolean hasProjectType(List<SettlementProject> projects, SettlementProjectType type) {
@@ -662,9 +787,17 @@ public final class SettlementEconomySimulator {
 			if (infrastructure.docks() > 0) {
 				catchRate *= 1.0D + Math.min(0.8D, infrastructure.docks() * 0.6D);
 			}
+
+			if (infrastructure.lighthouses() > 0) {
+				catchRate += fishermen * scaledLighthouseCount(infrastructure.lighthouses()) * 0.65D;
+			}
 		}
 
 		return catchRate;
+	}
+
+	private static double average(double first, double second) {
+		return (first + second) * 0.5D;
 	}
 
 	private static double harborLocalTradeBonus(SettlementConstruction.InfrastructureSurvey infrastructure, int portmasters) {
@@ -673,7 +806,7 @@ public final class SettlementEconomySimulator {
 		}
 
 		return infrastructure.docks() * (0.6D + Math.min(0.35D, portmasters * 0.2D))
-			+ infrastructure.lighthouses() * (1.4D + Math.min(0.45D, portmasters * 0.25D));
+			+ scaledLighthouseCount(infrastructure.lighthouses()) * (1.4D + Math.min(0.45D, portmasters * 0.25D));
 	}
 
 	private static double harborRouteTradeBonus(SettlementConstruction.InfrastructureSurvey infrastructure, int portmasters) {
@@ -682,7 +815,23 @@ public final class SettlementEconomySimulator {
 		}
 
 		return infrastructure.docks() * (0.18D + Math.min(0.08D, portmasters * 0.04D))
-			+ infrastructure.lighthouses() * (0.45D + Math.min(0.12D, portmasters * 0.06D));
+			+ scaledLighthouseCount(infrastructure.lighthouses()) * (0.45D + Math.min(0.12D, portmasters * 0.06D));
+	}
+
+	private static double lighthouseSecurityBonus(SettlementConstruction.InfrastructureSurvey infrastructure) {
+		if (!infrastructure.available() || infrastructure.lighthouses() <= 0) {
+			return 0.0D;
+		}
+
+		return 0.03D + Math.min(0.03D, Math.max(0, infrastructure.lighthouses() - 1) * 0.01D);
+	}
+
+	private static double scaledLighthouseCount(int lighthouseCount) {
+		if (lighthouseCount <= 0) {
+			return 0.0D;
+		}
+
+		return 1.0D + Math.min(0.30D, Math.max(0, lighthouseCount - 1) * 0.10D);
 	}
 
 	private static double tradingPostLocalTradeBonus(SettlementConstruction.InfrastructureSurvey infrastructure) {

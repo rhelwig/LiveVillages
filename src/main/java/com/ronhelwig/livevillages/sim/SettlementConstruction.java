@@ -553,6 +553,58 @@ public final class SettlementConstruction {
 			}
 		}
 	);
+	private static final StructureBlueprint LIGHTHOUSE_BLUEPRINT = new StructureBlueprint(
+		-1,
+		-1,
+		9,
+		new String[][] {
+			{
+				"CCC",
+				"CWC",
+				"CCC"
+			},
+			{
+				"CCC",
+				"CCC",
+				"CCC"
+			},
+			{
+				"CCC",
+				"CCC",
+				"CCC"
+			},
+			{
+				"CCC",
+				"CCC",
+				"CCC"
+			},
+			{
+				"A",
+				"C",
+				"A"
+			},
+			{
+				"A",
+				"C",
+				"A"
+			},
+			{
+				"A",
+				"C",
+				"A"
+			},
+			{
+				"A",
+				"C",
+				"A"
+			},
+			{
+				"A",
+				"K",
+				"A"
+			}
+		}
+	);
 	private static final StructureBlueprint TRADING_POST_BLUEPRINT = new StructureBlueprint(
 		-4,
 		-2,
@@ -897,6 +949,7 @@ public final class SettlementConstruction {
 			waterSurfaceColumns,
 			deepWaterColumns,
 			buildSiteInfrastructure.incompleteDocks(),
+			buildSiteInfrastructure.incompleteLighthouses(),
 			buildSiteInfrastructure.completedTradingPosts(),
 			buildSiteInfrastructure.incompleteTradingPosts(),
 			buildSiteInfrastructure.incompleteCarpenterWorkshops()
@@ -928,6 +981,7 @@ public final class SettlementConstruction {
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations = new HashSet<>();
 		int completedTradingPosts = 0;
 		int incompleteDocks = 0;
+		int incompleteLighthouses = 0;
 		int incompleteTradingPosts = 0;
 		int incompleteCarpenterWorkshops = 0;
 
@@ -935,6 +989,10 @@ public final class SettlementConstruction {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
 				if (!buildSite.complete()) {
 					incompleteDocks++;
+				}
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.LIGHTHOUSE) {
+				if (!buildSite.complete()) {
+					incompleteLighthouses++;
 				}
 			} else if (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST) {
 				if (buildSite.complete()) {
@@ -953,6 +1011,7 @@ public final class SettlementConstruction {
 			Set.copyOf(incompleteCarpenterWorkshopWorkstations),
 			completedTradingPosts,
 			incompleteDocks,
+			incompleteLighthouses,
 			incompleteTradingPosts,
 			incompleteCarpenterWorkshops
 		);
@@ -1303,6 +1362,35 @@ public final class SettlementConstruction {
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(buildSite, stock, level.getServer().getTickCount()));
 	}
 
+	public static WorkstationBuildResult tryStartLighthouseAtMarker(
+		ServerLevel level,
+		BlockPos markerPos,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		if (existingBuildSite.isPresent()) {
+			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		LighthouseSite site = evaluateLighthouseMarkerSite(level, markerPos);
+
+		if (site == null) {
+			return WorkstationBuildResult.blocked();
+		}
+
+		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			StructureKind.LIGHTHOUSE,
+			LIGHTHOUSE_BLUEPRINT,
+			settlementId,
+			site.baseCenter(),
+			markerPos.immutable(),
+			markerPos.immutable(),
+			Direction.NORTH,
+			level.getServer().getTickCount()
+		), stock, level.getServer().getTickCount()));
+	}
+
 	public static StructurePreview previewCarpenterWorkshopAtWorkstation(ServerLevel level, String settlementId, BlockPos benchPos, Direction facing) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = benchPos.relative(horizontalFacing.getOpposite(), 3).below();
@@ -1503,6 +1591,20 @@ public final class SettlementConstruction {
 		);
 	}
 
+	public static StructurePreview previewLighthouseAtMarker(ServerLevel level, String settlementId, BlockPos markerPos) {
+		SettlementBuildSite previewBuildSite = createPendingBuildSite(
+			StructureKind.LIGHTHOUSE,
+			LIGHTHOUSE_BLUEPRINT,
+			settlementId,
+			markerPos.immutable(),
+			markerPos.immutable(),
+			markerPos.immutable(),
+			Direction.NORTH,
+			0L
+		);
+		return previewBuildSite(previewBuildSite, "Lighthouse", evaluateLighthouseMarkerSite(level, markerPos) != null);
+	}
+
 	public static List<BlockPos> findPlacedCartographyTables(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(level, settlement, state -> state.is(Blocks.CARTOGRAPHY_TABLE));
 	}
@@ -1533,6 +1635,10 @@ public final class SettlementConstruction {
 
 	public static List<BlockPos> findPlacedPortmasterAnchors(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.PORTMASTER_ANCHOR));
+	}
+
+	public static List<BlockPos> findPlacedLighthouses(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.LIGHTHOUSE));
 	}
 
 	private static List<BlockPos> findPlacedWorkstations(ServerLevel level, SettlementState settlement, Predicate<BlockState> matcher) {
@@ -2600,7 +2706,8 @@ public final class SettlementConstruction {
 		return switch (symbol) {
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP
 				? Blocks.OAK_LOG.defaultBlockState()
-				: (structureKind == StructureKind.TRADING_POST
+				: (structureKind == StructureKind.LIGHTHOUSE
+					|| structureKind == StructureKind.TRADING_POST
 					|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
 					|| structureKind == StructureKind.FLETCHER_HUT
 					|| structureKind == StructureKind.BUTCHER_SHOP)
@@ -2615,6 +2722,7 @@ public final class SettlementConstruction {
 			case 'N' -> lanternStateFor();
 			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
+			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
 			case 'W' -> workstationStateFor(structureKind, facing);
 			case 'B' -> slabStateFor(structureKind, up);
 			case 'S' -> stairStateFor(blueprint, structureKind, facing, right, forward, up);
@@ -2645,6 +2753,10 @@ public final class SettlementConstruction {
 	}
 
 	private static BlockState workstationStateFor(StructureKind structureKind, Direction facing) {
+		if (structureKind == StructureKind.LIGHTHOUSE) {
+			return LiveVillagesBlocks.LIGHTHOUSE.defaultBlockState();
+		}
+
 		if (structureKind == StructureKind.TRADING_POST) {
 			return LiveVillagesBlocks.TRADE_BOARD.defaultBlockState().setValue(TradeBoardBlock.FACING, facing.getCounterClockWise());
 		}
@@ -3167,6 +3279,7 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
 			|| structureKind == StructureKind.FLETCHER_HUT
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
+			|| structureKind == StructureKind.LIGHTHOUSE
 			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
 			|| structureKind == StructureKind.TRADING_POST);
 	}
@@ -3189,6 +3302,7 @@ public final class SettlementConstruction {
 			case 'F' -> "fence";
 			case 'G' -> "fence_gate";
 			case 'H' -> "chest";
+			case 'K' -> "campfire";
 			case 'L' -> "logs";
 			case 'M' -> "cobblestone";
 			case 'N' -> "lantern";
@@ -3204,7 +3318,7 @@ public final class SettlementConstruction {
 				case ROADWRIGHT_WORKSHOP -> "surveyor_table";
 				case CARTOGRAPHER_HOUSE -> "cartography_table";
 				case CARPENTER_WORKSHOP -> "carpenter_bench";
-				case HOUSING_SHELTER, SIMPLE_HOUSING_SHELTER -> "";
+				case HOUSING_SHELTER, LIGHTHOUSE, SIMPLE_HOUSING_SHELTER -> "";
 				case DOCK -> "";
 			};
 			default -> "";
@@ -3292,6 +3406,7 @@ public final class SettlementConstruction {
 			case FLETCHER_HUT -> FLETCHER_HUT_BLUEPRINT;
 			case FORESTER_WORKSHOP -> FORESTER_WORKSHOP_BLUEPRINT;
 			case HOUSING_SHELTER -> HOUSING_SHELTER_BLUEPRINT;
+			case LIGHTHOUSE -> LIGHTHOUSE_BLUEPRINT;
 			case ROADWRIGHT_WORKSHOP -> ROADWRIGHT_WORKSHOP_BLUEPRINT;
 			case SIMPLE_HOUSING_SHELTER -> SIMPLE_HOUSING_SHELTER_BLUEPRINT;
 			case TRADING_POST -> TRADING_POST_BLUEPRINT;
@@ -3307,6 +3422,7 @@ public final class SettlementConstruction {
 			case FLETCHER_HUT -> StructureKind.FLETCHER_HUT;
 			case FORESTER_WORKSHOP -> StructureKind.FORESTER_WORKSHOP;
 			case HOUSING_SHELTER -> StructureKind.HOUSING_SHELTER;
+			case LIGHTHOUSE -> StructureKind.LIGHTHOUSE;
 			case ROADWRIGHT_WORKSHOP -> StructureKind.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> StructureKind.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> StructureKind.TRADING_POST;
@@ -3322,6 +3438,7 @@ public final class SettlementConstruction {
 			case FLETCHER_HUT -> SettlementBuildSiteType.FLETCHER_HUT;
 			case FORESTER_WORKSHOP -> SettlementBuildSiteType.FORESTER_WORKSHOP;
 			case HOUSING_SHELTER -> SettlementBuildSiteType.HOUSING_SHELTER;
+			case LIGHTHOUSE -> SettlementBuildSiteType.LIGHTHOUSE;
 			case ROADWRIGHT_WORKSHOP -> SettlementBuildSiteType.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> SettlementBuildSiteType.TRADING_POST;
@@ -3560,6 +3677,14 @@ public final class SettlementConstruction {
 	}
 
 	private static LighthouseSite findLighthouseSite(ServerLevel level, SettlementState settlement) {
+		for (BlockPos markerPos : findPlacedLighthouses(level, settlement)) {
+			LighthouseSite anchoredSite = evaluateLighthouseMarkerSite(level, markerPos);
+
+			if (anchoredSite != null) {
+				return anchoredSite;
+			}
+		}
+
 		for (int radius = 4; radius <= buildRadius(settlement); radius++) {
 			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
 				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
@@ -3647,6 +3772,78 @@ public final class SettlementConstruction {
 		}
 
 		return new LighthouseSite(baseCenter);
+	}
+
+	private static LighthouseSite evaluateLighthouseMarkerSite(ServerLevel level, BlockPos markerPos) {
+		if (!hasNearbyWater(level, markerPos, LIGHTHOUSE_WATER_RADIUS_BLOCKS)) {
+			return null;
+		}
+
+		int minGroundY = Integer.MAX_VALUE;
+		int maxGroundY = Integer.MIN_VALUE;
+
+		for (int offsetX = -1; offsetX <= 1; offsetX++) {
+			for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+				BlockPos columnPos = markerPos.offset(offsetX, 0, offsetZ);
+
+				if (!level.hasChunkAt(columnPos)) {
+					return null;
+				}
+
+				int groundY;
+
+				if (offsetX == 0 && offsetZ == 0 && level.getBlockState(markerPos).is(LiveVillagesBlocks.LIGHTHOUSE)) {
+					groundY = markerPos.getY() - 1;
+				} else {
+					groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnPos.getX(), columnPos.getZ()) - 1;
+				}
+
+				if (groundY < level.getMinY()) {
+					return null;
+				}
+
+				BlockPos groundPos = new BlockPos(columnPos.getX(), groundY, columnPos.getZ());
+
+				if (!hasStableBuildGround(level, groundPos)) {
+					return null;
+				}
+
+				minGroundY = Math.min(minGroundY, groundY);
+				maxGroundY = Math.max(maxGroundY, groundY);
+			}
+		}
+
+		if (maxGroundY - minGroundY > 1 || maxGroundY + 1 != markerPos.getY()) {
+			return null;
+		}
+
+		for (int offsetX = -1; offsetX <= 1; offsetX++) {
+			for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+				for (int y = markerPos.getY(); y < markerPos.getY() + LIGHTHOUSE_BASE_LEVELS; y++) {
+					BlockPos blockPos = new BlockPos(markerPos.getX() + offsetX, y, markerPos.getZ() + offsetZ);
+					BlockState state = level.getBlockState(blockPos);
+
+					if (blockPos.equals(markerPos) && state.is(LiveVillagesBlocks.LIGHTHOUSE)) {
+						continue;
+					}
+
+					if (!isReplaceable(state) && !canLandscapeRemove(level, blockPos, state)) {
+						return null;
+					}
+				}
+			}
+		}
+
+		for (int y = markerPos.getY() + LIGHTHOUSE_BASE_LEVELS; y < markerPos.getY() + LIGHTHOUSE_BASE_LEVELS + LIGHTHOUSE_TOWER_LEVELS + 1; y++) {
+			BlockPos blockPos = new BlockPos(markerPos.getX(), y, markerPos.getZ());
+			BlockState state = level.getBlockState(blockPos);
+
+			if (!isReplaceable(state) && !canLandscapeRemove(level, blockPos, state)) {
+				return null;
+			}
+		}
+
+		return new LighthouseSite(markerPos.immutable());
 	}
 
 	private static void placeLighthouse(ServerLevel level, LighthouseSite site, Map<String, Integer> stock) {
@@ -4041,7 +4238,7 @@ public final class SettlementConstruction {
 			return false;
 		}
 
-		BlockPos towerBase = campfirePos.below(LIGHTHOUSE_TOWER_LEVELS);
+		BlockPos topBaseCenter = campfirePos.below(LIGHTHOUSE_TOWER_LEVELS + 1);
 
 		for (int y = 0; y < LIGHTHOUSE_TOWER_LEVELS; y++) {
 			if (!level.getBlockState(campfirePos.below(y + 1)).is(Blocks.COBBLESTONE)) {
@@ -4050,11 +4247,18 @@ public final class SettlementConstruction {
 		}
 
 		for (int levelIndex = 0; levelIndex < LIGHTHOUSE_BASE_LEVELS; levelIndex++) {
-			int y = towerBase.getY() - levelIndex;
+			int y = topBaseCenter.getY() - levelIndex;
 
 			for (int offsetX = -1; offsetX <= 1; offsetX++) {
 				for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-					if (!level.getBlockState(new BlockPos(towerBase.getX() + offsetX, y, towerBase.getZ() + offsetZ)).is(Blocks.COBBLESTONE)) {
+					BlockPos blockPos = new BlockPos(topBaseCenter.getX() + offsetX, y, topBaseCenter.getZ() + offsetZ);
+					BlockState state = level.getBlockState(blockPos);
+					boolean markerBase = offsetX == 0
+						&& offsetZ == 0
+						&& levelIndex == LIGHTHOUSE_BASE_LEVELS - 1
+						&& state.is(LiveVillagesBlocks.LIGHTHOUSE);
+
+					if (!markerBase && !state.is(Blocks.COBBLESTONE)) {
 						return false;
 					}
 				}
@@ -4209,6 +4413,10 @@ public final class SettlementConstruction {
 	}
 
 	private static String recoveredGoodsKey(BlockState state) {
+		if (state.is(Blocks.CAMPFIRE)) {
+			return "campfire";
+		}
+
 		if (state.is(Blocks.COBBLESTONE)
 			|| state.is(Blocks.MOSSY_COBBLESTONE)
 			|| state.is(Blocks.STONE)
@@ -4480,12 +4688,13 @@ public final class SettlementConstruction {
 		int waterSurfaceColumns,
 		int deepWaterColumns,
 		int incompleteDocks,
+		int incompleteLighthouses,
 		int tradingPosts,
 		int incompleteTradingPosts,
 		int incompleteCarpenterWorkshops
 	) {
 		public static InfrastructureSurvey empty() {
-			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 		}
 
 		public boolean hasLargeWaterBody() {
@@ -4506,6 +4715,7 @@ public final class SettlementConstruction {
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations,
 		int completedTradingPosts,
 		int incompleteDocks,
+		int incompleteLighthouses,
 		int incompleteTradingPosts,
 		int incompleteCarpenterWorkshops
 	) {
@@ -4539,6 +4749,7 @@ public final class SettlementConstruction {
 		FLETCHER_HUT,
 		FORESTER_WORKSHOP,
 		HOUSING_SHELTER,
+		LIGHTHOUSE,
 		ROADWRIGHT_WORKSHOP,
 		SIMPLE_HOUSING_SHELTER,
 		TRADING_POST

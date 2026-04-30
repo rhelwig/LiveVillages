@@ -35,24 +35,43 @@ public final class RouteNetworkSimulator {
 			return new RouteAdvanceResult(route, from, to);
 		}
 
-		RouteState surveyedRoute = surveyRoute(level, route, from, to, currentTick);
-		TradeAdvanceResult tradeResult = advanceTrade(surveyedRoute, from, to, currentTick);
+		SettlementTradeRange.TradeRangeProfile fromRange = tradeProfileForRoute(level, route, from);
+		SettlementTradeRange.TradeRangeProfile toRange = tradeProfileForRoute(level, route, to);
+		RouteState surveyedRoute = surveyRoute(level, route, from, to, currentTick, fromRange, toRange);
+		TradeAdvanceResult tradeResult = advanceTrade(surveyedRoute, from, to, currentTick, fromRange, toRange);
 		return new RouteAdvanceResult(tradeResult.route(), tradeResult.fromSettlement(), tradeResult.toSettlement());
 	}
 
-	private static RouteState surveyRoute(ServerLevel level, RouteState route, SettlementState from, SettlementState to, long currentTick) {
+	private static RouteState surveyRoute(
+		ServerLevel level,
+		RouteState route,
+		SettlementState from,
+		SettlementState to,
+		long currentTick,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
+		int distanceBlocks = Math.max(1, (int) Math.round(Math.sqrt(from.center().distSqr(to.center()))));
+
 		if (route.type() != RouteType.LAND) {
+			double quality = clamp(
+				baseQuality(route.tier()) + averageTradeQualityBonus(fromRange, toRange, true) - Math.min(0.08D, distanceBlocks / 12_288.0D),
+				0.70D,
+				0.97D
+			);
 			double security = clamp((from.security() + to.security()) * 0.5D, 0.15D, 0.95D);
-			return route.withSurvey(route.tier(), route.distanceBlocks(), route.quality(), security, route.throughputBase(), currentTick);
+			int throughputBase = determineThroughputBase(route.tier(), quality, distanceBlocks)
+				+ (int) Math.round(averageRouteTradeBonus(fromRange, toRange) * 32.0D);
+			return route.withSurvey(route.tier(), distanceBlocks, quality, security, throughputBase, currentTick);
 		}
 
-		int distanceBlocks = Math.max(1, (int) Math.round(Math.sqrt(from.center().distSqr(to.center()))));
 		int sampleCount = Math.max(MIN_SURVEY_SAMPLES, Math.min(MAX_SURVEY_SAMPLES, distanceBlocks / 16));
 		SurveyStats surveyStats = collectSurveyStats(level, from.center(), to.center(), sampleCount);
 		RouteTier tier = determineLandTier(route.tier(), surveyStats);
-		double quality = determineQuality(tier, surveyStats, distanceBlocks);
+		double quality = clamp(determineQuality(tier, surveyStats, distanceBlocks) + averageTradeQualityBonus(fromRange, toRange, false), 0.25D, 0.95D);
 		double security = determineRouteSecurity(from, to, quality);
-		int throughputBase = determineThroughputBase(tier, quality, distanceBlocks);
+		int throughputBase = determineThroughputBase(tier, quality, distanceBlocks)
+			+ (int) Math.round(averageRouteTradeBonus(fromRange, toRange) * 20.0D);
 		return route.withSurvey(tier, distanceBlocks, quality, security, throughputBase, currentTick);
 	}
 
@@ -153,9 +172,16 @@ public final class RouteNetworkSimulator {
 		return RoadSampleKind.NONE;
 	}
 
-	private static TradeAdvanceResult advanceTrade(RouteState route, SettlementState from, SettlementState to, long currentTick) {
+	private static TradeAdvanceResult advanceTrade(
+		RouteState route,
+		SettlementState from,
+		SettlementState to,
+		long currentTick,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
 		long elapsedTradeTicks = Math.max(0L, currentTick - route.lastTradeAttemptTick());
-		long minTradeIntervalTicks = computeTradeIntervalTicks(route, from, to);
+		long minTradeIntervalTicks = computeTradeIntervalTicks(route, from, to, fromRange, toRange);
 
 		if (elapsedTradeTicks < minTradeIntervalTicks) {
 			return new TradeAdvanceResult(route, from, to);
@@ -302,16 +328,57 @@ public final class RouteNetworkSimulator {
 		return Math.max(1, (int) Math.round(throughput));
 	}
 
-	private static long computeTradeIntervalTicks(RouteState route, SettlementState from, SettlementState to) {
+	private static long computeTradeIntervalTicks(
+		RouteState route,
+		SettlementState from,
+		SettlementState to,
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
 		double combinedPopulation = from.totalPopulation() + to.totalPopulation();
 		double averageComfort = (from.comfort() + to.comfort()) * 0.5D;
 		double sizeReduction = Math.min(2.5D, combinedPopulation / 8.0D);
 		double routeReduction = tierTradeCadenceBonus(route.tier())
 			+ route.quality() * 1.5D
 			+ route.security() * 0.75D
+			+ averageTradeCadenceBonus(fromRange, toRange, route.type() != RouteType.LAND)
 			+ Math.max(0.0D, averageComfort - 0.80D);
 		double intervalDays = clamp(MAX_TRADE_INTERVAL_DAYS - sizeReduction - routeReduction, MIN_TRADE_INTERVAL_DAYS, MAX_TRADE_INTERVAL_DAYS);
 		return Math.max(MIN_ROUTE_UPDATE_TICKS, Math.round(intervalDays * SettlementEconomyRules.TICKS_PER_DAY));
+	}
+
+	private static SettlementTradeRange.TradeRangeProfile tradeProfileForRoute(ServerLevel level, RouteState route, SettlementState settlement) {
+		SettlementConstruction.InfrastructureSurvey infrastructure = route.type() == RouteType.WATER
+			? SettlementConstruction.survey(level, settlement)
+			: SettlementConstruction.InfrastructureSurvey.empty();
+		return SettlementTradeRange.profile(settlement, infrastructure);
+	}
+
+	private static double averageTradeCadenceBonus(
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange,
+		boolean waterRoute
+	) {
+		return waterRoute
+			? (fromRange.waterTradeCadenceBonusDays() + toRange.waterTradeCadenceBonusDays()) * 0.5D
+			: (fromRange.landTradeCadenceBonusDays() + toRange.landTradeCadenceBonusDays()) * 0.5D;
+	}
+
+	private static double averageTradeQualityBonus(
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange,
+		boolean waterRoute
+	) {
+		return waterRoute
+			? (fromRange.waterTradeQualityBonus() + toRange.waterTradeQualityBonus()) * 0.5D
+			: (fromRange.landTradeQualityBonus() + toRange.landTradeQualityBonus()) * 0.5D;
+	}
+
+	private static double averageRouteTradeBonus(
+		SettlementTradeRange.TradeRangeProfile fromRange,
+		SettlementTradeRange.TradeRangeProfile toRange
+	) {
+		return (fromRange.routeTradeBonus() + toRange.routeTradeBonus()) * 0.5D;
 	}
 
 	private static double tierTradeCadenceBonus(RouteTier tier) {
