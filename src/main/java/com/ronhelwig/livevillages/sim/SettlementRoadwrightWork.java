@@ -62,8 +62,8 @@ public final class SettlementRoadwrightWork {
 	private static final int MAX_LOADED_ROADWORKERS_PER_MAINTENANCE = 3;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_PLANNED_WORK = 1;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_ROUTE_TRACE = 21;
-	private static final int ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT = 18;
-	private static final int ROADWORK_DAILY_WORK_UNITS_PER_HELPER = 9;
+	private static final int ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT = SettlementEconomyRules.scaledWorkerDailyUnits(18);
+	private static final int ROADWORK_DAILY_WORK_UNITS_PER_HELPER = SettlementEconomyRules.scaledWorkerDailyUnits(9);
 	private static final long ROADWORK_TASK_CACHE_TICKS = 1_200L; // Keep expensive path searches from repeating while the same task remains useful.
 	private static final long ROADWORK_VISUAL_MEMORY_TICKS = 12_000L;
 	private static final long ROADWORK_DECIDE_INTERVAL_TICKS = 320L;

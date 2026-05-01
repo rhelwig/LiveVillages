@@ -20,6 +20,7 @@ It should stay aligned with [SPECS.md](SPECS.md) and [PROFESSIONS.md](PROFESSION
 - Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation, with dock and lighthouse bonuses preserved.
 - Split bell-triggered loaded defense cleanly between civilian panic behavior and combat-capable villager rally behavior.
 - Finish migrating active issue tracking to GitHub issues and keep the placed `Trade Board` cosmetic display issue there as the source of truth.
+- Temporarily run worker productivity at `2x` during feature development so construction, roadwork, and other visible villager loops are faster to evaluate in playtests; retune later for normal play balance.
 
 ## Current Foundations
 

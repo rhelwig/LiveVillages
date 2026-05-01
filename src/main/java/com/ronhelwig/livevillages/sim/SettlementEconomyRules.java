@@ -8,6 +8,8 @@ public final class SettlementEconomyRules {
 	public static final double TICKS_PER_DAY = 24_000.0D;
 	public static final long MIN_SIMULATION_TICKS = 6_000L;
 	public static final double MAX_CATCH_UP_DAYS = 5.0D;
+	// Temporary playtest tuning: keep visible worker loops moving faster until major systems settle down.
+	public static final double WORKER_PRODUCTIVITY_MULTIPLIER = 2.0D;
 	private static final List<String> FOOD_GOODS = List.of("bread", "beef", "mutton", "pork", "cod", "carrot", "potato", "beetroot", "wheat");
 	private static final List<TargetRule> TARGET_RULES = List.of(
 		new TargetRule("bread", population -> 8 + population * 4),
@@ -49,6 +51,26 @@ public final class SettlementEconomyRules {
 
 	public static List<TargetRule> targetRules() {
 		return TARGET_RULES;
+	}
+
+	public static int scaledWorkerTickInterval(int baseTicks) {
+		if (baseTicks <= 0) {
+			return 1;
+		}
+
+		return Math.max(20, (int) Math.round(baseTicks / WORKER_PRODUCTIVITY_MULTIPLIER));
+	}
+
+	public static int scaledWorkerDailyUnits(int baseUnits) {
+		if (baseUnits <= 0) {
+			return 0;
+		}
+
+		return Math.max(1, (int) Math.round(baseUnits * WORKER_PRODUCTIVITY_MULTIPLIER));
+	}
+
+	public static double scaledWorkerDailyRate(double baseRate) {
+		return baseRate <= 0.0D ? 0.0D : baseRate * WORKER_PRODUCTIVITY_MULTIPLIER;
 	}
 
 	public static int targetForGoods(String goodsKey, int population) {

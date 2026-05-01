@@ -6,12 +6,15 @@ import net.minecraft.server.MinecraftServer;
 import com.ronhelwig.livevillages.LiveVillages;
 
 public final class LiveVillagesScheduler {
-	public static final int TICKS_BETWEEN_FARMER_MAINTENANCE = 160; // Increased from 80
-	public static final int TICKS_BETWEEN_RESOURCE_MAINTENANCE = 80; // Increased from 40
-	public static final int TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE = 160; // Increased from 80
-	public static final int TICKS_BETWEEN_CYCLES = 200; // Increased from 100
+	private static final int BASE_TICKS_BETWEEN_FARMER_MAINTENANCE = 160;
+	private static final int BASE_TICKS_BETWEEN_RESOURCE_MAINTENANCE = 80;
+	private static final int BASE_TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE = 160;
+	public static final int TICKS_BETWEEN_FARMER_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_FARMER_MAINTENANCE);
+	public static final int TICKS_BETWEEN_RESOURCE_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_RESOURCE_MAINTENANCE);
+	public static final int TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
+	public static final int TICKS_BETWEEN_CYCLES = 200;
 	public static final int LOADED_MAINTENANCE_CHECK_INTERVAL = 20;
-	public static final int REGIONS_PER_CYCLE = 3; // Reduced from 5
+	public static final int REGIONS_PER_CYCLE = 3;
 
 	private LiveVillagesScheduler() {
 	}

@@ -706,13 +706,13 @@ public final class SettlementEconomySimulator {
 		double woodConstruction = carpenters * 1.5D + constructionSupport * 1.3D;
 		double stoneConstruction = masons * 1.4D + constructionSupport * 1.0D;
 
-		return switch (type) {
+		return SettlementEconomyRules.scaledWorkerDailyRate(switch (type) {
 			case HOUSING -> Math.max(0.6D, baseLabor + woodConstruction + stoneConstruction * 0.8D + unemployed * 0.7D + trademasters * 0.8D);
 			case CARPENTER_WORKSHOP, COMPOSTER, STORAGE, DOCK -> Math.max(0.5D, baseLabor + woodConstruction + stoneConstruction * 0.45D + unemployed * 0.5D + trademasters * 0.6D);
 			case LIGHTHOUSE -> Math.max(0.55D, baseLabor + stoneConstruction * 1.3D + woodConstruction * 0.35D + unemployed * 0.45D + trademasters * 0.75D);
 			case DEFENSE -> Math.max(0.4D, baseLabor + guards * 1.1D + stoneConstruction * 0.9D + woodConstruction * 0.45D + unemployed * 0.25D + trademasters * 0.4D);
 			case ROAD -> Math.max(0.4D, baseLabor + roadwrights * 1.8D + stoneConstruction * 0.55D + woodConstruction * 0.55D + unemployed * 0.35D + trademasters * 1.0D);
-		};
+		});
 	}
 
 	private static Map<String, Integer> roadProjectCost(int distanceBlocks) {
