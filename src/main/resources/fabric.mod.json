@@ -9,7 +9,7 @@
 	],
 	"contact": {
 		"homepage": "https://ronhelwig.com/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/rhelwig/LiveVillages"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/live-villages/icon.png",
