@@ -5,6 +5,7 @@ This file tracks the intended implementation order for the next major profession
 ## Current Focus
 
 - Fold the new harbor trade-range model into actual trade cadence and quality, fix the custom recipe data path so new recipes appear in-game, and give `Fisherman` consistent simulation output with extra dock and lighthouse seafood bonuses while keeping the role otherwise close to vanilla.
+- Migrate the legacy `known-issues.md` tracker into GitHub issues and retire the file once the migrated issues are published.
 - Make bell-triggered loaded defense split cleanly between civilian vanilla panic behavior and combat-capable villager rally behavior, with bell response reaching `max(25, half settlement radius)` instead of a fixed small village core, and keep the first-pass rally set aligned with current defender-capable roles such as `Fletcher`, `Butcher`, `Forester`, and `Roadwright`.
 
 ## Current Foundations
