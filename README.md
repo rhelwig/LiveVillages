@@ -1,28 +1,80 @@
 # Live Villages
 
-Live Villages is a Fabric mod for Minecraft Java that makes settlements feel more self-directed. Villages, harbors, and hostile outposts are meant to have their own needs, projects, stored goods, and trade routes, while the player nudges those systems by building infrastructure and changing incentives.
+Live Villages is a Fabric mod for Minecraft Java that makes settlements feel more self-directed. Villages already track needs, projects, stored goods, and trade routes, while the player nudges those systems by building infrastructure and changing incentives. Harbors are supported today, and hostile outposts remain part of the longer-term scope.
 
 The project currently targets Minecraft Java `26.1.1`, Fabric Loader `0.18.6`, Fabric API `0.145.3+26.1.1`, and Java `25`.
 
-## What It Adds
+## Current State
 
-- Settlement-level simulation for population, stock, wealth, housing, comfort, security, projects, and routes.
-- A Trade Board block for settlement status, shortages, surpluses, project summaries, settlement-backed trading, and a future in-world `Trading Post` anchor.
-- Trademaster and Carpenter villager professions tied to the Trade Board and Carpenter's Bench.
-- Persistent settlement and route state so villages can continue progressing through abstract updates instead of only through loaded villager behavior.
-- Route and economy foundations for land trade, water trade, settlement growth, construction queues, hostile outpost pressure, and settlement inspection tooling.
+This repository is in active development and already contains a playable foundation rather than only design scaffolding. Current implemented systems include:
+
+- persistent settlement simulation for population, stock, wealth, housing, comfort, security, growth, projects, and routes
+- village autodetection plus saved settlement and route state
+- a working `Trade Board` UI for settlement overview, shortages, surpluses, trade pressure, workforce, routes, and project summaries
+- staged village construction for settlement-linked structures instead of instant full builds
+- harbor trade support through `Portmaster's Anchor`, `Lighthouse`, terrain charting, and land/water trade-range bonuses
+- loaded-world villager work for roles such as `Carpenter`, `Butcher`, `Portmaster`, and `Roadwright`, alongside abstract catch-up simulation when chunks are unloaded
+- custom professions, workstations, structure anchors, and support tooling for inspecting and debugging settlements
+
+The full design and implementation specification lives in [SPECS.md](SPECS.md).
+
+## Player-Facing Content
+
+Blocks and anchors currently in the mod:
+
+- `Trade Board`: the central settlement block for status, trading, shortages, surpluses, routes, and projects
+- `Carpenter's Bench`: custom workstation for the `Carpenter`
+- `Forester's Table`: custom workstation for the `Forester`
+- `Surveyor's Table`: route-planning and settlement-map workstation used by the `Roadwright`
+- `Portmaster's Anchor`: harbor map and water-trade anchor
+- `Lighthouse`: harbor infrastructure that extends water trade and navigation support
+- `Milepost`: route infrastructure marker
+- `Simple Housing Shelter` and `Housing Shelter`: placeable settlement housing anchors that start or resume staged shelter construction
+
+Custom villager professions currently registered:
+
+- `Trademaster`
+- `Carpenter`
+- `Forester`
+- `Portmaster`
+- `Roadwright`
+
+The simulation also extends vanilla profession behavior in several areas, including settlement farming, butchery, harbor support, trading, and cartography-adjacent route systems.
 
 ## How It Plays
 
 Live Villages is designed around influence rather than micromanagement. Instead of telling each villager what to carry or craft, the player helps a settlement by improving its conditions: adding workstations, strengthening food supply, building housing, improving roads, making docks, defending trade corridors, or resolving shortages through trade. Placed workstations are meant to become anchors for real profession buildings rather than staying as isolated utility blocks.
 
-The Trade Board is the main civic block for this loop. It is where a settlement exposes what it needs, what it has too much of, which routes and projects matter, and how the player can trade against the settlement's shared stock.
+The `Trade Board` is the main civic block for this loop. It is where a settlement exposes what it needs, what it has too much of, which routes and projects matter, and how the player can trade against the settlement's shared stock.
 
-## Current Status
+In the current build, a typical loop looks like this:
 
-This repository is in active development. The implemented foundation includes the mod entrypoints, Trade Board presentation, a first-pass functional Carpenter's Bench, loaded-settlement Carpenter promotion and workshop-bed priority, custom villager professions, Trade Board UI/data plumbing, saved settlement data, economy rules, construction projects, route state, scheduler support, and village autodetection.
+- place a `Trade Board` in or near a village to inspect the settlement and trade with its pooled stock
+- place infrastructure such as workstations, shelter anchors, harbor anchors, or lighthouses so the settlement has more options to expand
+- use staged construction previews to see what villagers plan to build and help complete missing blocks yourself
+- check settlement overlays, route summaries, and harbor maps to see whether the village is stabilizing or bottlenecked
 
-The full design and implementation specification lives in [SPECS.md](SPECS.md).
+## Controls And Debugging
+
+Client-side controls:
+
+- `O`: toggle the build-site preview overlay
+- `I`: cycle the settlement inventory/status overlay near a detected settlement
+
+Server/debug utilities:
+
+- `/livevillages settlements list`
+- `/livevillages settlements inspect`
+- `/livevillages settlements rescan [radiusChunks]`
+- `/livevillages settlements validate`
+- `gamerule live-villages:surveyor_map_fog false|true` to toggle the surveyor fog-of-war rule; it currently defaults to `false` for playtesting
+
+## Project Docs
+
+- [SPECS.md](SPECS.md): full gameplay and systems specification
+- [PROFESSIONS.md](PROFESSIONS.md): profession-specific design notes
+- [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
+- GitHub issues: active bug and polish tracking
 
 ## Development
 
@@ -37,3 +89,5 @@ Run a development client with:
 ```sh
 ./gradlew runClient
 ```
+
+The repository currently assumes Java `25`.
