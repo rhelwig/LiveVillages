@@ -45,6 +45,9 @@ Focus:
 - keep abstract and loaded settlement outputs aligned, especially for harbor-adjacent production such as `Fisherman`
 - make infrastructure bonuses visible in actual trade cadence, quality, and route usefulness, not only in hidden scoring
 - keep Trade Board shortage/surplus output accurate when construction blockers, protected reserves, or build-site demand are involved
+- keep route-transfer demand aware of active staged build-site materials so visible construction stalls can be supplied by trade
+- preserve completed harbor/trade build-site effects for route planning even while the corresponding chunks are unloaded
+- keep route growth limited by reachability and active planning state rather than a small hard cap on total connections
 - unblock recipe/data-driven content so new recipes are dependable before more professions are added
 
 ### 2. Defense And Worker Behavior
@@ -82,6 +85,7 @@ Focus:
 - keep `Roadwright` responsible for both internal route quality and outward settlement connections
 - preserve cached survey/map memory so route tools do not rebuild from scratch after reloads
 - extend route quality improvements without regressing the bounded-search and bounded-per-tick performance model
+- add bounded catch-up for visible road/path improvement so revisiting a settlement shows progress without requiring constant player babysitting
 - keep `Surveyor's Table`, harbor map views, and `Milepost` guidance useful for both debugging and gameplay
 
 ### 5. Profession Rollout

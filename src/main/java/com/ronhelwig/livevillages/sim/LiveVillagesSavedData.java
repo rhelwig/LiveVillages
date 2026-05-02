@@ -42,6 +42,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS = 6;
 	public static final int SHARED_MAP_SAMPLE_STRIDE_BLOCKS = 4;
 	public static final long SURVEY_CACHE_DURATION_TICKS = 2_000L; // Cache survey for 100 seconds
+	private static final long DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS = (long) SettlementEconomyRules.TICKS_PER_DAY;
 	private static final int SHARED_MAP_PLAYER_OBSERVATION_RADIUS_BLOCKS = 32;
 	private static final int SHARED_MAP_MAX_SAMPLES_PER_UPDATE = 1_200;
 	private static final int SHARED_MAP_REFRESH_TICKS = 600;
@@ -55,6 +56,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SharedTerrainCell.CODEC).optionalFieldOf("shared_terrain_knowledge", Map.of()).forGetter(data -> data.sharedTerrainKnowledge),
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
+		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
 		Codec.INT.optionalFieldOf("next_region_cursor", 0).forGetter(data -> data.nextRegionCursor),
 		Codec.LONG.optionalFieldOf("last_global_update_tick", 0L).forGetter(data -> data.lastGlobalUpdateTick),
 		VillageScanCursor.CODEC.optionalFieldOf("village_scan_cursor").forGetter(data -> Optional.ofNullable(data.villageScanCursor))
@@ -74,6 +76,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SharedTerrainCell> sharedTerrainKnowledge;
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
+	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
 	private int nextRegionCursor;
 	private long lastGlobalUpdateTick;
 	private VillageScanCursor villageScanCursor;
@@ -98,7 +101,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -110,6 +113,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SharedTerrainCell> sharedTerrainKnowledge,
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
+		Map<String, Long> loadedRoadworkCatchupTicks,
 		int nextRegionCursor,
 		long lastGlobalUpdateTick,
 		Optional<VillageScanCursor> villageScanCursor
@@ -123,6 +127,7 @@ public class LiveVillagesSavedData extends SavedData {
 		this.savedSurveyorObservations = new LinkedHashMap<>(savedSurveyorObservations);
 		this.savedRoadworkPlans = new LinkedHashMap<>();
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
+		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
 		this.nextRegionCursor = nextRegionCursor;
 		this.lastGlobalUpdateTick = lastGlobalUpdateTick;
 		this.villageScanCursor = villageScanCursor.orElse(null);
@@ -813,6 +818,35 @@ public class LiveVillagesSavedData extends SavedData {
 				storeSurveyorObservation(workingSettlement.id(), observation);
 				SettlementPerformanceLog.warnIfSlow("loaded_surveyor_observation", workingSettlement, surveyorObservationStart, server.getTickCount());
 			}
+			long lastRoadworkCatchupTick = loadedRoadworkCatchupTicks.getOrDefault(
+				workingSettlement.id(),
+				Math.max(0L, currentTick - DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS)
+			);
+			long elapsedRoadworkCatchupTicks = Math.max(0L, currentTick - lastRoadworkCatchupTick);
+			boolean roadworkCatchupChanged = false;
+
+			if (elapsedRoadworkCatchupTicks >= SettlementEconomyRules.MIN_SIMULATION_TICKS) {
+				long roadworkCatchupStart = System.nanoTime();
+				SettlementRoadwrightWork.RoadworkCatchupResult roadworkCatchupResult = SettlementRoadwrightWork.applyLoadedRoadworkCatchup(
+					level,
+					workingSettlement,
+					stock,
+					activeBuildSites,
+					getSettlementsInDimension(server, settlement.dimension()),
+					getRoutesForSettlement(settlement.id()),
+					elapsedRoadworkCatchupTicks / SettlementEconomyRules.TICKS_PER_DAY
+				);
+				long roadworkCatchupTime = System.nanoTime() - roadworkCatchupStart;
+
+				if (roadworkCatchupTime > 100_000_000) {
+					LiveVillages.LOGGER.warn("Roadwork catch-up took {} ms for settlement {}", Math.round(roadworkCatchupTime / 1_000_000.0D), settlement.id());
+				}
+
+				roadworkCatchupChanged = roadworkCatchupResult.worldChanged();
+			}
+
+			Long previousRoadworkCatchupTick = loadedRoadworkCatchupTicks.put(workingSettlement.id(), currentTick);
+			changed |= previousRoadworkCatchupTick == null || previousRoadworkCatchupTick.longValue() != currentTick;
 			long roadworkStart = System.nanoTime();
 			SettlementRoadwrightWork.RoadworkResult roadworkResult = SettlementRoadwrightWork.maintainLoadedRoadwork(
 				level,
@@ -837,6 +871,7 @@ public class LiveVillagesSavedData extends SavedData {
 					changed = true;
 				}
 
+				changed |= roadworkCatchupChanged;
 				changed |= roadworkResult.worldChanged();
 				SettlementPerformanceLog.warnIfSlow("loaded_construction", workingSettlement, taskStart, server.getTickCount());
 				continue;
@@ -861,6 +896,7 @@ public class LiveVillagesSavedData extends SavedData {
 
 			boolean stockChanged = !stock.equals(workingSettlement.stock());
 			changed |= constructionResult.deliveriesChanged();
+			changed |= roadworkCatchupChanged;
 			changed |= roadworkResult.worldChanged();
 			SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
 
@@ -1138,9 +1174,12 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			ServerLevel level = server.getLevel(settlement.dimension());
+			boolean loadedSettlement = level != null
+				&& level.isLoaded(settlement.center())
+				&& level.isPositionEntityTicking(settlement.center());
 			SettlementState simulationInput = settlement;
 
-			if (level != null && level.isLoaded(settlement.center()) && level.isPositionEntityTicking(settlement.center()) && SettlementVillagers.usesActualVillagers(settlement)) {
+			if (loadedSettlement && SettlementVillagers.usesActualVillagers(settlement)) {
 				SettlementVillagers.ensureTrademaster(level, settlement);
 				SettlementVillagers.ensureCarpenter(level, settlement);
 				SettlementVillagers.ensureRoadwright(level, settlement);
@@ -1157,7 +1196,8 @@ public class LiveVillagesSavedData extends SavedData {
 				getRoutesForSettlement(settlement.id()),
 				getSettlementsInDimension(server, settlement.dimension()),
 				currentTick,
-				level != null && level.isLoaded(simulationInput.center()) && level.isPositionEntityTicking(simulationInput.center()) ? level : null
+				level,
+				loadedSettlement
 			);
 			SettlementPerformanceLog.warnIfSlow("economy_simulation", simulationInput, simulationStart, currentTick);
 
@@ -1194,6 +1234,8 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 		}
 
+		Map<String, List<SettlementBuildSite>> buildSitesBySettlement = indexBuildSitesBySettlement();
+
 		for (Map.Entry<String, RouteState> entry : routes.entrySet()) {
 			RouteState route = entry.getValue();
 			Optional<RegionKey> routeRegion = getRouteRegion(route);
@@ -1222,6 +1264,8 @@ public class LiveVillagesSavedData extends SavedData {
 				route,
 				fromSettlement,
 				toSettlement,
+				buildSitesBySettlement.getOrDefault(fromSettlement.id(), List.of()),
+				buildSitesBySettlement.getOrDefault(toSettlement.id(), List.of()),
 				currentTick
 			);
 
@@ -1242,6 +1286,16 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		return changed;
+	}
+
+	private Map<String, List<SettlementBuildSite>> indexBuildSitesBySettlement() {
+		Map<String, List<SettlementBuildSite>> indexedBuildSites = new HashMap<>();
+
+		for (SettlementBuildSite buildSite : buildSites.values()) {
+			indexedBuildSites.computeIfAbsent(buildSite.settlementId(), key -> new ArrayList<>()).add(buildSite);
+		}
+
+		return indexedBuildSites;
 	}
 
 	private boolean shouldEnsureBootstrapVillager(SettlementState settlement, long currentTick) {

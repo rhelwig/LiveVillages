@@ -1,6 +1,7 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +29,15 @@ public final class RouteNetworkSimulator {
 	private RouteNetworkSimulator() {
 	}
 
-	public static RouteAdvanceResult advanceRoute(ServerLevel level, RouteState route, SettlementState from, SettlementState to, long currentTick) {
+	public static RouteAdvanceResult advanceRoute(
+		ServerLevel level,
+		RouteState route,
+		SettlementState from,
+		SettlementState to,
+		Collection<SettlementBuildSite> fromBuildSites,
+		Collection<SettlementBuildSite> toBuildSites,
+		long currentTick
+	) {
 		long elapsedTicks = Math.max(0L, currentTick - route.lastSurveyTick());
 
 		if (elapsedTicks < MIN_ROUTE_UPDATE_TICKS) {
@@ -38,7 +47,7 @@ public final class RouteNetworkSimulator {
 		SettlementTradeRange.TradeRangeProfile fromRange = tradeProfileForRoute(level, route, from);
 		SettlementTradeRange.TradeRangeProfile toRange = tradeProfileForRoute(level, route, to);
 		RouteState surveyedRoute = surveyRoute(level, route, from, to, currentTick, fromRange, toRange);
-		TradeAdvanceResult tradeResult = advanceTrade(surveyedRoute, from, to, currentTick, fromRange, toRange);
+		TradeAdvanceResult tradeResult = advanceTrade(surveyedRoute, from, to, fromBuildSites, toBuildSites, currentTick, fromRange, toRange);
 		return new RouteAdvanceResult(tradeResult.route(), tradeResult.fromSettlement(), tradeResult.toSettlement());
 	}
 
@@ -176,6 +185,8 @@ public final class RouteNetworkSimulator {
 		RouteState route,
 		SettlementState from,
 		SettlementState to,
+		Collection<SettlementBuildSite> fromBuildSites,
+		Collection<SettlementBuildSite> toBuildSites,
 		long currentTick,
 		SettlementTradeRange.TradeRangeProfile fromRange,
 		SettlementTradeRange.TradeRangeProfile toRange
@@ -200,7 +211,7 @@ public final class RouteNetworkSimulator {
 		List<Shipment> shipments = new ArrayList<>();
 		int remainingBudget = throughputBudget;
 
-		List<GoodsDemand> transfers = computeTransferCandidates(from, to, fromStock, toStock);
+		List<GoodsDemand> transfers = computeTransferCandidates(from, to, fromBuildSites, toBuildSites, fromStock, toStock);
 
 		for (GoodsDemand demand : transfers) {
 			if (remainingBudget <= 0) {
@@ -260,12 +271,14 @@ public final class RouteNetworkSimulator {
 	private static List<GoodsDemand> computeTransferCandidates(
 		SettlementState from,
 		SettlementState to,
+		Collection<SettlementBuildSite> fromBuildSites,
+		Collection<SettlementBuildSite> toBuildSites,
 		Map<String, Integer> fromStock,
 		Map<String, Integer> toStock
 	) {
 		List<GoodsDemand> demands = new ArrayList<>();
-		addTransferCandidates(demands, from, to, fromStock, toStock);
-		addTransferCandidates(demands, to, from, toStock, fromStock);
+		addTransferCandidates(demands, from, to, fromBuildSites, toBuildSites, fromStock, toStock);
+		addTransferCandidates(demands, to, from, toBuildSites, fromBuildSites, toStock, fromStock);
 		demands.sort(Comparator.comparingInt(GoodsDemand::priority).reversed());
 		return demands;
 	}
@@ -274,12 +287,14 @@ public final class RouteNetworkSimulator {
 		List<GoodsDemand> demands,
 		SettlementState source,
 		SettlementState destination,
+		Collection<SettlementBuildSite> sourceBuildSites,
+		Collection<SettlementBuildSite> destinationBuildSites,
 		Map<String, Integer> sourceStock,
 		Map<String, Integer> destinationStock
 	) {
 		for (SettlementEconomyRules.TargetRule targetRule : SettlementEconomyRules.targetRules()) {
-			int sourceTarget = SettlementEconomyRules.targetForGoods(source, targetRule.goodsKey());
-			int destinationTarget = SettlementEconomyRules.targetForGoods(destination, targetRule.goodsKey());
+			int sourceTarget = SettlementEconomyRules.targetForGoods(source, sourceBuildSites, targetRule.goodsKey());
+			int destinationTarget = SettlementEconomyRules.targetForGoods(destination, destinationBuildSites, targetRule.goodsKey());
 			int sourceCurrent = sourceStock.getOrDefault(targetRule.goodsKey(), 0);
 			int destinationCurrent = destinationStock.getOrDefault(targetRule.goodsKey(), 0);
 			int sourceSurplus = Math.max(0, sourceCurrent - sourceTarget);
@@ -306,7 +321,7 @@ public final class RouteNetworkSimulator {
 				destination.id(),
 				sourceAvailableToSend,
 				destinationShortage,
-				SettlementEconomyRules.shortagePriority(destination, targetRule.goodsKey(), destinationCurrent, destinationTarget)
+				SettlementEconomyRules.shortagePriority(destination, destinationBuildSites, targetRule.goodsKey(), destinationCurrent, destinationTarget)
 					+ sourceAvailableToSend
 					+ (sourceSurplus > 0 ? 100 : 0)
 			));

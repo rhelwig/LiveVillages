@@ -60,11 +60,15 @@ public final class SettlementRoadwrightWork {
 	private static final int MAX_SURVEYOR_FORECAST_TASKS_PER_ROUTE = 96;
 	private static final int MAX_MILEPOST_TARGETS = 24;
 	private static final int MAX_LOADED_ROADWORKERS_PER_MAINTENANCE = 3;
+	private static final int MAX_CATCHUP_TASKS_PER_MAINTENANCE = 24;
+	private static final double MAX_CATCHUP_DAYS = 3.0D;
+	private static final long MAX_CATCHUP_WALL_TIME_NANOS = 150_000_000L;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_PLANNED_WORK = 1;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_ROUTE_TRACE = 21;
 	private static final int ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT = SettlementEconomyRules.scaledWorkerDailyUnits(18);
 	private static final int ROADWORK_DAILY_WORK_UNITS_PER_HELPER = SettlementEconomyRules.scaledWorkerDailyUnits(9);
 	private static final long ROADWORK_TASK_CACHE_TICKS = 1_200L; // Keep expensive path searches from repeating while the same task remains useful.
+	private static final long ROADWORK_PATH_CACHE_TICKS = 1_200L;
 	private static final long ROADWORK_VISUAL_MEMORY_TICKS = 12_000L;
 	private static final long ROADWORK_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long MILEPOST_TARGET_CACHE_TICKS = 100L;
@@ -73,6 +77,7 @@ public final class SettlementRoadwrightWork {
 	private static final Map<String, CachedMilepostTargets> MILEPOST_TARGET_CACHE = new HashMap<>();
 	private static final Map<String, CachedRoadworkPlan> ROADWORK_TASK_CACHE = new HashMap<>();
 	private static final Map<String, CachedRoadworkPlan> ROADWORK_VISUAL_PLAN_CACHE = new HashMap<>();
+	private static final Map<RoadworkPathCacheKey, CachedPlannedPath> ROADWORK_PATH_CACHE = new HashMap<>();
 
 	private SettlementRoadwrightWork() {
 	}
@@ -95,6 +100,7 @@ public final class SettlementRoadwrightWork {
 		List<PathTarget> externalTargets = externalTargets(settlement, allSettlements, routes);
 		Set<String> busyRoadwrightIds = new HashSet<>();
 		boolean worldChanged = false;
+		boolean plannedThisPass = false;
 		long tick = level.getServer().getTickCount();
 
 		for (Villager roadwright : roadWorkers) {
@@ -112,12 +118,18 @@ public final class SettlementRoadwrightWork {
 			Optional<RoadworkDebugPlan> plan = cachedRoadworkPlan(level, settlement, roadwrightId, tick);
 
 			if (plan.isEmpty() && SettlementVillagerWorkSchedule.shouldStartNewWork(level, roadwright, "roadwork", ROADWORK_DECIDE_INTERVAL_TICKS)) {
+				if (!isPlanningRoadwright(roadwright) || plannedThisPass) {
+					continue;
+				}
+
 				long chooseTaskStart = System.nanoTime();
 				plan = chooseRoadworkPlan(level, settlement, roadwrightId, workStart, internalTargets, milepostTargets, externalTargets, tick);
 				long chooseTaskTime = System.nanoTime() - chooseTaskStart;
 				if (chooseTaskTime > 100_000_000) { // >100ms
 					LiveVillages.LOGGER.warn("Roadwork: chooseRoadworkTask took {} ms for roadwright {}", Math.round(chooseTaskTime / 1_000_000.0D), roadwrightId);
 				}
+
+				plannedThisPass = plan.isPresent();
 			}
 
 			if (plan.isEmpty()) {
@@ -149,6 +161,70 @@ public final class SettlementRoadwrightWork {
 		}
 
 		return new RoadworkResult(Set.copyOf(busyRoadwrightIds), worldChanged);
+	}
+
+	public static RoadworkCatchupResult applyLoadedRoadworkCatchup(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Collection<SettlementBuildSite> buildSites,
+		Collection<SettlementState> allSettlements,
+		List<RouteState> routes,
+		double elapsedDays
+	) {
+		if (elapsedDays <= 0.0D) {
+			return RoadworkCatchupResult.none();
+		}
+
+		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
+
+		if (roadwrights.isEmpty()) {
+			return RoadworkCatchupResult.none();
+		}
+
+		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights);
+		int helperCount = Math.max(0, roadWorkers.size() - roadwrights.size());
+		int dailyWorkUnits = forecastDailyWorkUnits(roadwrights.size(), helperCount);
+		int taskBudget = Math.min(
+			MAX_CATCHUP_TASKS_PER_MAINTENANCE,
+			Math.max(0, (int) Math.round(dailyWorkUnits * Math.min(MAX_CATCHUP_DAYS, elapsedDays)))
+		);
+
+		if (taskBudget <= 0) {
+			return RoadworkCatchupResult.none();
+		}
+
+		Set<String> appliedTasks = new HashSet<>();
+		boolean worldChanged = false;
+		int tasksApplied = 0;
+		long catchupStartNanos = System.nanoTime();
+
+		for (ForecastRoutePlan candidate : surveyorMapForecastCandidates(level, settlement, buildSites, allSettlements, routes)) {
+			if (tasksApplied >= taskBudget) {
+				break;
+			}
+
+			for (PathTask task : candidate.tasks()) {
+				if (tasksApplied >= taskBudget || System.nanoTime() - catchupStartNanos > MAX_CATCHUP_WALL_TIME_NANOS) {
+					break;
+				}
+
+				String taskKey = task.action().name() + "@" + task.workPos().toShortString();
+
+				if (!appliedTasks.add(taskKey)) {
+					continue;
+				}
+
+				if (!performRoadwork(level, settlement, stock, task)) {
+					continue;
+				}
+
+				worldChanged = true;
+				tasksApplied++;
+			}
+		}
+
+		return new RoadworkCatchupResult(worldChanged, tasksApplied);
 	}
 
 	public static Optional<String> loadedRoadworkTaskKey(
@@ -434,6 +510,10 @@ public final class SettlementRoadwrightWork {
 		return !SettlementVillagers.nearbyRoadwrights(level, settlement).isEmpty();
 	}
 
+	private static boolean isPlanningRoadwright(Villager villager) {
+		return villager.getVillagerData().profession().is(LiveVillagesVillagerProfessions.ROADWRIGHT);
+	}
+
 	private static List<Villager> roadworkWorkersForMaintenance(ServerLevel level, SettlementState settlement, List<Villager> roadwrights) {
 		List<Villager> helpers = SettlementVillagers.nearbyRoadworkHelpers(level, settlement);
 
@@ -508,6 +588,24 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static Optional<RoadworkDebugPlan> advanceRoadworkPlanOnSameRoute(ServerLevel level, SettlementState settlement, RoadworkDebugPlan currentPlan) {
+		boolean internal = usesInternalRouteSearch(currentPlan.targetKind());
+		Optional<PathTask> nextTaskOnCachedTrace = firstMissingPathTaskOnPath(level, settlement, currentPlan.routeTrace(), internal);
+
+		if (nextTaskOnCachedTrace.isPresent()) {
+			return Optional.of(new RoadworkDebugPlan(
+				nextTaskOnCachedTrace.get().workPos(),
+				nextTaskOnCachedTrace.get().standPos(),
+				nextTaskOnCachedTrace.get().action().name(),
+				nextTaskOnCachedTrace.get().uphillDirection(),
+				currentPlan.taskKey(),
+				currentPlan.targetKind(),
+				currentPlan.startPos(),
+				currentPlan.targetPos(),
+				currentPlan.routeTrace(),
+				false
+			));
+		}
+
 		return recomputeRoadworkPlan(level, settlement, currentPlan);
 	}
 
@@ -1145,10 +1243,19 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static List<BlockPos> plannedSurfacePath(ServerLevel level, SettlementState settlement, BlockPos start, BlockPos target, boolean internal) {
+		long tick = level.getServer().getTickCount();
+		RoadworkPathCacheKey cacheKey = new RoadworkPathCacheKey(settlement.dimension().identifier().toString(), settlement.id(), start, target, internal);
+		CachedPlannedPath cachedPath = ROADWORK_PATH_CACHE.get(cacheKey);
+
+		if (cachedPath != null && tick - cachedPath.tick() <= ROADWORK_PATH_CACHE_TICKS) {
+			return cachedPath.path();
+		}
+
 		Optional<BlockPos> startSurface = nearestSurfacePathPos(level, start, ROUTE_ENDPOINT_SEARCH_RADIUS_BLOCKS);
 		Optional<BlockPos> targetSurface = nearestSurfacePathPos(level, target, internal ? ROUTE_ENDPOINT_SEARCH_RADIUS_BLOCKS : 2);
 
 		if (startSurface.isEmpty() || targetSurface.isEmpty()) {
+			cachePlannedSurfacePath(cacheKey, tick, List.of());
 			return List.of();
 		}
 
@@ -1178,7 +1285,9 @@ public final class SettlementRoadwrightWork {
 			}
 
 			if (current.key().equals(targetKey)) {
-				return reconstructPath(visits, current.key());
+				List<BlockPos> path = reconstructPath(visits, current.key());
+				cachePlannedSurfacePath(cacheKey, tick, path);
+				return path;
 			}
 
 			searchedNodes++;
@@ -1222,7 +1331,18 @@ public final class SettlementRoadwrightWork {
 			}
 		}
 
+		cachePlannedSurfacePath(cacheKey, tick, List.of());
 		return List.of();
+	}
+
+	private static void cachePlannedSurfacePath(RoadworkPathCacheKey cacheKey, long tick, List<BlockPos> path) {
+		ROADWORK_PATH_CACHE.put(cacheKey, new CachedPlannedPath(tick, path));
+
+		if (ROADWORK_PATH_CACHE.size() <= 512) {
+			return;
+		}
+
+		ROADWORK_PATH_CACHE.entrySet().removeIf(entry -> tick - entry.getValue().tick() > ROADWORK_PATH_CACHE_TICKS);
 	}
 
 	private static BlockPos routeSearchTarget(ServerLevel level, BlockPos startSurface, BlockPos targetSurface, boolean internal) {
@@ -1674,6 +1794,12 @@ public final class SettlementRoadwrightWork {
 		}
 	}
 
+	public record RoadworkCatchupResult(boolean worldChanged, int tasksApplied) {
+		public static RoadworkCatchupResult none() {
+			return new RoadworkCatchupResult(false, 0);
+		}
+	}
+
 	public record SurveyorMapForecast(List<BlockPos> routeTraceBlocks, List<BlockPos> plannedWorkBlocks) {
 		public SurveyorMapForecast {
 			routeTraceBlocks = List.copyOf(routeTraceBlocks);
@@ -1697,6 +1823,12 @@ public final class SettlementRoadwrightWork {
 	private record CachedRoadworkPlan(Optional<RoadworkDebugPlan> plan, long tick) {
 	}
 
+	private record CachedPlannedPath(long tick, List<BlockPos> path) {
+		private CachedPlannedPath {
+			path = List.copyOf(path);
+		}
+	}
+
 	private record ForecastRoutePlan(String targetKind, BlockPos startPos, BlockPos targetPos, List<BlockPos> routeTrace, List<PathTask> tasks) {
 		private ForecastRoutePlan {
 			startPos = startPos.immutable();
@@ -1708,6 +1840,13 @@ public final class SettlementRoadwrightWork {
 
 	private record ForecastRouteKey(String targetKind, BlockPos startPos, BlockPos targetPos) {
 		private ForecastRouteKey {
+			startPos = startPos.immutable();
+			targetPos = targetPos.immutable();
+		}
+	}
+
+	private record RoadworkPathCacheKey(String dimensionId, String settlementId, BlockPos startPos, BlockPos targetPos, boolean internal) {
+		private RoadworkPathCacheKey {
 			startPos = startPos.immutable();
 			targetPos = targetPos.immutable();
 		}

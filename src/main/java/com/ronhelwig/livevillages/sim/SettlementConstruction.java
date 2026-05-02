@@ -875,8 +875,8 @@ public final class SettlementConstruction {
 		int composters = 0;
 		int storageBlocks = 0;
 		int carpenterBenches = 0;
-		int docks = 0;
-		int lighthouses = 0;
+		int docks = buildSiteInfrastructure.completedDocks();
+		int lighthouses = buildSiteInfrastructure.completedLighthouses();
 		int waterSurfaceColumns = 0;
 		int deepWaterColumns = 0;
 		Set<BlockPos> countedLighthouseTops = new HashSet<>();
@@ -899,7 +899,7 @@ public final class SettlementConstruction {
 						deepWaterColumns++;
 					}
 
-					if (docks <= 0) {
+					if (docks <= buildSiteInfrastructure.completedDocks()) {
 						BlockPos candidateOrigin = new BlockPos(x, waterColumn.surfaceY(), z);
 
 						for (Direction facing : Direction.Plane.HORIZONTAL) {
@@ -978,6 +978,8 @@ public final class SettlementConstruction {
 
 	private static BuildSiteInfrastructure buildSiteInfrastructure(ServerLevel level, SettlementState settlement) {
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations = new HashSet<>();
+		int completedDocks = 0;
+		int completedLighthouses = 0;
 		int completedTradingPosts = 0;
 		int incompleteDocks = 0;
 		int incompleteLighthouses = 0;
@@ -986,11 +988,15 @@ public final class SettlementConstruction {
 
 		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
-				if (!buildSite.complete()) {
+				if (buildSite.complete()) {
+					completedDocks++;
+				} else {
 					incompleteDocks++;
 				}
 			} else if (buildSite.blueprintId() == SettlementBuildSiteType.LIGHTHOUSE) {
-				if (!buildSite.complete()) {
+				if (buildSite.complete()) {
+					completedLighthouses++;
+				} else {
 					incompleteLighthouses++;
 				}
 			} else if (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST) {
@@ -1008,6 +1014,8 @@ public final class SettlementConstruction {
 
 		return new BuildSiteInfrastructure(
 			Set.copyOf(incompleteCarpenterWorkshopWorkstations),
+			completedDocks,
+			completedLighthouses,
 			completedTradingPosts,
 			incompleteDocks,
 			incompleteLighthouses,
@@ -4899,6 +4907,8 @@ public final class SettlementConstruction {
 
 	private record BuildSiteInfrastructure(
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations,
+		int completedDocks,
+		int completedLighthouses,
 		int completedTradingPosts,
 		int incompleteDocks,
 		int incompleteLighthouses,

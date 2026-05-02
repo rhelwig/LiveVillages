@@ -21,7 +21,8 @@ public final class SettlementEconomySimulator {
 		List<RouteState> routes,
 		Collection<SettlementState> allSettlements,
 		long currentTick,
-		ServerLevel level
+		ServerLevel level,
+		boolean loadedSettlement
 	) {
 		long elapsedTicks = Math.max(0L, currentTick - settlement.lastUpdateTick());
 
@@ -40,7 +41,7 @@ public final class SettlementEconomySimulator {
 			? SettlementConstruction.survey(level, settlement)
 			: SettlementConstruction.InfrastructureSurvey.empty();
 
-		if (infrastructure.available()) {
+		if (loadedSettlement && infrastructure.available()) {
 			int reconciledHousing = settlement.kind() == SettlementKind.CUSTOM
 				? infrastructure.housingCapacity()
 				: Math.max(simulationSettlement.housingCapacity(), infrastructure.housingCapacity());
@@ -59,11 +60,11 @@ public final class SettlementEconomySimulator {
 		Map<String, Integer> stock = new LinkedHashMap<>(simulationSettlement.stock());
 		Map<String, Integer> wealth = new LinkedHashMap<>(simulationSettlement.wealth());
 		Map<String, Integer> populationMap = new LinkedHashMap<>(simulationSettlement.population());
-		Map<String, Integer> nearbyProfessions = level != null && SettlementVillagers.usesActualVillagers(settlement)
+		Map<String, Integer> nearbyProfessions = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement)
 			? SettlementVillagers.nearbyProfessionPopulation(level, settlement)
 			: Map.of();
 
-		applyProduction(simulationSettlement, routes, stock, wealth, elapsedDays, level, infrastructure, nearbyProfessions);
+		applyProduction(simulationSettlement, routes, stock, wealth, elapsedDays, level, loadedSettlement, infrastructure, nearbyProfessions);
 		SupplyState foodSupply = consumeFood(stock, population, elapsedDays);
 		SupplyState upkeepSupply = consumeUpkeep(stock, simulationSettlement.housingCapacity(), population, elapsedDays);
 
@@ -76,7 +77,8 @@ public final class SettlementEconomySimulator {
 			stock,
 			elapsedDays,
 			currentTick,
-			level
+			level,
+			loadedSettlement
 		);
 
 		List<RouteState> activeRoutes = new ArrayList<>(routes);
@@ -130,6 +132,7 @@ public final class SettlementEconomySimulator {
 		Map<String, Integer> wealth,
 		double elapsedDays,
 		ServerLevel level,
+		boolean loadedSettlement,
 		SettlementConstruction.InfrastructureSurvey infrastructure,
 		Map<String, Integer> nearbyProfessions
 	) {
@@ -147,7 +150,7 @@ public final class SettlementEconomySimulator {
 		int portmasters = roleCount(settlement, SettlementRoleKeys.PORTMASTER);
 		double civilianScale = settlement.kind() == SettlementKind.OUTPOST ? 0.65D : 1.0D;
 		double tradeScale = settlement.kind() == SettlementKind.HARBOR ? 1.2D : 1.0D;
-		boolean useLoadedFarmerWork = level != null && SettlementVillagers.usesActualVillagers(settlement);
+		boolean useLoadedFarmerWork = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement);
 		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(settlement, infrastructure);
 
 		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
@@ -330,12 +333,11 @@ public final class SettlementEconomySimulator {
 			return;
 		}
 
-		int desiredRoutes = settlement.kind() == SettlementKind.CUSTOM ? 1 : 2;
 		long activeRoadProjects = projects.stream()
 			.filter(project -> project.type() == SettlementProjectType.ROAD)
 			.count();
 
-		if (routes.size() + activeRoadProjects >= desiredRoutes) {
+		if (activeRoadProjects > 0) {
 			return;
 		}
 
@@ -385,13 +387,14 @@ public final class SettlementEconomySimulator {
 		Map<String, Integer> stock,
 		double elapsedDays,
 		long currentTick,
-		ServerLevel level
+		ServerLevel level,
+		boolean loadedSettlement
 	) {
 		List<SettlementProject> remainingProjects = new ArrayList<>();
 		List<RouteState> createdRoutes = new ArrayList<>();
 		int housingCapacity = settlement.housingCapacity();
 		int defenseLevel = settlement.defenseLevel();
-		boolean useWorldConstruction = level != null && SettlementVillagers.usesActualVillagers(settlement);
+		boolean useWorldConstruction = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement);
 
 		for (SettlementProject project : projects) {
 			double newProgress = Math.min(project.requiredProgress(), project.progress() + (projectWorkRate(settlement, project.type()) * elapsedDays));

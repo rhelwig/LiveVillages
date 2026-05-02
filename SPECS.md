@@ -95,6 +95,9 @@ The player trades against settlement stock rather than only a single villager in
 - The Trade Board should show the highest-priority settlement-wide wants rather than every possible tradable item. Lower-priority or profession-specific trades should be handled by profession structures so the global board stays readable.
 - Any new feature that creates demand for a good, block, or item should also account for that good in the settlement wish/desire/trade model. If the village can use it, the player should eventually have a discoverable way to donate or trade it.
 - Active build-site blockers should raise matching goods onto the Trade Board's needs list. For example, unfinished glass windows should make glass and adaptable raw materials such as sand available as player trade or donation options; unfinished beds should make finished beds, wool, and supporting materials such as planks visible.
+- Inter-settlement stock transfers should also respect outstanding active build-site material demand so settlements can import the exact goods their visible construction sites are still missing.
+- Completed harbor and trade structures tracked through persistent build sites should continue to inform route planning and trade range even when those settlements are currently unloaded.
+- Settlements should not have an arbitrary fixed cap on total trade routes; route count should emerge from reachable infrastructure, profession support, and whether worthwhile targets actually exist.
 - The Trade Board trading screen should support two direct selection flows:
   - `Your Goods`: the player selects a tradable item from their inventory, then chooses from the village payout options that are valid for that good.
   - `Village Goods`: the player selects a village stock item the village is willing to offer, then chooses which currently wanted player good to pay with.

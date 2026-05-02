@@ -1,5 +1,6 @@
 package com.ronhelwig.livevillages.sim;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.IntUnaryOperator;
@@ -84,15 +85,30 @@ public final class SettlementEconomyRules {
 	}
 
 	public static int targetForGoods(SettlementState settlement, String goodsKey) {
+		return targetForGoods(settlement, List.of(), goodsKey);
+	}
+
+	public static int targetForGoods(SettlementState settlement, Collection<SettlementBuildSite> buildSites, String goodsKey) {
 		return targetForGoods(goodsKey, Math.max(1, settlement.totalPopulation()))
 			+ professionalReserveForGoods(settlement, goodsKey)
-			+ plannedDemandForGoods(settlement, goodsKey);
+			+ plannedDemandForGoods(settlement, goodsKey)
+			+ activeBuildSiteDemandForGoods(buildSites, goodsKey);
 	}
 
 	public static int shortagePriority(SettlementState settlement, String goodsKey, int current, int target) {
+		return shortagePriority(settlement, List.of(), goodsKey, current, target);
+	}
+
+	public static int shortagePriority(
+		SettlementState settlement,
+		Collection<SettlementBuildSite> buildSites,
+		String goodsKey,
+		int current,
+		int target
+	) {
 		int shortage = Math.max(0, target - current);
 		int priority = shortage;
-		int plannedDemand = plannedDemandForGoods(settlement, goodsKey);
+		int plannedDemand = plannedDemandForGoods(settlement, goodsKey) + activeBuildSiteDemandForGoods(buildSites, goodsKey);
 
 		if (plannedDemand > 0) {
 			priority += 200;
@@ -147,6 +163,32 @@ public final class SettlementEconomyRules {
 
 		if (needsStorageProject(settlement) && !hasProjectType(settlement, SettlementProjectType.STORAGE)) {
 			demand += SettlementProjectType.STORAGE.stockCost().getOrDefault(goodsKey, 0);
+		}
+
+		return demand;
+	}
+
+	public static int activeBuildSiteDemandForGoods(Collection<SettlementBuildSite> buildSites, String goodsKey) {
+		if (buildSites.isEmpty()) {
+			return 0;
+		}
+
+		int demand = 0;
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (!goodsKey.equals(block.expectedMaterialKey())
+					|| block.status() == SettlementBuildBlockStatus.PLACED
+					|| block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+					continue;
+				}
+
+				demand++;
+			}
 		}
 
 		return demand;
