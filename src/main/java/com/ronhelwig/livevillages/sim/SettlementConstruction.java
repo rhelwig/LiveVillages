@@ -2326,13 +2326,12 @@ public final class SettlementConstruction {
 					return null;
 				}
 
-				int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, floorPos.getX(), floorPos.getZ()) - 1;
+				BlockPos groundPos = resolveStructureGroundPos(level, floorPos);
 
-				if (groundY < level.getMinY() || groundY > level.getMaxY() - 1) {
+				if (groundPos == null) {
 					return null;
 				}
-
-				BlockPos groundPos = new BlockPos(floorPos.getX(), groundY, floorPos.getZ());
+				int groundY = groundPos.getY();
 
 				while (protectedPositions.contains(groundPos) && groundY > level.getMinY()) {
 					groundY--;
@@ -2419,11 +2418,12 @@ public final class SettlementConstruction {
 					return null;
 				}
 
-				int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, worldPos.getX(), worldPos.getZ()) - 1;
+				BlockPos groundPos = resolveStructureGroundPos(level, worldPos);
 
-				if (groundY < level.getMinY()) {
+				if (groundPos == null) {
 					return null;
 				}
+				int groundY = groundPos.getY();
 
 				minGroundY = Math.min(minGroundY, groundY);
 				maxGroundY = Math.max(maxGroundY, groundY);
@@ -2465,13 +2465,12 @@ public final class SettlementConstruction {
 		for (int right = blueprint.minRight(); right <= blueprint.maxRight(); right++) {
 			for (int forward = blueprint.minForward(); forward <= blueprint.maxForward(); forward++) {
 				BlockPos floorPos = offset(origin, facing, right, forward, 0);
-				int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, floorPos.getX(), floorPos.getZ()) - 1;
+				BlockPos groundPos = resolveStructureGroundPos(level, floorPos);
 
-				if (groundY < level.getMinY() || groundY > level.getMaxY() - 1) {
+				if (groundPos == null) {
 					return null;
 				}
-
-				BlockPos groundPos = new BlockPos(floorPos.getX(), groundY, floorPos.getZ());
+				int groundY = groundPos.getY();
 
 				if (!hasStableBuildGround(level, groundPos)) {
 					return null;
@@ -4543,6 +4542,28 @@ public final class SettlementConstruction {
 
 		BlockState belowState = level.getBlockState(belowPos);
 		return belowState.isSolid() && isBuildGroundSurface(belowState);
+	}
+
+	private static BlockPos resolveStructureGroundPos(ServerLevel level, BlockPos columnPos) {
+		int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnPos.getX(), columnPos.getZ()) - 1;
+
+		if (groundY < level.getMinY() || groundY > level.getMaxY() - 1) {
+			return null;
+		}
+
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos(columnPos.getX(), groundY, columnPos.getZ());
+
+		while (scanPos.getY() > level.getMinY()) {
+			BlockState state = level.getBlockState(scanPos);
+
+			if (!canLandscapeRemove(level, scanPos, state)) {
+				break;
+			}
+
+			scanPos.move(Direction.DOWN);
+		}
+
+		return scanPos.immutable();
 	}
 
 	private static boolean canAfford(Map<String, Integer> stock, Map<String, Integer> cost) {

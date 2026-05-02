@@ -188,7 +188,7 @@ public final class SettlementInventoryOverlay {
 		leftY = renderLine(graphics, font, leftX, leftY, "Population: " + settlement.population() + "  Housing: " + settlement.housingCapacity(), 0xFFDCC8A4);
 		leftY = renderLine(graphics, font, leftX, leftY, "Treasury: " + settlement.emeraldWealth() + "e", 0xFFDCC8A4);
 		leftY = renderLine(graphics, font, leftX, leftY, "Comfort: " + percent(settlement.comfort()) + "  Security: " + percent(settlement.security()), 0xFFDCC8A4);
-		leftY = renderLine(graphics, font, leftX, leftY, "Routes: " + settlement.routeCount(), 0xFFDCC8A4);
+		leftY = renderLine(graphics, font, leftX, leftY, "Routes: " + settlement.routes().size(), 0xFFDCC8A4);
 		leftY += LINE_HEIGHT;
 		leftY = drawRoleSection(graphics, font, leftX, leftY, LEFT_COLUMN_WIDTH, "Workforce", settlement.roleCounts(), MAX_OVERVIEW_ROLE_ROWS);
 		leftY += LINE_HEIGHT;
@@ -252,7 +252,7 @@ public final class SettlementInventoryOverlay {
 		TradeBoardSettlementView settlement
 	) {
 		leftY = renderLine(graphics, font, leftX, leftY, settlement.settlementName() + " Village Trades", 0xFFF8E6BE);
-		leftY = renderLine(graphics, font, leftX, leftY, "Routes: " + settlement.routeCount(), 0xFFDCC8A4);
+		leftY = renderLine(graphics, font, leftX, leftY, "Routes: " + settlement.routes().size(), 0xFFDCC8A4);
 		leftY += LINE_HEIGHT;
 		leftY = drawRouteSection(graphics, font, leftX, leftY, LEFT_COLUMN_WIDTH, "Trades With Other Villages", settlement.routes(), MAX_ROUTE_ROWS);
 		drawFooter(graphics, font, leftX, leftY + LINE_HEIGHT);

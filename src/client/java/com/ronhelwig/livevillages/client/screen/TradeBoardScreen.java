@@ -99,7 +99,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			int y = TOP_SUMMARY_Y;
 			graphics.text(
 				font,
-				"Kind: " + humanizeKey(settlement.settlementKind().getSerializedName()) + "  Routes: " + settlement.routeCount(),
+				"Kind: " + humanizeKey(settlement.settlementKind().getSerializedName()) + "  Tier: " + settlement.tier() + "  Routes: " + settlement.routes().size(),
 				10,
 				y,
 				0xFFE6D6B7,
@@ -249,10 +249,10 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			PRIMARY_SECTION_TOP_Y,
 			"Town Overview",
 			List.of(
+				"Tier: " + settlement.tier(),
 				"Growth: " + settlement.growthSummary(),
-				"Routes: " + settlement.routeCount(),
-				"Shortages: " + settlement.shortages().size(),
-				"Surpluses: " + settlement.surpluses().size()
+				"Routes: " + settlement.routes().size(),
+				"Shortages: " + settlement.shortages().size()
 			)
 		);
 		drawInfoSection(graphics, RIGHT_COLUMN_X, PRIMARY_SECTION_TOP_Y, "Top Needs", firstRows(settlement.shortages(), 4), true);
@@ -308,13 +308,13 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			PRIMARY_SECTION_TOP_Y,
 			"Network Status",
 			List.of(
-				"Routes: " + settlement.routeCount(),
+				"Tier: " + settlement.tier(),
+				"Routes: " + settlement.routes().size(),
 				"Growth: " + settlement.growthSummary(),
-				"Shortages: " + settlement.shortages().size(),
-				"Surpluses: " + settlement.surpluses().size()
+				"Shortages: " + settlement.shortages().size()
 			)
 		);
-		drawRouteSection(graphics, WIDE_SECTION_X, ROUTE_SECTION_TOP_Y, "Recent Trade", settlement.routes(), settlement.routeCount());
+		drawRouteSection(graphics, WIDE_SECTION_X, ROUTE_SECTION_TOP_Y, "Recent Trade", settlement.routes(), settlement.routes().size());
 	}
 
 	private void drawPlayerGoodsRows(GuiGraphicsExtractor graphics, List<PlayerGoodsOption> entries) {

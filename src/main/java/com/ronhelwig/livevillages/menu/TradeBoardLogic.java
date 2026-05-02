@@ -16,6 +16,7 @@ import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementProjectType;
 import com.ronhelwig.livevillages.sim.SettlementState;
+import com.ronhelwig.livevillages.sim.SettlementTiers;
 
 public final class TradeBoardLogic {
 	private static final int MAX_TRADE_ROWS = TradeBoardTrading.MAX_TRADE_ROWS;
@@ -124,7 +125,6 @@ public final class TradeBoardLogic {
 					.thenComparing(route -> route.lastTransferSummary().isBlank() ? 1 : 0)
 					.thenComparing(route -> routePartnerName(route, settlement, settlementNameResolver))
 			)
-			.limit(Math.max(0, maxRouteRows))
 			.map(route -> new TradeBoardRouteView(
 				routePartnerName(route, settlement, settlementNameResolver),
 				routeSummary(route)
@@ -143,12 +143,12 @@ public final class TradeBoardLogic {
 			settlement.id(),
 			settlement.name(),
 			settlement.kind(),
+			SettlementTiers.unlockedTier(settlement),
 			settlement.totalPopulation(),
 			settlement.housingCapacity(),
 			settlement.wealth().getOrDefault("emerald", 0),
 			settlement.comfort(),
 			settlement.security(),
-			routes.size(),
 			summarizeGrowth(settlement, population),
 			roleCounts,
 			shortages,

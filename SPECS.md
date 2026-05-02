@@ -14,7 +14,7 @@ Live Villages is a Fabric mod for Minecraft Java `26.1.x`. The goal is to make v
 
 ## Core Simulation Model
 
-- Each settlement stores persistent state for population, stock, wealth, housing, comfort, security, construction queues, and trade routes.
+- Each settlement stores persistent state for population, stock, wealth, advancement tier progress, housing, comfort, security, construction queues, and trade routes.
 - Bulk resources live in a virtual warehouse ledger rather than in fully simulated per-villager inventories.
 - Individual villagers can still have identity, profession, home, tools, family goals, and a small amount of personal state, but settlement logistics should be ledger-driven.
 - When chunks are loaded, villagers can perform visible representative work such as hauling, building, guarding, and traveling.
@@ -45,6 +45,8 @@ Example settlement state:
   "id": "village:123_456",
   "center": [123, 68, 456],
   "type": "village|harbor|outpost|custom",
+  "tier": 1,
+  "highestUnlockedTier": 1,
   "population": {
     "unemployed": 2,
     "farmer": 5,
@@ -75,6 +77,30 @@ Example settlement state:
 }
 ```
 
+## Settlement Tiers
+
+Settlements should use a four-tier civic progression model that gates which upgrades, public projects, path materials, and structure variants they can pursue.
+
+- `Tier 1`: the default founding tier. New settlements start here. They focus on survival, starter housing, rough paths, simple workshops, and first-pass defensive works such as wooden log palisades or fenced boundaries.
+- `Tier 2`: unlocks when a settlement has at least `500` emeralds and at least `16` villagers. This tier enables more established village improvements such as cobblestone path upgrades, stronger workshop finishes, larger storage, and cobblestone defensive walls.
+- `Tier 3`: unlocks when a settlement has at least `5,000` emeralds and at least `32` villagers. This tier enables more substantial civic works, better road materials, larger or upgraded profession structures, and dressed-stone fortifications such as smooth stone or polished granite / polished diorite walls.
+- `Tier 4`: the top planned tier for now. Treat the unlock gate as provisional and tuneable; first-pass target is at least `20,000` emeralds and at least `48` villagers. This tier should unlock prestige upgrades, major civic expansions, stronger gatehouses or towers, and the settlement's best polished-material variants.
+- These gates should become data-driven later, but the above thresholds are the first-pass balancing targets.
+- Tier unlocks should be persistent progression, not volatile moment-to-moment state. If a settlement reaches a tier and later spends emeralds or temporarily loses population, it should not immediately downgrade or tear down completed upgrades.
+- The settlement should still track its current live wealth and population separately from unlocked tier progress so UI and planning can show both the present economy and the best tier reached.
+- The `Trade Board`, overlays, and debug views should show the settlement's current tier and the next unlock requirement.
+- Tier should affect more than cosmetics: it should gate structure blueprints, material choices, path upgrades, fortification projects, and future autonomous-build-rate caps.
+- Structure families should support tier-aware variants or staged upgrades. Not every tier needs a completely different footprint; some tiers may only swap materials, lighting, or small attachments, while later tiers may add a second floor, wings, walls, towers, or other larger expansions.
+- The first-pass defensive material progression should be:
+  - `Tier 1`: wooden log palisade / rough boundary
+  - `Tier 2`: cobblestone or rough-stone wall
+  - `Tier 3`: smooth-stone or polished-stone fortification
+  - `Tier 4`: reinforced prestige fortification with upgraded gatehouse / tower language
+- Fortification radius should also vary by tier:
+  - `Tier 1`: aim for about `80%` of the settlement radius so a young village builds a meaningful but still affordable inner perimeter
+  - `Tier 2` and above: aim for about `100%` of the settlement radius
+- Tier-specific structure choices should still respect local wood family, stone palette, biome rules, and future style variants rather than forcing one universal block palette everywhere.
+
 ## Trade Board
 
 The Trade Board is the central management workstation for a settlement. Visually it should feel like a community posting board or sign-like civic block, not just another chest menu.
@@ -83,7 +109,7 @@ When a player right-clicks the Trade Board they should see:
 
 - A list of goods the settlement does not have enough of.
 - A list of goods the settlement has in surplus.
-- Basic settlement status: population, security, housing, and key projects.
+- Basic settlement status: tier, population, security, housing, and key projects.
 - Route and trade summaries.
 - Important construction or knowledge goals.
 
@@ -135,6 +161,8 @@ Profession structures can expose targeted trades that fill gaps left by the Trad
 - A settlement should not queue or start a duplicate associated structure while an existing build site of that role is in progress. This applies generally to workstation-associated structures, civic structures, upgrades, and repairs, not only to `Carpenter's Workshop` sites.
 - Workstation-associated structures may relocate the anchored workstation to the blueprint's intended final block, including vertical moves, without canceling the build site. Villagers should be able to remove the original placed workstation, recover it into construction supply, and place it at the planned workstation position as part of the same staged build.
 - If a completed staged structure is damaged or has required blocks removed, it should reopen as a repair build site instead of causing the settlement to queue a duplicate replacement structure. The repair site should follow the same visible work, stock, and material rules as initial construction.
+- Completed structures and civic projects should be eligible for later tier-based upgrades when the settlement unlocks a higher civic tier. These upgrades should reuse the same site where practical instead of spawning redundant replacement structures nearby.
+- Trees, leaves, tall grass, flowers, saplings, and similar removable natural vegetation should not by themselves invalidate an otherwise legal structure site or turn the build preview red. If the terrain under them is suitable, the site is valid and workers may clear that vegetation as part of landscaping or early construction work.
 - The placed workstation anchor is a protected planned block. Workers should not remove it while building around it; if it is missing or damaged, replacing it is part of finishing or repairing the structure.
 - Wood in the structure may be any local family but should be consistent within the structure. For example, a spruce-heavy region should prefer spruce logs, planks, stairs, slabs, fences, gates, and doors.
 - Stone-family structure materials should also prefer the local biome palette where it makes visual sense. Desert and beach builds should favor sandstone-family blocks; badlands builds should favor red-sandstone-family blocks; default village-style builds can stay cobblestone-oriented unless a later material system overrides them.
@@ -250,6 +278,7 @@ The Trade Board should eventually display the linked settlement name directly on
 - If the player places a Trade Board outside the radius of an existing settlement, it can seed a new one.
 - Tentative minimum spacing: about `100` blocks, subject to tuning.
 - The new settlement starts with only the board and minimal virtual state.
+- The new settlement starts at `Tier 1`.
 - Within roughly one in-game day, a founding villager should spawn nearby.
 - The first founder becomes the settlement's Trademaster and begins trying to establish warehousing, housing, food, and basic production.
 
@@ -261,7 +290,7 @@ The Trademaster is the settlement's quartermaster, planner, and routing manager.
 - The Trademaster commissions public projects through settlement queues rather than doing everything personally.
 - The Trademaster can still work, but is less efficient at non-specialist labor than dedicated workers.
 - The Trademaster handles inter-settlement trading and knowledge exchange. A village without a Trademaster cannot trade with other villages.
-- Autonomous public expansion should be capped by settlement advancement or knowledge tier rather than by one fixed rate.
+- Autonomous public expansion should be capped by settlement tier and knowledge rather than by one fixed rate.
 - Example guideline: before copper-tool knowledge, a settlement may autonomously complete about one major workstation or public project per in-game week; after copper-tool knowledge, about two per week; after iron-tool knowledge, a higher tuned rate.
 - The actual gates should use settlement knowledge/recipe state once that system exists, not player advancements alone, so settlements can improve by learning from trade, local infrastructure, or direct player help.
 
@@ -812,6 +841,24 @@ Possible effects of build queue completions:
 - New house plot increases housing capacity.
 - Better house or townhouse increases both capacity and comfort.
 - Wall or defensive structure increases security.
+- Finished walls, gatehouses, towers, and similar visible fortifications should also provide a modest prestige value in gameplay terms. First pass may express that through a small comfort bonus, stronger project summaries, or similar settlement-status improvement rather than needing a separate dedicated prestige stat immediately.
+
+## Tier 1 Palisade
+
+The first-pass `Tier 1` settlement wall should be a simple wooden palisade that reads as a real fortification rather than a decorative fence.
+
+- Primary wall body: vertical logs, at least `4` blocks high
+- Interior firing walk: wood slabs attached only on the inside of the wall at the level just below the top log, forming a narrow defender walkway rather than exterior trim
+- Access points: about every `30` blocks, add a small stair access up to a short plank landing connected to the interior slab walk
+- Lighting: place a torch about every `10` blocks along the top of the wall
+- Material family: use the settlement's local wood family where practical rather than forcing oak everywhere
+- Gatehouses: first pass may be very small. A simple door opening in a slightly widened wall section is acceptable until fuller timber gatehouse variants exist
+- Gate placement: prefer locations where established settlement paths or route corridors would naturally pass through the wall, rather than arbitrary cardinal positions
+- Terrain handling: the wall should follow terrain in a readable stepped way and may use light landscaping, but should avoid absurd jagged one-block noise when a short smoothing pass can fix it
+- Vegetation handling: trees, leaves, brush, and similar removable natural blocks should be cleared or cut back as needed instead of preventing a valid palisade segment
+- Walkability: the stair access, landing, and interior slab run should be usable by guards or workers in loaded chunks so defenders can fire projectiles over the wall. The first pass does not need a perfectly continuous battlement-grade walkway everywhere, but it should clearly function as an interior fighting position
+- Defense effect: the wall should physically slow or block ordinary hostile entry where the geometry is complete, not only raise an abstract security number
+- Simulation effect: a completed palisade should add a meaningful security bonus and a modest visible-settlement prestige / comfort benefit
 
 ## Security, Guards, and Hostile Outposts
 
@@ -946,14 +993,14 @@ Already present in code:
 Remaining steps to close the spec/code gaps:
 
 1. Finish the placed Trade Board visual work: resolve the known north-south dark-face issue, then add a client-side name renderer that displays the linked settlement name on both board faces.
-2. Formalize settlement knowledge and advancement tiers: add recipe/knowledge state, starter knowledge, knowledge trading, and advancement-gated autonomous build rates.
+2. Formalize settlement advancement: add persistent settlement-tier state, unlock tracking, recipe/knowledge state, starter knowledge, knowledge trading, tier-aware autonomous build rates, and tier-aware structure/path/fortification upgrades.
 3. Expand world-authoritative reconciliation: scan more infrastructure types, apply unloaded catch-up changes to real loaded chunks in bounded batches, extend placed-workstation anchoring beyond the current first pass, replace remaining instant autonomous builds with staged villager construction, reconcile completed build-site effects more deeply into UI/project summaries, add visible Trade Board stock retrieval/deposit visits and persistent villager-carried goods where useful, and add stronger loaded-world job behavior for gardens, herds, pens, roads, and other profession infrastructure before resurveying derived state.
 4. Flesh out the Trade Board UX: expose knowledge goals, fuller project details, clearer price/offer information, route quality/safety/capacity, Trading Post upgrade state, profession-specific trade entry points, and any future settlement renaming or naming rules.
 5. Complete founding behavior: tune minimum spacing and link radius, verify founder timing, ensure the founding villager reliably becomes Trademaster, and make the board/founder status clear to the player.
 6. Tune or data-drive the Carpenter's Bench recipe set, add any missing wood-heavy outputs, then continue adding or refactoring the remaining roles and workstations from [PROFESSIONS.md](PROFESSIONS.md): Baker, Beekeeper, Forester, Miner, Gardener, Guard, Roadwright, Portmaster, Scribe, Bakery, Beekeeper's Apiary, Warehouse, Guard Post, Honey Separator, Miner Workstation, Forester's Table, Gardener Workstation, Surveyor's Table, Milepost, Dock, and Scribe Desk, while expanding vanilla Cartographer, Farmer, Butcher, Mason, and Carpenter behavior.
 7. Replace hard-coded goods, target rules, and profession-priority heuristics with data-driven rules using tags, datapacks, and config where practical.
 8. Build out physical warehouse behavior: capacity, interaction, storage visualization, route efficiency bonuses, and reconciliation between physical storage blocks and the ledger.
-9. Expand construction queues: add real defensive works, road/path placement and upgrades, dock/harbor projects, warehouse projects, Trading Post and Shopping Mall projects, workstation-linked building jobs, maintenance, and advancement-tier build-rate caps.
+9. Expand construction queues: add real defensive works, road/path placement and upgrades, dock/harbor projects, warehouse projects, Trading Post and Shopping Mall projects, workstation-linked building jobs, maintenance, settlement-wall projects, and tier-aware build-rate caps and retrofit upgrades.
 10. Finish land-route gameplay: nearby Roadwright-built corridors, Surveyor's Table and Milepost rules, internal path upgrades with comfort impact, path connectors to workstation buildings so they count in the local trade network, trade-weight bonuses from connected workstations and civic trade improvements, material-based road upgrades, bridge rules, named and direction-facing Milepost presentation with optional distance text, route maintenance, cartographer support for long-distance trade, and route security from guards and hostile pressure.
 11. Implement water trade: harbor detection or founding, dock validation, Portmaster role, river/canal/sea-lane routes, dredging/canal projects, water throughput, and nearby cosmetic boats.
 12. Implement hostile outposts as settlements: detection/founding, stock and wealth, hostile pressure, raid planning, route attacks, stolen goods, offensive-biased staffing, inefficient fallback construction without exact profession matches, reinforcement spending, and player disruption hooks.
