@@ -249,9 +249,10 @@ Workstation names such as `Miner Workstation` are current working names carried 
 
 ### Miner
 
-- Workstation: `Miner Workstation`
+- Workstation: `Miner Workstation`, a stone-forward bench or block with pickaxe visual language on the sides and top
+- Associated structure: `Mine Entrance`, a functional extraction-site entrance rather than housing; first pass is a compact stone-and-log portal with a `2x2` starter shaft and rear-wall ladders
 - Equipment: carries pickaxes
-- Loaded-world behavior: works quarries, mine entrances, and underground extraction points; gathers raw stone and ore materials
+- Loaded-world behavior: first-pass staged construction covers the Mine Entrance and starter shaft, with later miner work extending into quarries, deeper shafts, primary tunnels, and secondary tunnels while gathering raw stone and ore materials
 - Settlement behavior: adds cobblestone, stone, ore, coal, and other underground materials to stock; consumes tools and support materials
 - Change introduced by Live Villages: separates raw extraction from smithing and building support jobs
 

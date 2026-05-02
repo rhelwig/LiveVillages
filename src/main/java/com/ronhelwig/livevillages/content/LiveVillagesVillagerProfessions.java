@@ -32,6 +32,8 @@ public final class LiveVillagesVillagerProfessions {
 	public static final ResourceKey<PoiType> MILEPOST_POI = poiKey("milepost");
 	public static final ResourceKey<PoiType> FORESTER_POI = poiKey("forester");
 	public static final ResourceKey<VillagerProfession> FORESTER = professionKey("forester");
+	public static final ResourceKey<PoiType> MINER_POI = poiKey("miner");
+	public static final ResourceKey<VillagerProfession> MINER = professionKey("miner");
 	public static final ResourceKey<PoiType> PORTMASTER_POI = poiKey("portmaster");
 	public static final ResourceKey<VillagerProfession> PORTMASTER = professionKey("portmaster");
 
@@ -44,11 +46,13 @@ public final class LiveVillagesVillagerProfessions {
 		PoiHelper.register(ROADWRIGHT_POI.identifier(), 1, 1, LiveVillagesBlocks.SURVEYOR_TABLE);
 		PoiHelper.register(MILEPOST_POI.identifier(), 1, 1, LiveVillagesBlocks.MILEPOST);
 		PoiHelper.register(FORESTER_POI.identifier(), 1, 1, LiveVillagesBlocks.FORESTER_TABLE);
+		PoiHelper.register(MINER_POI.identifier(), 1, 1, LiveVillagesBlocks.MINER_WORKSTATION);
 		PoiHelper.register(PORTMASTER_POI.identifier(), 1, 1, LiveVillagesBlocks.PORTMASTER_ANCHOR);
 		registerProfession(TRADEMASTER, TRADEMASTER_POI, SoundEvents.VILLAGER_WORK_CARTOGRAPHER);
 		registerProfession(CARPENTER, CARPENTER_POI, SoundEvents.VILLAGER_WORK_MASON);
 		registerProfession(ROADWRIGHT, ROADWRIGHT_POI, SoundEvents.VILLAGER_WORK_TOOLSMITH);
 		registerProfession(FORESTER, FORESTER_POI, SoundEvents.VILLAGER_WORK_FLETCHER);
+		registerProfession(MINER, MINER_POI, SoundEvents.VILLAGER_WORK_TOOLSMITH);
 		registerProfession(PORTMASTER, PORTMASTER_POI, SoundEvents.VILLAGER_WORK_FISHERMAN);
 	}
 

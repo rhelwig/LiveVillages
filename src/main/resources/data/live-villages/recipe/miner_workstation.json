@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "minecraft:cobblestone",
+    "P": "#minecraft:pickaxes",
+    "T": "minecraft:crafting_table",
+    "X": "minecraft:stick"
+  },
+  "pattern": [
+    "###",
+    "#T#",
+    "XPX"
+  ],
+  "result": {
+    "id": "live-villages:miner_workstation"
+  }
+}

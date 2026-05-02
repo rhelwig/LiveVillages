@@ -944,6 +944,7 @@ public final class SettlementRoadwrightWork {
 			|| state.is(Blocks.STONECUTTER)
 			|| state.is(LiveVillagesBlocks.TRADE_BOARD)
 			|| state.is(LiveVillagesBlocks.CARPENTER_BENCH)
+			|| state.is(LiveVillagesBlocks.MINER_WORKSTATION)
 			|| state.is(LiveVillagesBlocks.FORESTER_TABLE)
 			|| state.is(LiveVillagesBlocks.SURVEYOR_TABLE)) {
 			return true;

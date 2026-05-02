@@ -626,7 +626,7 @@ Key planned settlement-specific roles:
 - `Baker`: turns farm and livestock supplies into baked foods such as bread, cakes, pies, and cookies, and offers specialist food trades.
 - `Beekeeper`: manages bee nests and bee hives, produces honey bottles and honeycomb, maintains safe smoked hives, and grows dispersed apiary capacity from a `Honey Separator`.
 - `Forester`: harvests and replants wood resources, must not cut down trees that contain bee nests or bee hives, maintains a sparse tree presence inside the village, manages denser woodland beyond the village core, and keeps a diverse seedling reserve that can create sapling trade demand.
-- `Miner`: gathers stone, ore, and underground materials.
+- `Miner`: gathers stone, ore, and underground materials, anchored by a stone-like `Miner Workstation` and later a functional mine-entrance structure rather than housing.
 - `Gardener`: improves village appearance and comfort by building decorative raised beds, planting flowers and grass, and managing chickens and eggs.
 - `Guard`: protects the settlement and its corridors.
 - `Roadwright`: creates and upgrades land routes, improves internal town paths, connects workstation structures to the path network, visibly uses a shovel for dirt-path work, and places mileposts from a `Surveyor's Table`.
@@ -717,6 +717,22 @@ Additional shared or planned workstations and civic structures include:
 - Beekeepers should not destroy natural bee nests during ordinary work. Any future relocation behavior must preserve the bees rather than treating nests as raw blocks.
 - Settlement behavior should add honey bottles, honeycomb, candles, and modest food or comfort value, while creating discoverable demand for glass bottles, shears, campfires, flowers, wood, and hive-building supplies.
 - The Beekeeper villager texture should be mostly white, reading as a protective beekeeper suit: pale hood or veil silhouette, white tunic and leggings, and light gloves or boots.
+
+### Miner Details
+
+- `Miner` is a planned custom extraction profession for stone, ore, and underground building supplies.
+- The Miner workstation is the `Miner Workstation`. Its first-pass block should read like the same family as the `Carpenter's Bench` and `Surveyor's Table`, but with a heavier stone build and pickaxe visual language on the sides and top instead of a wood-first look.
+- Placing a `Miner Workstation` in or near a settlement should allow one eligible villager to become a `Miner`.
+- The associated Miner structure should be a functional `Mine Entrance`, not a house or bed-bearing workshop home.
+- The first-pass `Mine Entrance` should be a compact `6x6` stone-and-log portal that can be embedded into a hillside or cliff face as long as the double-door front remains accessible.
+- The entrance shell should use stone-family walls and floor with log supports, with the first three above-ground wall levels matching the authored layered blueprint and a capped roof layer above them.
+- The floor should open into a `2x2` starter shaft directly inside the entrance. The first staged build should include several initial shaft levels below grade, with ladders mounted on the back two shaft-wall blocks.
+- If the build site already contains solid natural stone where the Mine Entrance expects stone shell blocks, that stone may remain in place instead of being replaced block-for-block. The result should read as carved into the terrain rather than pasted on top of it.
+- The first-pass staged structure is the entrance and starter shaft only. Later Miner loaded-world behavior can extend that work into deeper shafts, primary tunnels, secondary tunnels, quarry cuts, and broader underground extraction points as the settlement tier and terrain allow.
+- Planned tunnel rules:
+  - `Shaft`: `2x2` vertical dig with ladders on the back wall pair
+  - `Primary Tunnel`: `3` blocks tall, `1` block wide, with lanterns overhead about every `10` blocks when available or wall torches as fallback
+  - `Secondary Tunnel`: `2` blocks tall, `1` block wide, using wall torches for lighting
 
 ### Debug and Inspection Tools
 

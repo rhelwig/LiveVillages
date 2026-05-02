@@ -334,6 +334,10 @@ public final class SettlementLoadedObservation {
 			return new MapPointMarker("poi", "Forester");
 		}
 
+		if (state.is(LiveVillagesBlocks.MINER_WORKSTATION)) {
+			return new MapPointMarker("poi", "Miner");
+		}
+
 		if (state.is(LiveVillagesBlocks.SURVEYOR_TABLE)) {
 			return new MapPointMarker("poi", "Surveyor");
 		}
@@ -426,6 +430,7 @@ public final class SettlementLoadedObservation {
 			case BUTCHER_SHOP -> "Butcher";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";
+			case MINE_ENTRANCE -> "Mine Entrance";
 			case TRADING_POST -> "Trading Post";
 			case CARPENTER_WORKSHOP -> "Carpenter";
 			case FLETCHER_HUT -> "Fletcher";

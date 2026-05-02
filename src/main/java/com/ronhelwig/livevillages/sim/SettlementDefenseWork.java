@@ -234,6 +234,7 @@ public final class SettlementDefenseWork {
 			|| profession.is(VillagerProfession.TOOLSMITH)
 			|| profession.is(VillagerProfession.WEAPONSMITH)
 			|| profession.is(LiveVillagesVillagerProfessions.FORESTER)
+			|| profession.is(LiveVillagesVillagerProfessions.MINER)
 			|| profession.is(LiveVillagesVillagerProfessions.ROADWRIGHT);
 	}
 

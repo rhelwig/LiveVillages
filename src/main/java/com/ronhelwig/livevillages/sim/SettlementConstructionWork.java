@@ -20,6 +20,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -267,13 +268,14 @@ public final class SettlementConstructionWork {
 			}
 
 			boolean exactMatch = currentState.equals(plannedState);
+			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState);
 			SettlementBuildBlockState updatedBlock = block;
 
 			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
-				if (!exactMatch) {
+				if (!matchesIntent) {
 					updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
 				}
-			} else if (exactMatch) {
+			} else if (matchesIntent) {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
 			} else if (block.status() == SettlementBuildBlockStatus.BLOCKED && SettlementConstruction.isBuildSiteReplaceable(currentState)) {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
@@ -300,7 +302,7 @@ public final class SettlementConstructionWork {
 			}
 
 			BlockState currentState = level.getBlockState(blockPos.get());
-			SettlementBuildBlockState addedBlock = currentState.equals(plannedState)
+			SettlementBuildBlockState addedBlock = statesMatchBuildSiteIntent(buildSite, currentBlueprintBlock, currentState, plannedState)
 				? currentBlueprintBlock.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "")
 				: currentBlueprintBlock;
 			updatedBlocks.add(addedBlock);
@@ -764,7 +766,7 @@ public final class SettlementConstructionWork {
 
 				BlockState currentState = level.getBlockState(targetPos.get());
 				if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL
-					&& (SettlementConstruction.isBuildSiteReplaceable(currentState) || isCompatiblePlacedBlock(currentState, plannedState))) {
+					&& (SettlementConstruction.isBuildSiteReplaceable(currentState) || statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState))) {
 					continue;
 				}
 
@@ -783,6 +785,7 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
+				int taskLayer = taskLayerPriority(buildSite, relativePos.up());
 				double distanceSquared = standPos.get().distSqr(worker.blockPosition());
 				ConstructionTask candidateTask = new ConstructionTask(
 					siteIndex,
@@ -791,7 +794,7 @@ public final class SettlementConstructionWork {
 					block,
 					targetPos.get(),
 					standPos.get(),
-					relativePos.up(),
+					taskLayer,
 					claimKey
 				);
 
@@ -875,8 +878,8 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		if (isCompatiblePlacedBlock(currentState, plannedState)) {
-			boolean normalizedWorld = !currentState.equals(plannedState);
+		if (statesMatchBuildSiteIntent(task.buildSite(), block, currentState, plannedState)) {
+			boolean normalizedWorld = shouldNormalizeToPlannedState(task.buildSite(), block, currentState, plannedState);
 
 			if (normalizedWorld) {
 				level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
@@ -944,15 +947,15 @@ public final class SettlementConstructionWork {
 
 		BlockState currentState = level.getBlockState(task.targetPos());
 		BlockState pairedCurrentState = level.getBlockState(pairedPos.get());
-		boolean currentMatches = isCompatiblePlacedBlock(currentState, plannedState);
-		boolean pairedMatches = isCompatiblePlacedBlock(pairedCurrentState, pairedPlannedState);
+		boolean currentMatches = statesMatchBuildSiteIntent(task.buildSite(), block, currentState, plannedState);
+		boolean pairedMatches = statesMatchBuildSiteIntent(task.buildSite(), pairedBlock.block(), pairedCurrentState, pairedPlannedState);
 
 		if (currentMatches && pairedMatches) {
-			if (!currentState.equals(plannedState)) {
+			if (shouldNormalizeToPlannedState(task.buildSite(), block, currentState, plannedState)) {
 				level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
 			}
 
-			if (!pairedCurrentState.equals(pairedPlannedState)) {
+			if (shouldNormalizeToPlannedState(task.buildSite(), pairedBlock.block(), pairedCurrentState, pairedPlannedState)) {
 				level.setBlock(pairedPos.get(), pairedPlannedState, BLOCK_UPDATE_FLAGS);
 			}
 
@@ -1057,6 +1060,7 @@ public final class SettlementConstructionWork {
 					case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
 					case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
 					case LIGHTHOUSE -> null;
+					case MINE_ENTRANCE -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
 					case TRADING_POST -> relativePosition(2, -1, 1);
@@ -1214,10 +1218,49 @@ public final class SettlementConstructionWork {
 			|| state.getBlock() instanceof DoorBlock
 			|| state.getBlock() instanceof FenceBlock
 			|| state.getBlock() instanceof FenceGateBlock
+			|| state.getBlock() instanceof LadderBlock
 			|| state.getBlock() instanceof RotatedPillarBlock
 			|| state.getBlock() instanceof SlabBlock
 			|| state.getBlock() instanceof StairBlock
 			|| state.getBlock() instanceof WallTorchBlock;
+	}
+
+	private static boolean statesMatchBuildSiteIntent(
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockState currentState,
+		BlockState plannedState
+	) {
+		if (isCompatiblePlacedBlock(currentState, plannedState)) {
+			return true;
+		}
+
+		return isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
+	}
+
+	private static boolean shouldNormalizeToPlannedState(
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockState currentState,
+		BlockState plannedState
+	) {
+		return !currentState.equals(plannedState) && !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
+	}
+
+	private static boolean isIntegratedMineEntranceStone(
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockState currentState,
+		BlockState plannedState
+	) {
+		if (buildSite.blueprintId() != SettlementBuildSiteType.MINE_ENTRANCE
+			|| plannedState.isAir()
+			|| block.blueprintSymbol().isBlank()) {
+			return false;
+		}
+
+		char symbol = block.blueprintSymbol().charAt(0);
+		return (symbol == 'M' || symbol == 'C') && SettlementConstruction.isMineEntranceIntegratedStone(currentState);
 	}
 
 	private static boolean isProtectedWorkstationOccupyingDifferentPlannedBlock(
@@ -1229,6 +1272,7 @@ public final class SettlementConstructionWork {
 			&& !SettlementConstruction.isAnchoredWorkstationBlock(task.buildSite(), block)
 			&& (currentState.is(LiveVillagesBlocks.TRADE_BOARD)
 				|| currentState.is(LiveVillagesBlocks.CARPENTER_BENCH)
+				|| currentState.is(LiveVillagesBlocks.MINER_WORKSTATION)
 				|| currentState.is(LiveVillagesBlocks.SURVEYOR_TABLE)
 				|| currentState.is(Blocks.CARTOGRAPHY_TABLE));
 	}
@@ -1284,7 +1328,7 @@ public final class SettlementConstructionWork {
 	private static List<BlockPos> standCandidatesFor(ServerLevel level, SettlementBuildSite buildSite, BlockPos targetPos) {
 		List<BlockPos> candidates = new ArrayList<>();
 		int minY = Math.max(level.getMinY(), Math.min(buildSite.origin().getY() + 1, targetPos.getY() - 4));
-		int maxY = Math.min(level.getMaxY() - 2, Math.min(targetPos.getY(), buildSite.origin().getY() + 2));
+		int maxY = Math.min(level.getMaxY() - 2, Math.max(targetPos.getY(), buildSite.origin().getY() + 2));
 
 		for (int radius = 0; radius <= 2; radius++) {
 			for (int dx = -radius; dx <= radius; dx++) {
@@ -1307,6 +1351,14 @@ public final class SettlementConstructionWork {
 		}
 
 		return candidates;
+	}
+
+	private static int taskLayerPriority(SettlementBuildSite buildSite, int relativeUp) {
+		if (buildSite.blueprintId() != SettlementBuildSiteType.MINE_ENTRANCE) {
+			return relativeUp;
+		}
+
+		return relativeUp >= 0 ? relativeUp : 1_000 + Math.abs(relativeUp);
 	}
 
 	private static boolean isStandable(ServerLevel level, BlockPos pos) {

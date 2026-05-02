@@ -247,6 +247,10 @@ public final class SettlementVillagers {
 		return heldForesterJobSite(level, villager).map(BlockPos::immutable);
 	}
 
+	public static Optional<BlockPos> minerJobSite(ServerLevel level, Villager villager) {
+		return heldMinerJobSite(level, villager).map(BlockPos::immutable);
+	}
+
 	public static Optional<BlockPos> portmasterJobSite(ServerLevel level, Villager villager) {
 		return heldPortmasterJobSite(level, villager).map(BlockPos::immutable);
 	}
@@ -360,6 +364,46 @@ public final class SettlementVillagers {
 			if (isCustomForester(villager)) {
 				lockCustomProfession(villager);
 				changed |= ensureForesterJobSite(level, villager);
+			}
+		}
+
+		return changed;
+	}
+
+	public static boolean ensureMiner(ServerLevel level, SettlementState settlement) {
+		if (!usesActualVillagers(settlement)) {
+			return false;
+		}
+
+		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		boolean changed = false;
+		int desiredMiners = desiredMinerCount(level, settlement);
+		long currentMiners = villagers.stream()
+			.filter(villager -> !villager.isBaby() && isCustomMiner(villager))
+			.count();
+
+		if (currentMiners < desiredMiners) {
+			for (Villager villager : villagers.stream()
+				.filter(villager -> !villager.isBaby())
+				.filter(villager -> heldMinerJobSite(level, villager).isPresent() || canBecomeMiner(villager))
+				.sorted(Comparator.comparingInt(SettlementVillagers::minerCandidateRank)
+					.thenComparingDouble(villager -> distanceToCenterSqr(villager, settlement.center())))
+				.toList()) {
+				if (promoteToMiner(level, villager)) {
+					changed = true;
+					currentMiners++;
+				}
+
+				if (currentMiners >= desiredMiners) {
+					break;
+				}
+			}
+		}
+
+		for (Villager villager : villagers) {
+			if (isCustomMiner(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureMinerJobSite(level, villager);
 			}
 		}
 
@@ -531,6 +575,7 @@ public final class SettlementVillagers {
 		int farmers = 0;
 		int fletchers = 0;
 		int foresters = 0;
+		int miners = 0;
 		int portmasters = 0;
 		int carpenters = 0;
 		int masons = 0;
@@ -555,6 +600,8 @@ public final class SettlementVillagers {
 				fletchers++;
 			} else if (profession.is(LiveVillagesVillagerProfessions.FORESTER)) {
 				foresters++;
+			} else if (profession.is(LiveVillagesVillagerProfessions.MINER)) {
+				miners++;
 			} else if (profession.is(LiveVillagesVillagerProfessions.PORTMASTER)) {
 				portmasters++;
 			} else if (profession.is(LiveVillagesVillagerProfessions.CARPENTER)) {
@@ -572,7 +619,7 @@ public final class SettlementVillagers {
 			}
 		}
 
-		int remaining = villagers.size() - cartographers - farmers - fletchers - foresters - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
+		int remaining = villagers.size() - cartographers - farmers - fletchers - foresters - miners - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
 		unemployed += Math.max(0, remaining);
 
 		if (trademasters <= 0 && !villagers.isEmpty()) {
@@ -612,6 +659,10 @@ public final class SettlementVillagers {
 
 		if (foresters > 0) {
 			population.put(SettlementRoleKeys.FORESTER, foresters);
+		}
+
+		if (miners > 0) {
+			population.put(SettlementRoleKeys.MINER, miners);
 		}
 
 		if (portmasters > 0) {
@@ -802,6 +853,39 @@ public final class SettlementVillagers {
 		return true;
 	}
 
+	private static boolean promoteToMiner(ServerLevel level, Villager villager) {
+		Optional<BlockPos> heldJobSite = heldMinerJobSite(level, villager);
+
+		if (heldJobSite.isPresent()) {
+			villager.releasePoi(MemoryModuleType.JOB_SITE);
+			assignMinerJobSite(level, villager, heldJobSite.get());
+			return true;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableMinerJobSite(level, villager);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
+
+		Optional<BlockPos> jobSite = level.getPoiManager().take(
+			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
+			(poiType, pos) -> pos.equals(reachableJobSite.get()),
+			reachableJobSite.get(),
+			1
+		);
+
+		if (jobSite.isEmpty()) {
+			return false;
+		}
+
+		villager.releasePoi(MemoryModuleType.JOB_SITE);
+		assignMinerJobSite(level, villager, jobSite.get());
+		return true;
+	}
+
 	private static boolean promoteToPortmaster(ServerLevel level, Villager villager) {
 		Optional<BlockPos> heldJobSite = heldPortmasterJobSite(level, villager);
 
@@ -969,6 +1053,35 @@ public final class SettlementVillagers {
 		return true;
 	}
 
+	private static boolean ensureMinerJobSite(ServerLevel level, Villager villager) {
+		if (heldMinerJobSite(level, villager).isPresent()) {
+			return false;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableMinerJobSite(level, villager);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
+
+		Optional<BlockPos> jobSite = level.getPoiManager().take(
+			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
+			(poiType, pos) -> pos.equals(reachableJobSite.get()),
+			reachableJobSite.get(),
+			1
+		);
+
+		if (jobSite.isEmpty()) {
+			return false;
+		}
+
+		villager.releasePoi(MemoryModuleType.JOB_SITE);
+		assignMinerJobSite(level, villager, jobSite.get());
+		return true;
+	}
+
 	private static boolean ensurePortmasterJobSite(ServerLevel level, Villager villager) {
 		if (heldPortmasterJobSite(level, villager).isPresent()) {
 			return false;
@@ -1057,6 +1170,14 @@ public final class SettlementVillagers {
 			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
 			.map(GlobalPos::pos)
 			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI)));
+	}
+
+	private static Optional<BlockPos> heldMinerJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos)
+			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI)));
 	}
 
 	private static Optional<BlockPos> heldPortmasterJobSite(ServerLevel level, Villager villager) {
@@ -1148,6 +1269,19 @@ public final class SettlementVillagers {
 			.findFirst();
 	}
 
+	private static Optional<BlockPos> findReachableMinerJobSite(ServerLevel level, Villager villager) {
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
+			pos -> true,
+			villager.blockPosition(),
+			JOB_SITE_SEARCH_RADIUS_BLOCKS,
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
+		)
+			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.findFirst();
+	}
+
 	private static Optional<BlockPos> findReachablePortmasterJobSite(ServerLevel level, Villager villager) {
 		return level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(LiveVillagesVillagerProfessions.PORTMASTER_POI),
@@ -1216,6 +1350,17 @@ public final class SettlementVillagers {
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
 		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
 		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), LiveVillagesVillagerProfessions.FORESTER));
+		lockCustomProfession(villager);
+		villager.setOffers(new MerchantOffers());
+		villager.refreshBrain(level);
+		level.broadcastEntityEvent(villager, (byte) 14);
+	}
+
+	private static void assignMinerJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
+		GlobalPos globalPos = GlobalPos.of(level.dimension(), jobSite);
+		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
+		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
+		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), LiveVillagesVillagerProfessions.MINER));
 		lockCustomProfession(villager);
 		villager.setOffers(new MerchantOffers());
 		villager.refreshBrain(level);
@@ -1363,6 +1508,10 @@ public final class SettlementVillagers {
 
 	private static boolean canBecomeForester(Villager villager) {
 		return foresterCandidateRank(villager) != Integer.MAX_VALUE;
+	}
+
+	private static boolean canBecomeMiner(Villager villager) {
+		return minerCandidateRank(villager) != Integer.MAX_VALUE;
 	}
 
 	private static boolean canBecomePortmaster(Villager villager) {
@@ -1522,6 +1671,10 @@ public final class SettlementVillagers {
 			return "surveying_groves";
 		}
 
+		if (profession.is(LiveVillagesVillagerProfessions.MINER)) {
+			return "surveying_mine";
+		}
+
 		if (profession.is(LiveVillagesVillagerProfessions.PORTMASTER)) {
 			return "managing_harbor";
 		}
@@ -1658,6 +1811,20 @@ public final class SettlementVillagers {
 		return Integer.MAX_VALUE;
 	}
 
+	private static int minerCandidateRank(Villager villager) {
+		if (villager.isBaby()) {
+			return Integer.MAX_VALUE;
+		}
+
+		Holder<VillagerProfession> profession = villager.getVillagerData().profession();
+
+		if (profession.is(VillagerProfession.NONE)) {
+			return 0;
+		}
+
+		return Integer.MAX_VALUE;
+	}
+
 	private static int portmasterCandidateRank(Villager villager) {
 		if (villager.isBaby()) {
 			return Integer.MAX_VALUE;
@@ -1720,6 +1887,21 @@ public final class SettlementVillagers {
 		return (int) Math.min(Integer.MAX_VALUE, workstationCount);
 	}
 
+	private static int desiredMinerCount(ServerLevel level, SettlementState settlement) {
+		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
+			pos -> true,
+			settlement.center(),
+			villagerRadius(settlement),
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.distinct()
+			.count();
+		return (int) Math.min(Integer.MAX_VALUE, workstationCount);
+	}
+
 	private static boolean isCustomTrademaster(Villager villager) {
 		return villager.getVillagerData().profession().is(LiveVillagesVillagerProfessions.TRADEMASTER);
 	}
@@ -1734,6 +1916,10 @@ public final class SettlementVillagers {
 
 	private static boolean isCustomForester(Villager villager) {
 		return villager.getVillagerData().profession().is(LiveVillagesVillagerProfessions.FORESTER);
+	}
+
+	private static boolean isCustomMiner(Villager villager) {
+		return villager.getVillagerData().profession().is(LiveVillagesVillagerProfessions.MINER);
 	}
 
 	private static boolean isCustomPortmaster(Villager villager) {
@@ -1777,6 +1963,10 @@ public final class SettlementVillagers {
 
 		if (profession.is(LiveVillagesVillagerProfessions.FORESTER)) {
 			return SettlementRoleKeys.FORESTER;
+		}
+
+		if (profession.is(LiveVillagesVillagerProfessions.MINER)) {
+			return SettlementRoleKeys.MINER;
 		}
 
 		return profession.unwrapKey()

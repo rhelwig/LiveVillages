@@ -18,6 +18,7 @@ import com.ronhelwig.livevillages.block.ForesterTableBlock;
 import com.ronhelwig.livevillages.block.HousingShelterBlock;
 import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
+import com.ronhelwig.livevillages.block.MinerWorkstationBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
 import com.ronhelwig.livevillages.block.SurveyorTableBlock;
@@ -91,6 +92,19 @@ public final class LiveVillagesBlocks {
 	public static final Item FORESTER_TABLE_ITEM = registerItem(
 		"forester_table",
 		new BlockItem(FORESTER_TABLE, new Item.Properties().setId(itemKey("forester_table")).useBlockDescriptionPrefix())
+	);
+	public static final MinerWorkstationBlock MINER_WORKSTATION = registerBlock(
+		"miner_workstation",
+		new MinerWorkstationBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.STONECUTTER)
+				.setId(blockKey("miner_workstation"))
+				.strength(3.5F)
+				.sound(SoundType.STONE)
+		)
+	);
+	public static final Item MINER_WORKSTATION_ITEM = registerItem(
+		"miner_workstation",
+		new BlockItem(MINER_WORKSTATION, new Item.Properties().setId(itemKey("miner_workstation")).useBlockDescriptionPrefix())
 	);
 	public static final PortmasterAnchorBlock PORTMASTER_ANCHOR = registerBlock(
 		"portmaster_anchor",

@@ -516,6 +516,7 @@ public class LiveVillagesSavedData extends SavedData {
 			Long previousSpawnTick = bootstrapVillagerSpawnTicks.put(settlement.id(), currentTick);
 			SettlementVillagers.ensureTrademaster(level, settlement);
 			SettlementVillagers.ensureCarpenter(level, settlement);
+			SettlementVillagers.ensureMiner(level, settlement);
 			SettlementVillagers.ensureFletcher(level, settlement);
 			SettlementVillagers.ensureVillagerHomes(level, settlement);
 			SettlementState updatedSettlement = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
@@ -796,15 +797,16 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
-				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+			changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			restoreSettlementMapMemory(level, workingSettlement);
 			if (LiveVillagesGameRules.surveyorMapFogEnabled(level)
 				&& !SettlementVillagers.nearbyRoadwrights(level, workingSettlement).isEmpty()) {
@@ -1109,6 +1111,35 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
+	private boolean tryStartPlacedMineEntranceBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos workstationPos : SettlementConstruction.findPlacedMinerWorkstations(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE, workstationPos);
+
+			if (existingBuildSite.isEmpty()) {
+				continue;
+			}
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartMineEntranceAtWorkstation(
+				level,
+				workstationPos,
+				existingBuildSite.get().facing(),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= SettlementVillagers.ensureMiner(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
 	private boolean tryStartPlacedRoadwrightWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		boolean changed = false;
 
@@ -1184,6 +1215,7 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementVillagers.ensureCarpenter(level, settlement);
 				SettlementVillagers.ensureRoadwright(level, settlement);
 				SettlementVillagers.ensureForester(level, settlement);
+				SettlementVillagers.ensureMiner(level, settlement);
 				SettlementVillagers.ensurePortmaster(level, settlement);
 				SettlementVillagers.ensureFletcher(level, settlement);
 				SettlementVillagers.ensureVillagerHomes(level, settlement);
@@ -1212,6 +1244,7 @@ public class LiveVillagesSavedData extends SavedData {
 					SettlementVillagers.ensureCarpenter(level, updatedSettlement);
 					SettlementVillagers.ensureRoadwright(level, updatedSettlement);
 					SettlementVillagers.ensureForester(level, updatedSettlement);
+					SettlementVillagers.ensureMiner(level, updatedSettlement);
 					SettlementVillagers.ensureFletcher(level, updatedSettlement);
 					SettlementVillagers.ensureVillagerHomes(level, updatedSettlement);
 					updatedSettlement = updatedSettlement

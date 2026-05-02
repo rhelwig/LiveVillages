@@ -23,7 +23,9 @@ import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LanternBlock;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StandingSignBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -51,6 +53,8 @@ public final class SettlementConstruction {
 	private static final int MAX_TERRAIN_FILL_BLOCKS = 3;
 	private static final int MAX_SITE_LANDSCAPING_BLOCKS = 40;
 	private static final int MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS = 72;
+	private static final int MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS = 140;
+	private static final int MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS = 8;
 	private static final int MIN_STRUCTURE_SPACING_BLOCKS = 3;
 	private static final double WORKSTATION_SETTLEMENT_LINK_RADIUS_BLOCKS = 128.0D;
 	private static final int VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS = 64;
@@ -74,6 +78,7 @@ public final class SettlementConstruction {
 	 * A = empty space
 	 * B = bed at bed-designated coordinates, otherwise slab
 	 * D = door
+	 * E = excavate / clear to air
 	 * F = fence
 	 * G = fence gate
 	 * H = chest
@@ -81,6 +86,7 @@ public final class SettlementConstruction {
 	 * M = stone / cobblestone-family block
 	 * N = hanging lantern
 	 * P = planks
+	 * R = ladder
 	 * S = stairs
 	 * T = wall torch
 	 * V = glass / window block
@@ -319,6 +325,160 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA",
 				"AABAA"
+			}
+		}
+	);
+	private static final StructureBlueprint MINE_ENTRANCE_BLUEPRINT = new StructureBlueprint(
+		-2,
+		-3,
+		-4,
+		5,
+		new String[][] {
+			{
+				"AAAAAA",
+				"AAAAAA",
+				"AAAAAA",
+				"AARRAA",
+				"AAEEAA",
+				"AAAAAA"
+			},
+			{
+				"AAAAAA",
+				"AAAAAA",
+				"AAAAAA",
+				"AARRAA",
+				"AAEEAA",
+				"AAAAAA"
+			},
+			{
+				"AAAAAA",
+				"AAAAAA",
+				"AAAAAA",
+				"AARRAA",
+				"AAEEAA",
+				"AAAAAA"
+			},
+			{
+				"AAAAAA",
+				"AAAAAA",
+				"AAAAAA",
+				"AARRAA",
+				"AAEEAA",
+				"AAAAAA"
+			},
+			{
+				"LMMMML",
+				"MMMMMM",
+				"MMMMMM",
+				"MMEEMM",
+				"MMEEMM",
+				"LLMMLL"
+			},
+			{
+				"LMMMML",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"LLDDLL"
+			},
+			{
+				"LMMMML",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"LLDDLL"
+			},
+			{
+				"LMMMML",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"MEEEEM",
+				"LLLLLL"
+			},
+			{
+				"LMMMML",
+				"MMMMMM",
+				"MMMMMM",
+				"MMMMMM",
+				"MMMMMM",
+				"LMMMML"
+			}
+		},
+		new String[][] {
+			{
+				"......",
+				"......",
+				"......",
+				"..FF..",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"..FF..",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"..FF..",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"..FF..",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"......",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"......",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"......",
+				"......",
+				"......"
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"......",
+				"......",
+				".RRRR."
+			},
+			{
+				"......",
+				"......",
+				"......",
+				"......",
+				"......",
+				"......"
 			}
 		}
 	);
@@ -1159,6 +1319,52 @@ public final class SettlementConstruction {
 		), stock, level.getServer().getTickCount()));
 	}
 
+	public static WorkstationBuildResult tryStartMineEntranceAtWorkstation(
+		ServerLevel level,
+		BlockPos workstationPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		if (existingBuildSite.isPresent()) {
+			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		BlockPos origin = workstationPos.relative(horizontalFacing.getOpposite(), 3);
+		AnchoredStructureSite site = findAnchoredStructureSite(
+			level,
+			origin,
+			horizontalFacing,
+			MINE_ENTRANCE_BLUEPRINT.minRight(),
+			MINE_ENTRANCE_BLUEPRINT.maxRight(),
+			MINE_ENTRANCE_BLUEPRINT.minForward(),
+			MINE_ENTRANCE_BLUEPRINT.maxForward(),
+			MINE_ENTRANCE_BLUEPRINT.clearHeight(),
+			MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS,
+			MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS,
+			Set.of(workstationPos.immutable())
+		);
+
+		if (site == null) {
+			placeCantBuildHereSign(level, workstationPos, horizontalFacing);
+			return WorkstationBuildResult.blocked();
+		}
+
+		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
+			StructureKind.MINE_ENTRANCE,
+			MINE_ENTRANCE_BLUEPRINT,
+			settlementId,
+			site.origin(),
+			workstationPos.immutable(),
+			workstationPos.immutable(),
+			site.facing(),
+			level.getServer().getTickCount()
+		), stock, level.getServer().getTickCount()));
+	}
+
 	public static WorkstationBuildResult tryStartFletcherHutAtWorkstation(
 		ServerLevel level,
 		BlockPos tablePos,
@@ -1457,6 +1663,24 @@ public final class SettlementConstruction {
 		);
 	}
 
+	public static StructurePreview previewMineEntranceAtWorkstation(ServerLevel level, String settlementId, BlockPos workstationPos, Direction facing) {
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		BlockPos origin = workstationPos.relative(horizontalFacing.getOpposite(), 3);
+		return previewAnchoredStructure(
+			level,
+			settlementId,
+			StructureKind.MINE_ENTRANCE,
+			MINE_ENTRANCE_BLUEPRINT,
+			"mine_entrance",
+			origin,
+			workstationPos.immutable(),
+			workstationPos.immutable(),
+			horizontalFacing,
+			MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS,
+			MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS
+		);
+	}
+
 	public static StructurePreview previewFletcherHutAtWorkstation(ServerLevel level, String settlementId, BlockPos tablePos, Direction facing) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.relative(horizontalFacing.getOpposite(), 3).below();
@@ -1647,6 +1871,10 @@ public final class SettlementConstruction {
 
 	public static List<BlockPos> findPlacedForesterTables(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.FORESTER_TABLE));
+	}
+
+	public static List<BlockPos> findPlacedMinerWorkstations(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.MINER_WORKSTATION));
 	}
 
 	public static List<BlockPos> findPlacedPortmasterAnchors(ServerLevel level, SettlementState settlement) {
@@ -1861,6 +2089,34 @@ public final class SettlementConstruction {
 		Direction facing,
 		int maxLandscapingBlocks
 	) {
+		return previewAnchoredStructure(
+			level,
+			settlementId,
+			structureKind,
+			blueprint,
+			previewType,
+			origin,
+			anchorPos,
+			workstationPos,
+			facing,
+			maxLandscapingBlocks,
+			MAX_TERRAIN_CUT_BLOCKS
+		);
+	}
+
+	private static StructurePreview previewAnchoredStructure(
+		ServerLevel level,
+		String settlementId,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		String previewType,
+		BlockPos origin,
+		BlockPos anchorPos,
+		BlockPos workstationPos,
+		Direction facing,
+		int maxLandscapingBlocks,
+		int maxTerrainCutBlocks
+	) {
 		AnchoredStructureSite validSite = findAnchoredStructureSite(
 			level,
 			origin,
@@ -1871,6 +2127,7 @@ public final class SettlementConstruction {
 			blueprint.maxForward(),
 			blueprint.clearHeight(),
 			maxLandscapingBlocks,
+			maxTerrainCutBlocks,
 			Set.of(anchorPos.immutable())
 		);
 		SettlementBuildSite previewBuildSite = createPendingBuildSite(
@@ -2006,8 +2263,9 @@ public final class SettlementConstruction {
 	) {
 		List<StructurePreviewBlock> blocks = new ArrayList<>();
 
-		for (int up = 0; up < blueprint.layers().length; up++) {
-			String[] rows = blueprint.layers()[up];
+		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
+			int up = blueprint.minUp() + layerIndex;
+			String[] rows = blueprint.layers()[layerIndex];
 
 			for (int row = 0; row < rows.length; row++) {
 				String rowPattern = rows[row];
@@ -2147,8 +2405,9 @@ public final class SettlementConstruction {
 		StructureBlueprint blueprint = blueprintFor(structureKind);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
 
-		for (int up = 0; up < blueprint.layers().length; up++) {
-			String[] rows = blueprint.layers()[up];
+		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
+			int up = blueprint.minUp() + layerIndex;
+			String[] rows = blueprint.layers()[layerIndex];
 
 			for (int row = 0; row < rows.length; row++) {
 				String rowPattern = rows[row];
@@ -2180,6 +2439,19 @@ public final class SettlementConstruction {
 
 	public static boolean isBuildSiteReplaceable(BlockState state) {
 		return isReplaceable(state);
+	}
+
+	public static boolean isMineEntranceIntegratedStone(BlockState state) {
+		return state.is(Blocks.STONE)
+			|| state.is(Blocks.COBBLESTONE)
+			|| state.is(Blocks.ANDESITE)
+			|| state.is(Blocks.DIORITE)
+			|| state.is(Blocks.GRANITE)
+			|| state.is(Blocks.TUFF)
+			|| state.is(Blocks.DEEPSLATE)
+			|| state.is(Blocks.COBBLED_DEEPSLATE)
+			|| state.is(Blocks.SANDSTONE)
+			|| state.is(Blocks.RED_SANDSTONE);
 	}
 
 	public static boolean tryClearBuildSiteBlock(ServerLevel level, BlockPos pos, Map<String, Integer> stock) {
@@ -2311,6 +2583,34 @@ public final class SettlementConstruction {
 		int maxLandscapingBlocks,
 		Set<BlockPos> protectedPositions
 	) {
+		return findAnchoredStructureSite(
+			level,
+			origin,
+			facing,
+			minRight,
+			maxRight,
+			minForward,
+			maxForward,
+			maxClearHeight,
+			maxLandscapingBlocks,
+			MAX_TERRAIN_CUT_BLOCKS,
+			protectedPositions
+		);
+	}
+
+	private static AnchoredStructureSite findAnchoredStructureSite(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		int minRight,
+		int maxRight,
+		int minForward,
+		int maxForward,
+		int maxClearHeight,
+		int maxLandscapingBlocks,
+		int maxTerrainCutBlocks,
+		Set<BlockPos> protectedPositions
+	) {
 		int baseY = origin.getY();
 		int landscapingBlocks = 0;
 
@@ -2338,7 +2638,7 @@ public final class SettlementConstruction {
 					groundPos = groundPos.below();
 				}
 
-				if (groundY > baseY + MAX_TERRAIN_CUT_BLOCKS || groundY < baseY - MAX_TERRAIN_FILL_BLOCKS) {
+				if (groundY > baseY + maxTerrainCutBlocks || groundY < baseY - MAX_TERRAIN_FILL_BLOCKS) {
 					return null;
 				}
 
@@ -2633,8 +2933,9 @@ public final class SettlementConstruction {
 	) {
 		prepareStructureFootprint(level, origin, facing, stock, protectedWorkstationPos, blueprint);
 
-		for (int up = 0; up < blueprint.layers().length; up++) {
-			String[] rows = blueprint.layers()[up];
+		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
+			int up = blueprint.minUp() + layerIndex;
+			String[] rows = blueprint.layers()[layerIndex];
 
 			for (int row = 0; row < rows.length; row++) {
 				String rowPattern = rows[row];
@@ -2756,9 +3057,11 @@ public final class SettlementConstruction {
 		int up
 	) {
 		return switch (symbol) {
+			case 'E' -> Blocks.AIR.defaultBlockState();
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP
 				? woodLogBlock(woodFamily).defaultBlockState()
 				: (structureKind == StructureKind.LIGHTHOUSE
+					|| structureKind == StructureKind.MINE_ENTRANCE
 					|| structureKind == StructureKind.TRADING_POST
 					|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
 					|| structureKind == StructureKind.FLETCHER_HUT
@@ -2766,12 +3069,13 @@ public final class SettlementConstruction {
 				? stoneBlock(stoneMaterial).defaultBlockState()
 				: woodPlankBlock(woodFamily).defaultBlockState();
 			case 'H' -> Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing.getOpposite());
-			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
+			case 'L' -> logStateFor(blueprint, facing, woodFamily, right, forward, up);
 			case 'M' -> stoneBlock(stoneMaterial).defaultBlockState();
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
 			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, facing);
 			case 'N' -> lanternStateFor();
+			case 'R' -> ladderStateFor(blueprint, facing, right, forward, up);
 			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
 			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
@@ -2780,6 +3084,22 @@ public final class SettlementConstruction {
 			case 'S' -> stairStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			default -> null;
 		};
+	}
+
+	private static BlockState logStateFor(StructureBlueprint blueprint, Direction facing, String woodFamily, int right, int forward, int up) {
+		BlockState state = woodLogBlock(woodFamily).defaultBlockState();
+		Direction explicitFacing = explicitBlueprintFacing(blueprint, facing, right, forward, up);
+
+		if (explicitFacing == null) {
+			return state;
+		}
+
+		return state.setValue(RotatedPillarBlock.AXIS, explicitFacing.getAxis());
+	}
+
+	private static BlockState ladderStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
+		Direction explicitFacing = explicitBlueprintFacing(blueprint, facing, right, forward, up);
+		return Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, explicitFacing == null ? facing : explicitFacing);
 	}
 
 	private static BlockState fenceStateFor(
@@ -2820,6 +3140,10 @@ public final class SettlementConstruction {
 
 		if (structureKind == StructureKind.FORESTER_WORKSHOP) {
 			return LiveVillagesBlocks.FORESTER_TABLE.defaultBlockState();
+		}
+
+		if (structureKind == StructureKind.MINE_ENTRANCE) {
+			return LiveVillagesBlocks.MINER_WORKSTATION.defaultBlockState();
 		}
 
 		if (structureKind == StructureKind.CARTOGRAPHER_HOUSE) {
@@ -3016,11 +3340,13 @@ public final class SettlementConstruction {
 	}
 
 	private static char blueprintSymbolAt(StructureBlueprint blueprint, int right, int forward, int up) {
-		if (up < 0 || up >= blueprint.layers().length) {
+		int layerIndex = up - blueprint.minUp();
+
+		if (layerIndex < 0 || layerIndex >= blueprint.layers().length) {
 			return 'A';
 		}
 
-		String[] rows = blueprint.layers()[up];
+		String[] rows = blueprint.layers()[layerIndex];
 		int row = forward - blueprint.minForward();
 
 		if (row < 0 || row >= rows.length) {
@@ -3038,11 +3364,13 @@ public final class SettlementConstruction {
 	}
 
 	private static char blueprintOrientationAt(StructureBlueprint blueprint, int right, int forward, int up) {
-		if (blueprint.orientations() == null || up < 0 || up >= blueprint.orientations().length) {
+		int layerIndex = up - blueprint.minUp();
+
+		if (blueprint.orientations() == null || layerIndex < 0 || layerIndex >= blueprint.orientations().length) {
 			return '.';
 		}
 
-		String[] rows = blueprint.orientations()[up];
+		String[] rows = blueprint.orientations()[layerIndex];
 		int row = forward - blueprint.minForward();
 
 		if (row < 0 || row >= rows.length) {
@@ -3060,7 +3388,7 @@ public final class SettlementConstruction {
 	}
 
 	private static boolean fenceConnectsToSymbol(StructureKind structureKind, char symbol, int up) {
-		if (symbol == 'A' || symbol == 'D') {
+		if (symbol == 'A' || symbol == 'D' || symbol == 'E') {
 			return false;
 		}
 
@@ -3212,8 +3540,9 @@ public final class SettlementConstruction {
 		String anchorPosition = relativeBlueprintPositionFromWorld(origin, facing, anchorPos);
 		boolean anchorMappedInBlueprint = false;
 
-		for (int up = 0; up < blueprint.layers().length; up++) {
-			String[] rows = blueprint.layers()[up];
+		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
+			int up = blueprint.minUp() + layerIndex;
+			String[] rows = blueprint.layers()[layerIndex];
 
 			for (int row = 0; row < rows.length; row++) {
 				String rowPattern = rows[row];
@@ -3352,6 +3681,7 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.FLETCHER_HUT
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
 			|| structureKind == StructureKind.LIGHTHOUSE
+			|| structureKind == StructureKind.MINE_ENTRANCE
 			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
 			|| structureKind == StructureKind.TRADING_POST);
 	}
@@ -3371,6 +3701,7 @@ public final class SettlementConstruction {
 			case 'B' -> isBedSymbol(structureKind, symbol, up) ? (isBedFootBlock(structureKind, right, forward, up) ? "bed" : "") : "slab";
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP ? "logs" : (structureKind == StructureKind.CARPENTER_WORKSHOP || structureKind == StructureKind.ROADWRIGHT_WORKSHOP) ? "planks" : "cobblestone";
 			case 'D' -> up == 1 ? "door" : "";
+			case 'E' -> "";
 			case 'F' -> "fence";
 			case 'G' -> "fence_gate";
 			case 'H' -> "chest";
@@ -3379,12 +3710,14 @@ public final class SettlementConstruction {
 			case 'M' -> "cobblestone";
 			case 'N' -> "lantern";
 			case 'P' -> "planks";
+			case 'R' -> "ladder";
 			case 'S' -> "stairs";
 			case 'T' -> "torch";
 			case 'V' -> "glass";
 			case 'W' -> switch (structureKind) {
 				case TRADING_POST -> "trade_board";
 				case FORESTER_WORKSHOP -> "forester_table";
+				case MINE_ENTRANCE -> "miner_workstation";
 				case FLETCHER_HUT -> "fletching_table";
 				case BUTCHER_SHOP -> "smoker";
 				case ROADWRIGHT_WORKSHOP -> "surveyor_table";
@@ -3593,6 +3926,7 @@ public final class SettlementConstruction {
 			case FORESTER_WORKSHOP -> FORESTER_WORKSHOP_BLUEPRINT;
 			case HOUSING_SHELTER -> HOUSING_SHELTER_BLUEPRINT;
 			case LIGHTHOUSE -> LIGHTHOUSE_BLUEPRINT;
+			case MINE_ENTRANCE -> MINE_ENTRANCE_BLUEPRINT;
 			case ROADWRIGHT_WORKSHOP -> ROADWRIGHT_WORKSHOP_BLUEPRINT;
 			case SIMPLE_HOUSING_SHELTER -> SIMPLE_HOUSING_SHELTER_BLUEPRINT;
 			case TRADING_POST -> TRADING_POST_BLUEPRINT;
@@ -3609,6 +3943,7 @@ public final class SettlementConstruction {
 			case FORESTER_WORKSHOP -> StructureKind.FORESTER_WORKSHOP;
 			case HOUSING_SHELTER -> StructureKind.HOUSING_SHELTER;
 			case LIGHTHOUSE -> StructureKind.LIGHTHOUSE;
+			case MINE_ENTRANCE -> StructureKind.MINE_ENTRANCE;
 			case ROADWRIGHT_WORKSHOP -> StructureKind.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> StructureKind.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> StructureKind.TRADING_POST;
@@ -3625,6 +3960,7 @@ public final class SettlementConstruction {
 			case FORESTER_WORKSHOP -> SettlementBuildSiteType.FORESTER_WORKSHOP;
 			case HOUSING_SHELTER -> SettlementBuildSiteType.HOUSING_SHELTER;
 			case LIGHTHOUSE -> SettlementBuildSiteType.LIGHTHOUSE;
+			case MINE_ENTRANCE -> SettlementBuildSiteType.MINE_ENTRANCE;
 			case ROADWRIGHT_WORKSHOP -> SettlementBuildSiteType.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> SettlementBuildSiteType.TRADING_POST;
@@ -4708,6 +5044,10 @@ public final class SettlementConstruction {
 			return "forester_table";
 		}
 
+		if (state.is(LiveVillagesBlocks.MINER_WORKSTATION)) {
+			return "miner_workstation";
+		}
+
 		if (isInTag(state, BlockTags.WOOL)) {
 			return "wool";
 		}
@@ -4746,6 +5086,7 @@ public final class SettlementConstruction {
 			|| state.is(Blocks.STONECUTTER)
 			|| state.is(LiveVillagesBlocks.TRADE_BOARD)
 			|| state.is(LiveVillagesBlocks.CARPENTER_BENCH)
+			|| state.is(LiveVillagesBlocks.MINER_WORKSTATION)
 			|| state.is(LiveVillagesBlocks.SURVEYOR_TABLE)
 			|| state.is(LiveVillagesBlocks.FORESTER_TABLE);
 	}
@@ -4944,9 +5285,17 @@ public final class SettlementConstruction {
 	private record BlueprintRelativeStep(int right, int forward) {
 	}
 
-	private record StructureBlueprint(int minRight, int minForward, int clearHeight, String[][] layers, String[][] orientations) {
+	private record StructureBlueprint(int minRight, int minForward, int minUp, int clearHeight, String[][] layers, String[][] orientations) {
 		private StructureBlueprint(int minRight, int minForward, int clearHeight, String[][] layers) {
-			this(minRight, minForward, clearHeight, layers, null);
+			this(minRight, minForward, 0, clearHeight, layers, null);
+		}
+
+		private StructureBlueprint(int minRight, int minForward, int clearHeight, String[][] layers, String[][] orientations) {
+			this(minRight, minForward, 0, clearHeight, layers, orientations);
+		}
+
+		private StructureBlueprint(int minRight, int minForward, int minUp, int clearHeight, String[][] layers) {
+			this(minRight, minForward, minUp, clearHeight, layers, null);
 		}
 
 		private int maxRight() {
@@ -4967,6 +5316,7 @@ public final class SettlementConstruction {
 		FORESTER_WORKSHOP,
 		HOUSING_SHELTER,
 		LIGHTHOUSE,
+		MINE_ENTRANCE,
 		ROADWRIGHT_WORKSHOP,
 		SIMPLE_HOUSING_SHELTER,
 		TRADING_POST

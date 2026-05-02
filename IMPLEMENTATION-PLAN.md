@@ -87,6 +87,7 @@ Focus:
 - make the first-pass `Tier 1` palisade concrete: log wall at least `4` blocks high, interior slab firing walk below the top log, torch spacing about every `10` blocks, stair access about every `30` blocks, and simple path-aligned gatehouses
 - keep early fortification radius smaller for starter villages, with `Tier 1` aiming for about `80%` of settlement radius before later tiers expand toward the full radius
 - keep preview and site-validation logic permissive for removable natural vegetation so trees or brush do not falsely block otherwise valid builds
+- keep the Miner rollout split between the now-staged `Mine Entrance` build and later actual extraction/tunnel-expansion behavior
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
@@ -167,7 +168,7 @@ These matter enough to keep in the plan:
 
 Keep these visible, but not as active work:
 
-- `Baker`, `Beekeeper`, `Miner`, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
+- `Baker`, `Beekeeper`, loaded Miner extraction and tunnel-expansion behavior beyond the starter `Mine Entrance`, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - an in-game authoring capture tool that lets a player look at a structure, press a key, and export a blueprint in the mod's structure-definition format for later curation

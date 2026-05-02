@@ -727,6 +727,7 @@ public final class LiveVillagesNetworking {
 	private static boolean isPreviewWorkstationItem(Item item) {
 		return item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
 			|| item == LiveVillagesBlocks.LIGHTHOUSE_ITEM
+			|| item == LiveVillagesBlocks.MINER_WORKSTATION_ITEM
 			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
@@ -754,6 +755,10 @@ public final class LiveVillagesNetworking {
 
 		if (item == LiveVillagesBlocks.LIGHTHOUSE_ITEM) {
 			return SettlementConstruction.previewLighthouseAtMarker(level, settlement.id(), placementPos);
+		}
+
+		if (item == LiveVillagesBlocks.MINER_WORKSTATION_ITEM) {
+			return SettlementConstruction.previewMineEntranceAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		if (item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM) {
@@ -958,6 +963,7 @@ public final class LiveVillagesNetworking {
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";
+			case MINE_ENTRANCE -> "Mine Entrance";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
 			case HOUSING_SHELTER -> "Housing Shelter";
