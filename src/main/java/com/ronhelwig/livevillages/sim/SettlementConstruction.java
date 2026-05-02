@@ -73,7 +73,6 @@ public final class SettlementConstruction {
 	 * Placement symbols:
 	 * A = empty space
 	 * B = bed at bed-designated coordinates, otherwise slab
-	 * C = structure-specific wall/foundation material
 	 * D = door
 	 * F = fence
 	 * G = fence gate
@@ -98,14 +97,14 @@ public final class SettlementConstruction {
 		6,
 		new String[][] {
 			{
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC"
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP"
 			},
 			{
 				"LPPPL",
@@ -175,14 +174,14 @@ public final class SettlementConstruction {
 		6,
 		new String[][] {
 			{
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC"
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP",
+				"PPPPP"
 			},
 			{
 				"LMMML",
@@ -329,14 +328,14 @@ public final class SettlementConstruction {
 		6,
 		new String[][] {
 			{
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC",
-				"CCCCC"
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
 			},
 			{
 				"LPPPL",
@@ -407,38 +406,38 @@ public final class SettlementConstruction {
 		new String[][] {
 			{
 				"AAAAAAAAAA",
-				"AACCCCCCCA",
-				"AACPPPPPCA",
-				"AACPPPPPCA",
-				"AACPPPPPCA",
-				"AACCCCCCCA",
+				"AAMMMMMMMA",
+				"AAMPPPPPMA",
+				"AAMPPPPPMA",
+				"AAMPPPPPMA",
+				"AAMMMMMMMA",
 				"AAAAAAAAAA"
 			},
 			{
 				"AAAAAAAAAA",
-				"AALCCCCCLA",
-				"AACFAAAACA",
-				"AADAAAWACA",
-				"AACHAAAACA",
-				"AALCCCCCLA",
+				"AALMMMMMLA",
+				"AAMFAAAAMA",
+				"AADAAAWAMA",
+				"AAMHAAAAMA",
+				"AALMMMMMLA",
 				"AAAAAAAAAA"
 			},
 			{
 				"AAAAAAAAAA",
-				"AALCVCVCLA",
-				"AACAAAAACA",
+				"AALMVMVMLA",
+				"AAMAAAAAMA",
 				"AADAAAAAVA",
-				"AACAAAAACA",
-				"AALCVCVCLA",
+				"AAMAAAAAMA",
+				"AALMVMVMLA",
 				"AAAAAAAAAA"
 			},
 			{
 				"AAAAAAAAAA",
-				"AALCCCCCLA",
-				"AACAAAAACA",
-				"AACAAAAACA",
-				"AACAAAAACA",
-				"AALCCCCCLA",
+				"AALMMMMMLA",
+				"AAMAAAAAMA",
+				"AAMAAAAAMA",
+				"AAMAAAAAMA",
+				"AALMMMMMLA",
 				"AAAAAAAAAA"
 			},
 			{
@@ -453,9 +452,9 @@ public final class SettlementConstruction {
 			{
 				"AAAAAAAAAA",
 				"ASSSSSSSSS",
-				"ASCAAAAACS",
-				"AACAAAAACA",
-				"ASCAAAAACS",
+				"ASMAAAAAMS",
+				"AAMAAAAAMA",
+				"ASMAAAAAMS",
 				"ASSSSSSSSS",
 				"AAAAAAAAAA"
 			},
@@ -559,43 +558,43 @@ public final class SettlementConstruction {
 		9,
 		new String[][] {
 			{
-				"CCC",
-				"CWC",
-				"CCC"
+				"MMM",
+				"MWM",
+				"MMM"
 			},
 			{
-				"CCC",
-				"CCC",
-				"CCC"
+				"MMM",
+				"MMM",
+				"MMM"
 			},
 			{
-				"CCC",
-				"CCC",
-				"CCC"
+				"MMM",
+				"MMM",
+				"MMM"
 			},
 			{
-				"CCC",
-				"CCC",
-				"CCC"
+				"MMM",
+				"MMM",
+				"MMM"
 			},
 			{
 				"A",
-				"C",
+				"M",
 				"A"
 			},
 			{
 				"A",
-				"C",
+				"M",
 				"A"
 			},
 			{
 				"A",
-				"C",
+				"M",
 				"A"
 			},
 			{
 				"A",
-				"C",
+				"M",
 				"A"
 			},
 			{
@@ -611,18 +610,18 @@ public final class SettlementConstruction {
 		6,
 		new String[][] {
 			{
-				"CCCCCCCC",
-				"CCCCCCCC",
-				"CCCCCCCC",
-				"CCCCCCCC",
-				"CCCCCCCC"
+				"MMMMMMMM",
+				"MMMMMMMM",
+				"MMMMMMMM",
+				"MMMMMMMM",
+				"MMMMMMMM"
 			},
 			{
-				"LFGLCCCL",
-				"FAACABBC",
-				"WAADAAAC",
-				"FAACAHHC",
-				"LFGLCCCL"
+				"LFGLMMML",
+				"FAAMABBM",
+				"WAADAAAM",
+				"FAAMAHHM",
+				"LFGLMMML"
 			},
 			{
 				"LAALPVPL",
@@ -1050,6 +1049,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.CARPENTER_WORKSHOP,
 			CARPENTER_WORKSHOP_BLUEPRINT,
 			settlementId,
@@ -1094,6 +1094,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.ROADWRIGHT_WORKSHOP,
 			ROADWRIGHT_WORKSHOP_BLUEPRINT,
 			settlementId,
@@ -1138,6 +1139,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.FORESTER_WORKSHOP,
 			FORESTER_WORKSHOP_BLUEPRINT,
 			settlementId,
@@ -1183,6 +1185,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.FLETCHER_HUT,
 			FLETCHER_HUT_BLUEPRINT,
 			settlementId,
@@ -1227,6 +1230,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.BUTCHER_SHOP,
 			FLETCHER_HUT_BLUEPRINT,
 			settlementId,
@@ -1271,6 +1275,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.CARTOGRAPHER_HOUSE,
 			CARTOGRAPHER_HOUSE_BLUEPRINT,
 			settlementId,
@@ -1330,6 +1335,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.TRADING_POST,
 			TRADING_POST_BLUEPRINT,
 			settlementId,
@@ -1380,6 +1386,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			StructureKind.LIGHTHOUSE,
 			LIGHTHOUSE_BLUEPRINT,
 			settlementId,
@@ -1587,12 +1594,13 @@ public final class SettlementConstruction {
 			settlementId + ":dock:" + anchorPos.getX() + "_" + anchorPos.getY() + "_" + anchorPos.getZ(),
 			"Dock",
 			site != null,
-			buildDockPreviewBlocks(level, origin, dockFacing, site != null)
+			buildDockPreviewBlocks(level, anchorPos, origin, dockFacing, site != null)
 		);
 	}
 
 	public static StructurePreview previewLighthouseAtMarker(ServerLevel level, String settlementId, BlockPos markerPos) {
 		SettlementBuildSite previewBuildSite = createPendingBuildSite(
+			level,
 			StructureKind.LIGHTHOUSE,
 			LIGHTHOUSE_BLUEPRINT,
 			settlementId,
@@ -1815,7 +1823,7 @@ public final class SettlementConstruction {
 		}
 
 		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
-			return dockBuildState(buildBlock.blueprintSymbol().charAt(0));
+			return dockBuildState(buildBlock.blueprintSymbol().charAt(0), buildSite.woodFamily());
 		}
 
 		StructureKind structureKind = structureKindFor(buildSite.blueprintId());
@@ -1824,6 +1832,8 @@ public final class SettlementConstruction {
 			structureKind,
 			blueprint,
 			buildSite.facing(),
+			buildSite.woodFamily(),
+			buildSite.stoneMaterial(),
 			buildBlock.blueprintSymbol().charAt(0),
 			relativePos.right(),
 			relativePos.forward(),
@@ -1856,6 +1866,7 @@ public final class SettlementConstruction {
 			Set.of(anchorPos.immutable())
 		);
 		SettlementBuildSite previewBuildSite = createPendingBuildSite(
+			level,
 			structureKind,
 			blueprint,
 			settlementId,
@@ -1892,12 +1903,18 @@ public final class SettlementConstruction {
 			maxLandscapingBlocks,
 			Set.of(doorPos.immutable())
 		);
-		return new StructurePreview(
-			settlementId + ":" + structureKind.name().toLowerCase() + ":" + doorPos.getX() + "_" + doorPos.getY() + "_" + doorPos.getZ(),
-			previewType,
-			validSite != null,
-			previewStructureBlocks(origin, horizontalFacing, structureKind, blueprint)
+		SettlementBuildSite previewBuildSite = createPendingBuildSite(
+			level,
+			structureKind,
+			blueprint,
+			settlementId,
+			origin,
+			doorPos.immutable(),
+			doorPos.immutable(),
+			horizontalFacing,
+			0L
 		);
+		return previewBuildSite(previewBuildSite, previewType, validSite != null);
 	}
 
 	private static WorkstationBuildResult tryStartDoorAnchoredStructure(
@@ -1935,6 +1952,7 @@ public final class SettlementConstruction {
 		}
 
 		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
 			structureKind,
 			blueprint,
 			settlementId,
@@ -1995,7 +2013,17 @@ public final class SettlementConstruction {
 						continue;
 					}
 
-					BlockState plannedState = plannedBlueprintBlockState(structureKind, blueprint, facing, symbol, right, forward, up);
+					BlockState plannedState = plannedBlueprintBlockState(
+						structureKind,
+						blueprint,
+						facing,
+						"oak",
+						"cobblestone",
+						symbol,
+						right,
+						forward,
+						up
+					);
 
 					if (plannedState == null || plannedState.isAir()) {
 						continue;
@@ -2036,7 +2064,8 @@ public final class SettlementConstruction {
 		return new BlockPos(frontPos.getX(), Math.max(anchorPos.getY(), groundY + 1), frontPos.getZ());
 	}
 
-	private static List<StructurePreviewBlock> buildDockPreviewBlocks(ServerLevel level, BlockPos origin, Direction facing, boolean placementValid) {
+	private static List<StructurePreviewBlock> buildDockPreviewBlocks(ServerLevel level, BlockPos anchorPos, BlockPos origin, Direction facing, boolean placementValid) {
+		String woodFamily = materialPaletteFor(level, anchorPos).woodFamily();
 		List<StructurePreviewBlock> blocks = new ArrayList<>();
 
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
@@ -2045,7 +2074,7 @@ public final class SettlementConstruction {
 				blocks.add(new StructurePreviewBlock(
 					deckPos,
 					"planks",
-					BuiltInRegistries.BLOCK.getKey(Blocks.OAK_PLANKS).toString()
+					BuiltInRegistries.BLOCK.getKey(woodPlankBlock(woodFamily)).toString()
 				));
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
@@ -2056,7 +2085,7 @@ public final class SettlementConstruction {
 						blocks.add(new StructurePreviewBlock(
 							new BlockPos(deckPos.getX(), y, deckPos.getZ()),
 							"logs",
-							BuiltInRegistries.BLOCK.getKey(Blocks.OAK_LOG).toString()
+							BuiltInRegistries.BLOCK.getKey(woodLogBlock(woodFamily)).toString()
 						));
 					}
 				}
@@ -2678,13 +2707,27 @@ public final class SettlementConstruction {
 
 		if (symbol == 'D') {
 			if (up == 1) {
-				placeOakDoor(level, pos, blueprintDoorFacing(structureKind, facing));
+				level.setBlock(
+					pos,
+					woodDoorBlock(materialPaletteFor(level, pos).woodFamily()).defaultBlockState()
+						.setValue(DoorBlock.FACING, blueprintDoorFacing(structureKind, facing))
+						.setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER),
+					BLOCK_UPDATE_FLAGS
+				);
+				level.setBlock(
+					pos.above(),
+					woodDoorBlock(materialPaletteFor(level, pos).woodFamily()).defaultBlockState()
+						.setValue(DoorBlock.FACING, blueprintDoorFacing(structureKind, facing))
+						.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER),
+					BLOCK_UPDATE_FLAGS
+				);
 			}
 
 			return;
 		}
 
-		BlockState state = blueprintStateFor(facing, blueprint, structureKind, symbol, right, forward, up);
+		StructureMaterialPalette palette = materialPaletteFor(level, pos);
+		BlockState state = blueprintStateFor(facing, blueprint, structureKind, palette.woodFamily(), palette.stoneMaterial(), symbol, right, forward, up);
 
 		if (state == null) {
 			clearBlockToWarehouse(level, pos, stock);
@@ -2698,6 +2741,8 @@ public final class SettlementConstruction {
 		Direction facing,
 		StructureBlueprint blueprint,
 		StructureKind structureKind,
+		String woodFamily,
+		String stoneMaterial,
 		char symbol,
 		int right,
 		int forward,
@@ -2705,27 +2750,27 @@ public final class SettlementConstruction {
 	) {
 		return switch (symbol) {
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP
-				? Blocks.OAK_LOG.defaultBlockState()
+				? woodLogBlock(woodFamily).defaultBlockState()
 				: (structureKind == StructureKind.LIGHTHOUSE
 					|| structureKind == StructureKind.TRADING_POST
 					|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
 					|| structureKind == StructureKind.FLETCHER_HUT
 					|| structureKind == StructureKind.BUTCHER_SHOP)
-				? Blocks.COBBLESTONE.defaultBlockState()
-				: Blocks.OAK_PLANKS.defaultBlockState();
+				? stoneBlock(stoneMaterial).defaultBlockState()
+				: woodPlankBlock(woodFamily).defaultBlockState();
 			case 'H' -> Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing.getOpposite());
-			case 'L' -> Blocks.OAK_LOG.defaultBlockState();
-			case 'M' -> Blocks.STONE.defaultBlockState();
-			case 'P' -> Blocks.OAK_PLANKS.defaultBlockState();
-			case 'F' -> fenceStateFor(blueprint, structureKind, facing, right, forward, up);
-			case 'G' -> Blocks.OAK_FENCE_GATE.defaultBlockState().setValue(FenceGateBlock.FACING, facing);
+			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
+			case 'M' -> stoneBlock(stoneMaterial).defaultBlockState();
+			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
+			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
+			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, facing);
 			case 'N' -> lanternStateFor();
 			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
 			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
 			case 'W' -> workstationStateFor(structureKind, facing);
-			case 'B' -> slabStateFor(structureKind, up);
-			case 'S' -> stairStateFor(blueprint, structureKind, facing, right, forward, up);
+			case 'B' -> slabStateFor(structureKind, woodFamily, up);
+			case 'S' -> stairStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			default -> null;
 		};
 	}
@@ -2734,11 +2779,12 @@ public final class SettlementConstruction {
 		StructureBlueprint blueprint,
 		StructureKind structureKind,
 		Direction facing,
+		String woodFamily,
 		int right,
 		int forward,
 		int up
 	) {
-		BlockState state = Blocks.OAK_FENCE.defaultBlockState();
+		BlockState state = woodFenceBlock(woodFamily).defaultBlockState();
 
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			BlueprintRelativeStep step = relativeStepForDirection(facing, direction);
@@ -2784,8 +2830,8 @@ public final class SettlementConstruction {
 		return LiveVillagesBlocks.CARPENTER_BENCH.defaultBlockState();
 	}
 
-	private static BlockState slabStateFor(StructureKind structureKind, int up) {
-		BlockState state = Blocks.OAK_SLAB.defaultBlockState();
+	private static BlockState slabStateFor(StructureKind structureKind, String woodFamily, int up) {
+		BlockState state = woodSlabBlock(woodFamily).defaultBlockState();
 
 		if ((structureKind == StructureKind.HOUSING_SHELTER && up == 4)
 			|| (structureKind == StructureKind.SIMPLE_HOUSING_SHELTER && up == 3)) {
@@ -2812,8 +2858,16 @@ public final class SettlementConstruction {
 			.setValue(WallTorchBlock.FACING, blueprintTorchFacing(blueprint, facing, right, forward, up));
 	}
 
-	private static BlockState stairStateFor(StructureBlueprint blueprint, StructureKind structureKind, Direction facing, int right, int forward, int up) {
-		BlockState state = Blocks.OAK_STAIRS.defaultBlockState()
+	private static BlockState stairStateFor(
+		StructureBlueprint blueprint,
+		StructureKind structureKind,
+		Direction facing,
+		String woodFamily,
+		int right,
+		int forward,
+		int up
+	) {
+		BlockState state = woodStairBlock(woodFamily).defaultBlockState()
 			.setValue(StairBlock.FACING, blueprintStairFacing(blueprint, structureKind, facing, right, forward, up));
 
 		if (explicitBlueprintTopHalf(blueprint, right, forward, up) || up == 3) {
@@ -3136,6 +3190,7 @@ public final class SettlementConstruction {
 	}
 
 	private static SettlementBuildSite createPendingBuildSite(
+		ServerLevel level,
 		StructureKind structureKind,
 		StructureBlueprint blueprint,
 		String settlementId,
@@ -3145,6 +3200,7 @@ public final class SettlementConstruction {
 		Direction facing,
 		long tick
 	) {
+		StructureMaterialPalette palette = materialPaletteFor(level, anchorPos);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
 		String anchorPosition = relativeBlueprintPositionFromWorld(origin, facing, anchorPos);
 		boolean anchorMappedInBlueprint = false;
@@ -3203,8 +3259,8 @@ public final class SettlementConstruction {
 			workstationPos.immutable(),
 			anchorPos.immutable(),
 			facing,
-			"oak",
-			"cobblestone",
+			palette.woodFamily(),
+			palette.stoneMaterial(),
 			blocks,
 			false,
 			tick,
@@ -3249,6 +3305,15 @@ public final class SettlementConstruction {
 		}
 
 		return buildSite.withBlocks(updatedBlocks, buildSite.complete(), tick);
+	}
+
+	public static SettlementBuildSite applyBiomeMaterialPalette(ServerLevel level, SettlementBuildSite buildSite, long tick) {
+		StructureMaterialPalette palette = materialPaletteFor(level, buildSite.anchorPos());
+		if (palette.woodFamily().equals(buildSite.woodFamily()) && palette.stoneMaterial().equals(buildSite.stoneMaterial())) {
+			return buildSite;
+		}
+
+		return buildSite.withMaterials(palette.woodFamily(), palette.stoneMaterial(), tick);
 	}
 
 	private static SettlementBuildBlockState normalizeBuildBlockMaterial(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
@@ -3371,6 +3436,8 @@ public final class SettlementConstruction {
 		StructureKind structureKind,
 		StructureBlueprint blueprint,
 		Direction facing,
+		String woodFamily,
+		String stoneMaterial,
 		char symbol,
 		int right,
 		int forward,
@@ -3385,7 +3452,7 @@ public final class SettlementConstruction {
 				return null;
 			}
 
-			return Blocks.OAK_DOOR.defaultBlockState()
+			return woodDoorBlock(woodFamily).defaultBlockState()
 				.setValue(DoorBlock.FACING, blueprintDoorFacing(structureKind, facing))
 				.setValue(DoorBlock.HALF, up == 1 ? DoubleBlockHalf.LOWER : DoubleBlockHalf.UPPER);
 		}
@@ -3394,7 +3461,119 @@ public final class SettlementConstruction {
 			return bedStateFor(structureKind, facing, right, forward, up);
 		}
 
-		return blueprintStateFor(facing, blueprint, structureKind, symbol, right, forward, up);
+		return blueprintStateFor(facing, blueprint, structureKind, woodFamily, stoneMaterial, symbol, right, forward, up);
+	}
+
+	private static StructureMaterialPalette materialPaletteFor(ServerLevel level, BlockPos pos) {
+		return StructurePaletteTable.paletteFor(level.getBiome(pos));
+	}
+
+	private static Block woodLogBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_LOG;
+			case "birch" -> Blocks.BIRCH_LOG;
+			case "jungle" -> Blocks.JUNGLE_LOG;
+			case "acacia" -> Blocks.ACACIA_LOG;
+			case "cherry" -> Blocks.CHERRY_LOG;
+			case "dark_oak" -> Blocks.DARK_OAK_LOG;
+			case "pale_oak" -> Blocks.PALE_OAK_LOG;
+			case "mangrove" -> Blocks.MANGROVE_LOG;
+			default -> Blocks.OAK_LOG;
+		};
+	}
+
+	private static Block woodPlankBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_PLANKS;
+			case "birch" -> Blocks.BIRCH_PLANKS;
+			case "jungle" -> Blocks.JUNGLE_PLANKS;
+			case "acacia" -> Blocks.ACACIA_PLANKS;
+			case "cherry" -> Blocks.CHERRY_PLANKS;
+			case "dark_oak" -> Blocks.DARK_OAK_PLANKS;
+			case "pale_oak" -> Blocks.PALE_OAK_PLANKS;
+			case "mangrove" -> Blocks.MANGROVE_PLANKS;
+			default -> Blocks.OAK_PLANKS;
+		};
+	}
+
+	private static Block woodStairBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_STAIRS;
+			case "birch" -> Blocks.BIRCH_STAIRS;
+			case "jungle" -> Blocks.JUNGLE_STAIRS;
+			case "acacia" -> Blocks.ACACIA_STAIRS;
+			case "cherry" -> Blocks.CHERRY_STAIRS;
+			case "dark_oak" -> Blocks.DARK_OAK_STAIRS;
+			case "pale_oak" -> Blocks.PALE_OAK_STAIRS;
+			case "mangrove" -> Blocks.MANGROVE_STAIRS;
+			default -> Blocks.OAK_STAIRS;
+		};
+	}
+
+	private static Block woodSlabBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_SLAB;
+			case "birch" -> Blocks.BIRCH_SLAB;
+			case "jungle" -> Blocks.JUNGLE_SLAB;
+			case "acacia" -> Blocks.ACACIA_SLAB;
+			case "cherry" -> Blocks.CHERRY_SLAB;
+			case "dark_oak" -> Blocks.DARK_OAK_SLAB;
+			case "pale_oak" -> Blocks.PALE_OAK_SLAB;
+			case "mangrove" -> Blocks.MANGROVE_SLAB;
+			default -> Blocks.OAK_SLAB;
+		};
+	}
+
+	private static Block woodDoorBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_DOOR;
+			case "birch" -> Blocks.BIRCH_DOOR;
+			case "jungle" -> Blocks.JUNGLE_DOOR;
+			case "acacia" -> Blocks.ACACIA_DOOR;
+			case "cherry" -> Blocks.CHERRY_DOOR;
+			case "dark_oak" -> Blocks.DARK_OAK_DOOR;
+			case "pale_oak" -> Blocks.PALE_OAK_DOOR;
+			case "mangrove" -> Blocks.MANGROVE_DOOR;
+			default -> Blocks.OAK_DOOR;
+		};
+	}
+
+	private static Block woodFenceBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_FENCE;
+			case "birch" -> Blocks.BIRCH_FENCE;
+			case "jungle" -> Blocks.JUNGLE_FENCE;
+			case "acacia" -> Blocks.ACACIA_FENCE;
+			case "cherry" -> Blocks.CHERRY_FENCE;
+			case "dark_oak" -> Blocks.DARK_OAK_FENCE;
+			case "pale_oak" -> Blocks.PALE_OAK_FENCE;
+			case "mangrove" -> Blocks.MANGROVE_FENCE;
+			default -> Blocks.OAK_FENCE;
+		};
+	}
+
+	private static Block woodFenceGateBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.SPRUCE_FENCE_GATE;
+			case "birch" -> Blocks.BIRCH_FENCE_GATE;
+			case "jungle" -> Blocks.JUNGLE_FENCE_GATE;
+			case "acacia" -> Blocks.ACACIA_FENCE_GATE;
+			case "cherry" -> Blocks.CHERRY_FENCE_GATE;
+			case "dark_oak" -> Blocks.DARK_OAK_FENCE_GATE;
+			case "pale_oak" -> Blocks.PALE_OAK_FENCE_GATE;
+			case "mangrove" -> Blocks.MANGROVE_FENCE_GATE;
+			default -> Blocks.OAK_FENCE_GATE;
+		};
+	}
+
+	private static Block stoneBlock(String stoneMaterial) {
+		return switch (stoneMaterial) {
+			case "sandstone" -> Blocks.SANDSTONE;
+			case "red_sandstone" -> Blocks.RED_SANDSTONE;
+			case "smooth_stone" -> Blocks.SMOOTH_STONE;
+			case "stone_bricks" -> Blocks.STONE_BRICKS;
+			default -> Blocks.COBBLESTONE;
+		};
 	}
 
 	private static StructureBlueprint blueprintFor(StructureKind structureKind) {
@@ -3649,6 +3828,7 @@ public final class SettlementConstruction {
 	}
 
 	private static void placeDock(ServerLevel level, DockSite site, Map<String, Integer> stock) {
+		String woodFamily = dockWoodFamilyForSite(level, site);
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
 			for (int right = -DOCK_HALF_WIDTH_BLOCKS; right <= DOCK_HALF_WIDTH_BLOCKS; right++) {
 				BlockPos deckPos = offset(site.origin(), site.facing(), right, forward, 0);
@@ -3659,7 +3839,7 @@ public final class SettlementConstruction {
 				}
 
 				clearBlockToWarehouse(level, deckPos, stock);
-				level.setBlock(deckPos, Blocks.OAK_PLANKS.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				level.setBlock(deckPos, woodPlankBlock(woodFamily).defaultBlockState(), BLOCK_UPDATE_FLAGS);
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
 					BlockPos footing = findDockFooting(level, deckPos);
@@ -3669,7 +3849,7 @@ public final class SettlementConstruction {
 					}
 
 					for (int y = deckPos.getY() - 1; y > footing.getY(); y--) {
-						level.setBlock(new BlockPos(deckPos.getX(), y, deckPos.getZ()), Blocks.OAK_LOG.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+						level.setBlock(new BlockPos(deckPos.getX(), y, deckPos.getZ()), woodLogBlock(woodFamily).defaultBlockState(), BLOCK_UPDATE_FLAGS);
 					}
 				}
 			}
@@ -4123,6 +4303,7 @@ public final class SettlementConstruction {
 		DockSite site,
 		long tick
 	) {
+		StructureMaterialPalette palette = materialPaletteFor(level, anchorPos);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
 
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
@@ -4156,7 +4337,7 @@ public final class SettlementConstruction {
 			anchorPos.immutable(),
 			anchorPos.immutable(),
 			site.facing(),
-			"oak",
+			palette.woodFamily(),
 			"",
 			blocks,
 			false,
@@ -4165,12 +4346,17 @@ public final class SettlementConstruction {
 		);
 	}
 
-	private static BlockState dockBuildState(char symbol) {
+	private static BlockState dockBuildState(char symbol, String woodFamily) {
 		return switch (symbol) {
-			case 'L' -> Blocks.OAK_LOG.defaultBlockState();
-			case 'P' -> Blocks.OAK_PLANKS.defaultBlockState();
+			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
+			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
 			default -> null;
 		};
+	}
+
+	private static String dockWoodFamilyForSite(ServerLevel level, DockSite site) {
+		BlockPos shorelinePos = site.origin().relative(site.facing().getOpposite());
+		return materialPaletteFor(level, shorelinePos).woodFamily();
 	}
 
 	private static String dockMaterialKey(char symbol) {

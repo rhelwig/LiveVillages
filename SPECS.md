@@ -134,6 +134,7 @@ Profession structures can expose targeted trades that fill gaps left by the Trad
 - If a completed staged structure is damaged or has required blocks removed, it should reopen as a repair build site instead of causing the settlement to queue a duplicate replacement structure. The repair site should follow the same visible work, stock, and material rules as initial construction.
 - The placed workstation anchor is a protected planned block. Workers should not remove it while building around it; if it is missing or damaged, replacing it is part of finishing or repairing the structure.
 - Wood in the structure may be any local family but should be consistent within the structure. For example, a spruce-heavy region should prefer spruce logs, planks, stairs, slabs, fences, gates, and doors.
+- Stone-family structure materials should also prefer the local biome palette where it makes visual sense. Desert and beach builds should favor sandstone-family blocks; badlands builds should favor red-sandstone-family blocks; default village-style builds can stay cobblestone-oriented unless a later material system overrides them.
 - Fence blocks in explicit structure blueprints should be placed with connection state derived from neighboring planned blocks so market posts connect cleanly to adjacent logs, fence gates, and solid supports.
 - The `Trading Post` front should discourage villager pathing over the `Trade Board` or fence line. A small three-stair cap above the board, placed in the soffit/roof layer rather than directly on the board level, is acceptable when it preserves the market frontage and keeps villagers using doors or side gates.
 - Stone material quality affects trade value. Cobblestone is the lowest tier, stone is better, smooth stone is better again, granite and diorite are better than plain stone, polished granite and polished diorite are better than their raw forms, and stone bricks or similar blocks should be categorized into comparable quality tiers.
@@ -145,25 +146,25 @@ The first-tier footprint is `5x8`. These layer diagrams are authoritative for pl
 Floor:
 
 ```text
-C = cobblestone or better
+M = cobblestone or better
 
-CCCCCCCC
-CCCCCCCC
-CCCCCCCC
-CCCCCCCC
-CCCCCCCC
+MMMMMMMM
+MMMMMMMM
+MMMMMMMM
+MMMMMMMM
+MMMMMMMM
 ```
 
 1st level:
 
 ```text
-C = cobblestone or better, W = Trade Board, L = log, P = planks, B = bed, D = door, F = fence, G = fence gate, A = air
+M = cobblestone or better, W = Trade Board, L = log, P = planks, B = bed, D = door, F = fence, G = fence gate, A = air
 
-LFGLCCCL
-FAACABBC
-WAADAAAC
-FAACAAAC
-LFGLCCCL
+LFGLMMML
+FAAMABBM
+WAADAAAM
+FAAMAAAM
+LFGLMMML
 ```
 
 2nd level:
@@ -472,16 +473,16 @@ Current implemented custom role and workstation pairs:
 Floor:
 
 ```text
-C = planks
+P = planks
 
-CCCCC
-CCCCC
-CCCCC
-CCCCC
-CCCCC
-CCCCC
-CCCCC
-CCCCC
+PPPPP
+PPPPP
+PPPPP
+PPPPP
+PPPPP
+PPPPP
+PPPPP
+PPPPP
 ```
 
 1st level:

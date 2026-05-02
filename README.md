@@ -74,6 +74,7 @@ Server/debug utilities:
 - [SPECS.md](SPECS.md): full gameplay and systems specification
 - [PROFESSIONS.md](PROFESSIONS.md): profession-specific design notes
 - [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
+- [docs/STRUCTURE-BLUEPRINT-GUIDE.md](docs/STRUCTURE-BLUEPRINT-GUIDE.md): human-friendly guide for designing importable structure blueprints
 - GitHub issues: active bug and polish tracking
 
 ## Development

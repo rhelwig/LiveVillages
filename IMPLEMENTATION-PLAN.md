@@ -68,6 +68,9 @@ Focus:
 - add generic duplicate suppression, repair reopening, and upgrade handling across all staged structure types
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
+- keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
+- keep blueprint symbols explicit for contributors; reserve shorthand aliases like `C` for backward compatibility only
+- keep a contributor-friendly blueprint authoring guide so non-technical builders can supply layered structure designs without reading Java internals
 - keep `Mason` as pending follow-up for stone labor, repairs, and material-upgrade passes
 
 ### 4. Roads, Maps, And Route Planning

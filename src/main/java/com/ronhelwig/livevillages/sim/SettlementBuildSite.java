@@ -104,6 +104,24 @@ public record SettlementBuildSite(
 		);
 	}
 
+	public SettlementBuildSite withMaterials(String newWoodFamily, String newStoneMaterial, long tick) {
+		return new SettlementBuildSite(
+			id,
+			settlementId,
+			blueprintId,
+			origin,
+			workstationPos,
+			anchorPos,
+			facing,
+			newWoodFamily,
+			newStoneMaterial,
+			blocks,
+			complete,
+			createdTick,
+			tick
+		);
+	}
+
 	public boolean referencesWorkstation(BlockPos pos) {
 		return anchorPos.equals(pos) || workstationPos.equals(pos);
 	}

@@ -63,7 +63,8 @@ public final class SettlementConstructionWork {
 		Map<String, Integer> stockBeforeReconcile = new LinkedHashMap<>(stock);
 
 		for (SettlementBuildSite buildSite : buildSites) {
-			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, buildSite, stock, tick);
+			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, buildSite, tick);
+			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
 			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
 
 			if (!refreshedBuildSite.equals(buildSite)) {

@@ -1,0 +1,50 @@
+{
+  "default_wood_family": "oak",
+  "default_stone_material": "cobblestone",
+  "rules": [
+    {
+      "biomes": ["minecraft:mangrove_swamp"],
+      "wood_family": "mangrove"
+    },
+    {
+      "biomes": ["minecraft:dark_forest"],
+      "wood_family": "dark_oak"
+    },
+    {
+      "biomes": ["minecraft:cherry_grove"],
+      "wood_family": "cherry"
+    },
+    {
+      "biomes": ["minecraft:pale_garden"],
+      "wood_family": "pale_oak"
+    },
+    {
+      "biomes": ["minecraft:birch_forest", "minecraft:old_growth_birch_forest"],
+      "wood_family": "birch"
+    },
+    {
+      "biome_tags": ["minecraft:is_taiga"],
+      "wood_family": "spruce"
+    },
+    {
+      "biome_tags": ["minecraft:is_savanna"],
+      "wood_family": "acacia"
+    },
+    {
+      "biome_tags": ["minecraft:is_jungle"],
+      "wood_family": "jungle"
+    },
+    {
+      "biome_tags": ["minecraft:is_badlands"],
+      "stone_material": "red_sandstone"
+    },
+    {
+      "biomes": ["minecraft:desert"],
+      "stone_material": "sandstone"
+    },
+    {
+      "biome_tags": ["minecraft:is_beach"],
+      "stone_material": "sandstone"
+    }
+  ]
+}
