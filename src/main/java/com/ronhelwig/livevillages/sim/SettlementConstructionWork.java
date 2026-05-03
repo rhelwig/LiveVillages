@@ -1206,6 +1206,10 @@ public final class SettlementConstructionWork {
 			return false;
 		}
 
+		if (currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock) {
+			return doorStatesMatchIntent(currentState, plannedState);
+		}
+
 		if (requiresExactState(currentState) || requiresExactState(plannedState)) {
 			return currentState.equals(plannedState);
 		}
@@ -1231,7 +1235,15 @@ public final class SettlementConstructionWork {
 		BlockState currentState,
 		BlockState plannedState
 	) {
+		if (currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock) {
+			return doorStatesMatchIntent(currentState, plannedState);
+		}
+
 		if (isCompatiblePlacedBlock(currentState, plannedState)) {
+			return true;
+		}
+
+		if (SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())) {
 			return true;
 		}
 
@@ -1244,7 +1256,25 @@ public final class SettlementConstructionWork {
 		BlockState currentState,
 		BlockState plannedState
 	) {
-		return !currentState.equals(plannedState) && !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
+		if (currentState.getBlock() instanceof DoorBlock
+			&& plannedState.getBlock() instanceof DoorBlock
+			&& doorStatesMatchIntent(currentState, plannedState)) {
+			return false;
+		}
+
+		return !currentState.equals(plannedState)
+			&& !SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
+			&& !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
+	}
+
+	private static boolean doorStatesMatchIntent(BlockState currentState, BlockState plannedState) {
+		return currentState.is(plannedState.getBlock())
+			&& currentState.hasProperty(DoorBlock.FACING)
+			&& plannedState.hasProperty(DoorBlock.FACING)
+			&& currentState.getValue(DoorBlock.FACING) == plannedState.getValue(DoorBlock.FACING)
+			&& currentState.hasProperty(DoorBlock.HALF)
+			&& plannedState.hasProperty(DoorBlock.HALF)
+			&& currentState.getValue(DoorBlock.HALF) == plannedState.getValue(DoorBlock.HALF);
 	}
 
 	private static boolean isIntegratedMineEntranceStone(

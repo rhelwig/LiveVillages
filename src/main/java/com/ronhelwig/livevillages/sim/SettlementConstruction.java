@@ -36,6 +36,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.Heightmap;
 
@@ -337,41 +338,41 @@ public final class SettlementConstruction {
 			{
 				"AAAAAA",
 				"AAAAAA",
-				"AAAAAA",
 				"AARRAA",
 				"AAEEAA",
+				"AAAAAA",
 				"AAAAAA"
 			},
 			{
 				"AAAAAA",
 				"AAAAAA",
-				"AAAAAA",
 				"AARRAA",
 				"AAEEAA",
+				"AAAAAA",
 				"AAAAAA"
 			},
 			{
 				"AAAAAA",
 				"AAAAAA",
-				"AAAAAA",
 				"AARRAA",
 				"AAEEAA",
+				"AAAAAA",
 				"AAAAAA"
 			},
 			{
 				"AAAAAA",
 				"AAAAAA",
-				"AAAAAA",
 				"AARRAA",
 				"AAEEAA",
+				"AAAAAA",
 				"AAAAAA"
 			},
 			{
 				"LMMMML",
 				"MMMMMM",
+				"MMRRMM",
+				"MMEEMM",
 				"MMMMMM",
-				"MMEEMM",
-				"MMEEMM",
 				"LLMMLL"
 			},
 			{
@@ -393,7 +394,7 @@ public final class SettlementConstruction {
 			{
 				"LMMMML",
 				"MEEEEM",
-				"MEEEEM",
+				"MENEEM",
 				"MEEEEM",
 				"MEEEEM",
 				"LLLLLL"
@@ -2441,17 +2442,32 @@ public final class SettlementConstruction {
 		return isReplaceable(state);
 	}
 
+	public static boolean isFlexibleMaterialMatch(BlockState currentState, BlockState plannedState, String materialKey) {
+		if (materialKey == null || materialKey.isBlank()) {
+			return false;
+		}
+
+		if (!matchesMaterialFamily(currentState, plannedState, materialKey)) {
+			return false;
+		}
+
+		return sharesPlacementProperties(currentState, plannedState);
+	}
+
+	public static BlockState copySharedPlacementProperties(BlockState targetState, BlockState plannedState) {
+		BlockState result = targetState;
+
+		for (Property<?> property : targetState.getProperties()) {
+			if (plannedState.hasProperty(property)) {
+				result = copyPropertyValue(result, plannedState, property);
+			}
+		}
+
+		return result;
+	}
+
 	public static boolean isMineEntranceIntegratedStone(BlockState state) {
-		return state.is(Blocks.STONE)
-			|| state.is(Blocks.COBBLESTONE)
-			|| state.is(Blocks.ANDESITE)
-			|| state.is(Blocks.DIORITE)
-			|| state.is(Blocks.GRANITE)
-			|| state.is(Blocks.TUFF)
-			|| state.is(Blocks.DEEPSLATE)
-			|| state.is(Blocks.COBBLED_DEEPSLATE)
-			|| state.is(Blocks.SANDSTONE)
-			|| state.is(Blocks.RED_SANDSTONE);
+		return isFlexibleStoneMaterial(state);
 	}
 
 	public static boolean tryClearBuildSiteBlock(ServerLevel level, BlockPos pos, Map<String, Integer> stock) {
@@ -2467,6 +2483,58 @@ public final class SettlementConstruction {
 
 		clearBlockToWarehouse(level, pos, stock);
 		return true;
+	}
+
+	private static boolean matchesMaterialFamily(BlockState currentState, BlockState plannedState, String materialKey) {
+		return switch (materialKey) {
+			case "bed" -> currentState.getBlock() instanceof BedBlock && plannedState.getBlock() instanceof BedBlock;
+			case "cobblestone" -> isFlexibleStoneMaterial(currentState) && isFlexibleStoneMaterial(plannedState);
+			case "door" -> currentState.getBlock() instanceof DoorBlock && currentState.is(BlockTags.WOODEN_DOORS) && plannedState.getBlock() instanceof DoorBlock;
+			case "fence" -> currentState.is(BlockTags.WOODEN_FENCES) && plannedState.is(BlockTags.WOODEN_FENCES);
+			case "fence_gate" -> currentState.is(BlockTags.FENCE_GATES) && plannedState.getBlock() instanceof FenceGateBlock;
+			case "glass" -> currentState.is(plannedState.getBlock());
+			case "lantern" -> currentState.hasProperty(LanternBlock.HANGING) && plannedState.hasProperty(LanternBlock.HANGING);
+			case "logs" -> currentState.is(BlockTags.LOGS) && plannedState.is(BlockTags.LOGS);
+			case "planks" -> currentState.is(BlockTags.PLANKS) && plannedState.is(BlockTags.PLANKS);
+			case "slab" -> currentState.is(BlockTags.WOODEN_SLABS) && plannedState.getBlock() instanceof SlabBlock;
+			case "stairs" -> currentState.is(BlockTags.WOODEN_STAIRS) && plannedState.getBlock() instanceof StairBlock;
+			default -> false;
+		};
+	}
+
+	private static boolean sharesPlacementProperties(BlockState currentState, BlockState plannedState) {
+		for (Property<?> property : plannedState.getProperties()) {
+			if (currentState.hasProperty(property) && !samePropertyValue(currentState, plannedState, property)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static boolean isFlexibleStoneMaterial(BlockState state) {
+		return state.is(Blocks.COBBLESTONE)
+			|| state.is(Blocks.MOSSY_COBBLESTONE)
+			|| state.is(Blocks.STONE)
+			|| state.is(Blocks.SMOOTH_STONE)
+			|| state.is(Blocks.GRANITE)
+			|| state.is(Blocks.DIORITE)
+			|| state.is(Blocks.ANDESITE)
+			|| state.is(Blocks.TUFF)
+			|| state.is(Blocks.CALCITE)
+			|| state.is(Blocks.DEEPSLATE)
+			|| state.is(Blocks.COBBLED_DEEPSLATE)
+			|| state.is(Blocks.SANDSTONE)
+			|| state.is(Blocks.RED_SANDSTONE)
+			|| isInTag(state, BlockTags.BASE_STONE_OVERWORLD);
+	}
+
+	private static <T extends Comparable<T>> BlockState copyPropertyValue(BlockState targetState, BlockState sourceState, Property<T> property) {
+		return targetState.setValue(property, sourceState.getValue(property));
+	}
+
+	private static <T extends Comparable<T>> boolean samePropertyValue(BlockState firstState, BlockState secondState, Property<T> property) {
+		return firstState.getValue(property).equals(secondState.getValue(property));
 	}
 
 	public static boolean tryReplaceBuildSiteBlock(ServerLevel level, BlockPos pos, BlockState plannedState, Map<String, Integer> stock) {
@@ -3074,7 +3142,7 @@ public final class SettlementConstruction {
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
 			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, facing);
-			case 'N' -> lanternStateFor();
+			case 'N' -> lanternStateFor(structureKind);
 			case 'R' -> ladderStateFor(blueprint, facing, right, forward, up);
 			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
@@ -3182,6 +3250,14 @@ public final class SettlementConstruction {
 
 	private static BlockState lanternStateFor() {
 		return Blocks.LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, true);
+	}
+
+	private static BlockState lanternStateFor(StructureKind structureKind) {
+		if (structureKind == StructureKind.MINE_ENTRANCE) {
+			return Blocks.COPPER_LANTERN.unaffected().defaultBlockState().setValue(LanternBlock.HANGING, true);
+		}
+
+		return lanternStateFor();
 	}
 
 	private static BlockState torchStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
@@ -4892,6 +4968,12 @@ public final class SettlementConstruction {
 		while (scanPos.getY() > level.getMinY()) {
 			BlockState state = level.getBlockState(scanPos);
 
+			// Treat ordinary visible terrain as valid ground. Only drill downward through
+			// removable clutter such as trees or brush that sits on top of that surface.
+			if (state.isSolid() && isBuildGroundSurface(state)) {
+				break;
+			}
+
 			if (!canLandscapeRemove(level, scanPos, state)) {
 				break;
 			}
@@ -5004,7 +5086,7 @@ public final class SettlementConstruction {
 			return "glass";
 		}
 
-		if (state.is(Blocks.LANTERN)) {
+		if (state.is(Blocks.LANTERN) || state.is(Blocks.COPPER_LANTERN.unaffected())) {
 			return "lantern";
 		}
 

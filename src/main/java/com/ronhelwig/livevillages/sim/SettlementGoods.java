@@ -148,6 +148,14 @@ public final class SettlementGoods {
 			return "cobblestone";
 		}
 
+		if (stack.is(Items.COBBLED_DEEPSLATE)) {
+			return "cobblestone";
+		}
+
+		if (stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT)) {
+			return "dirt";
+		}
+
 		if (stack.is(Items.SAND) || stack.is(Items.RED_SAND)) {
 			return "sand";
 		}
@@ -160,8 +168,28 @@ public final class SettlementGoods {
 			return "coal";
 		}
 
+		if (stack.is(Items.REDSTONE)) {
+			return "redstone";
+		}
+
+		if (stack.is(Items.LAPIS_LAZULI)) {
+			return "lapis";
+		}
+
+		if (stack.is(Items.DIAMOND)) {
+			return "diamond";
+		}
+
+		if (stack.is(Items.EMERALD)) {
+			return "emerald";
+		}
+
 		if (stack.is(Items.TORCH)) {
 			return "torch";
+		}
+
+		if (stack.is(Items.COPPER_TORCH)) {
+			return "copper_torch";
 		}
 
 		if (stack.is(Items.LANTERN)) {
@@ -170,6 +198,22 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.IRON_INGOT)) {
 			return "iron_ingot";
+		}
+
+		if (stack.is(Items.RAW_IRON)) {
+			return "raw_iron";
+		}
+
+		if (stack.is(Items.RAW_COPPER)) {
+			return "raw_copper";
+		}
+
+		if (stack.is(Items.RAW_GOLD)) {
+			return "raw_gold";
+		}
+
+		if (stack.is(Items.COPPER_INGOT)) {
+			return "copper_ingot";
 		}
 
 		return null;

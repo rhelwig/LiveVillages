@@ -27,6 +27,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 import com.ronhelwig.livevillages.client.LiveVillagesClientKeys;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.network.BuildSitePreviewBlockView;
 import com.ronhelwig.livevillages.network.BuildSitePreviewRequestPayload;
 import com.ronhelwig.livevillages.network.BuildSitePreviewSnapshot;
 import com.ronhelwig.livevillages.network.BuildSitePreviewStatePayload;
@@ -43,7 +44,10 @@ public final class BuildSiteWireframePreview {
 	);
 	private static final int REFRESH_INTERVAL_TICKS = 10;
 	private static final int RED_WIREFRAME_COLOR = 0xFFFF2222;
+	private static final int AMBER_WIREFRAME_COLOR = 0xFFFFB347;
 	private static final int PLACEMENT_WIREFRAME_COLOR = 0xFF66FF66;
+	private static final int EXCAVATION_WIREFRAME_COLOR = 0xFF66CCFF;
+	private static final double WIREFRAME_THICKNESS_OFFSET = 0.012D;
 	private static final VoxelShape BLOCK_SHAPE = Shapes.block();
 
 	private static boolean visible;
@@ -159,22 +163,60 @@ public final class BuildSiteWireframePreview {
 
 		for (var block : latestSnapshot.blocks()) {
 			BlockPos blockPos = block.pos();
-			int color = latestSnapshot.prospective()
+			int color = block.isExcavation()
+				? EXCAVATION_WIREFRAME_COLOR
+				: latestSnapshot.prospective()
 				? (latestSnapshot.placementValid() ? PLACEMENT_WIREFRAME_COLOR : RED_WIREFRAME_COLOR)
-				: (block.canUseItem(client.player.getMainHandItem()) || block.canUseItem(client.player.getOffhandItem()) ? PLACEMENT_WIREFRAME_COLOR : RED_WIREFRAME_COLOR);
-			ShapeRenderer.renderShape(
+				: previewColorForHeldItems(block, client);
+			renderThickShape(
 				context.poseStack(),
 				buffer,
-				BLOCK_SHAPE,
 				blockPos.getX() - cameraPos.x,
 				blockPos.getY() - cameraPos.y,
 				blockPos.getZ() - cameraPos.z,
-				color,
-				1.0F
+				color
 			);
 		}
 
 		context.bufferSource().endBatch(RenderTypes.lines());
+	}
+
+	private static void renderThickShape(
+		com.mojang.blaze3d.vertex.PoseStack poseStack,
+		VertexConsumer buffer,
+		double x,
+		double y,
+		double z,
+		int color
+	) {
+		renderShape(poseStack, buffer, x, y, z, color);
+		renderShape(poseStack, buffer, x + WIREFRAME_THICKNESS_OFFSET, y, z, color);
+		renderShape(poseStack, buffer, x - WIREFRAME_THICKNESS_OFFSET, y, z, color);
+		renderShape(poseStack, buffer, x, y + WIREFRAME_THICKNESS_OFFSET, z, color);
+		renderShape(poseStack, buffer, x, y - WIREFRAME_THICKNESS_OFFSET, z, color);
+	}
+
+	private static void renderShape(
+		com.mojang.blaze3d.vertex.PoseStack poseStack,
+		VertexConsumer buffer,
+		double x,
+		double y,
+		double z,
+		int color
+	) {
+		ShapeRenderer.renderShape(poseStack, buffer, BLOCK_SHAPE, x, y, z, color, 1.0F);
+	}
+
+	private static int previewColorForHeldItems(BuildSitePreviewBlockView block, Minecraft client) {
+		BuildSitePreviewBlockView.ItemMatch mainHandMatch = block.itemMatch(client.player.getMainHandItem());
+		BuildSitePreviewBlockView.ItemMatch offHandMatch = block.itemMatch(client.player.getOffhandItem());
+		BuildSitePreviewBlockView.ItemMatch bestMatch = mainHandMatch.ordinal() >= offHandMatch.ordinal() ? mainHandMatch : offHandMatch;
+
+		return switch (bestMatch) {
+			case EXACT -> PLACEMENT_WIREFRAME_COLOR;
+			case COMPATIBLE_MATERIAL -> AMBER_WIREFRAME_COLOR;
+			case NONE -> RED_WIREFRAME_COLOR;
+		};
 	}
 
 	private static void showActionbar(Minecraft client, String message) {

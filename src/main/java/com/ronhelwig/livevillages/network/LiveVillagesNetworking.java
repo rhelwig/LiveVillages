@@ -120,11 +120,10 @@ public final class LiveVillagesNetworking {
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
-		savedData.restoreSettlementMapMemory(level, settlement.get());
 		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.get().id());
 		int boundaryRadius = SettlementVillagers.settlementRadiusBlocks(settlement.get());
 		int mapRadius = Math.max(SURVEYOR_MAP_RADIUS_BLOCKS, boundaryRadius);
-		boolean fogOfWarEnabled = LiveVillagesGameRules.surveyorMapFogEnabled(level);
+		boolean fogOfWarEnabled = false;
 		List<SettlementState> settlementsInDimension = savedData.getSettlements().stream()
 			.filter(candidate -> candidate.dimension().equals(settlement.get().dimension()))
 			.toList();
@@ -141,9 +140,8 @@ public final class LiveVillagesNetworking {
 			settlement.get(),
 			buildSites,
 			mapRadius,
-			fogOfWarEnabled
+			false
 		);
-		savedData.storeSurveyorObservation(settlement.get().id(), observation);
 		savedData.storeRoadworkPlans(
 			settlement.get().id(),
 			SettlementRoadwrightWork.persistentPlansForSettlement(level, settlement.get(), level.getServer().getTickCount())
@@ -898,7 +896,11 @@ public final class LiveVillagesNetworking {
 		Optional<BlockPos> pos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
 		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
-		if (pos.isEmpty() || plannedState == null || plannedState.isAir()) {
+		if (pos.isEmpty() || plannedState == null) {
+			return Optional.empty();
+		}
+
+		if (plannedState.isAir() && !"E".equals(block.blueprintSymbol())) {
 			return Optional.empty();
 		}
 

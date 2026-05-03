@@ -720,6 +720,7 @@ public class LiveVillagesSavedData extends SavedData {
 				getRoutesForSettlement(workingSettlement.id()).size()
 			);
 			SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
+			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
 			SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
@@ -807,19 +808,6 @@ public class LiveVillagesSavedData extends SavedData {
 			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
 			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
-			restoreSettlementMapMemory(level, workingSettlement);
-			if (LiveVillagesGameRules.surveyorMapFogEnabled(level)
-				&& !SettlementVillagers.nearbyRoadwrights(level, workingSettlement).isEmpty()) {
-				long surveyorObservationStart = SettlementPerformanceLog.start();
-				SettlementLoadedObservation.SurveyorObservation observation = SettlementLoadedObservation.updateSurveyorMapObservation(
-					level,
-					workingSettlement,
-					activeBuildSites,
-					Math.max(96, SettlementVillagers.settlementRadiusBlocks(workingSettlement))
-				);
-				storeSurveyorObservation(workingSettlement.id(), observation);
-				SettlementPerformanceLog.warnIfSlow("loaded_surveyor_observation", workingSettlement, surveyorObservationStart, server.getTickCount());
-			}
 			long lastRoadworkCatchupTick = loadedRoadworkCatchupTicks.getOrDefault(
 				workingSettlement.id(),
 				Math.max(0L, currentTick - DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS)

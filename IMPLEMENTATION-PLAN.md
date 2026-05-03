@@ -49,6 +49,7 @@ Focus:
 - keep route-transfer demand aware of active staged build-site materials so visible construction stalls can be supplied by trade
 - preserve completed harbor/trade build-site effects for route planning even while the corresponding chunks are unloaded
 - keep route growth limited by reachability and active planning state rather than a small hard cap on total connections
+- let trade demand support limited brokered wants for downstream partner shortages so multi-hop trade networks can emerge
 - unblock recipe/data-driven content so new recipes are dependable before more professions are added
 - keep emerald accumulation and trade incentives compatible with future settlement-tier unlock thresholds
 
@@ -87,10 +88,13 @@ Focus:
 - make the first-pass `Tier 1` palisade concrete: log wall at least `4` blocks high, interior slab firing walk below the top log, torch spacing about every `10` blocks, stair access about every `30` blocks, and simple path-aligned gatehouses
 - keep early fortification radius smaller for starter villages, with `Tier 1` aiming for about `80%` of settlement radius before later tiers expand toward the full radius
 - keep preview and site-validation logic permissive for removable natural vegetation so trees or brush do not falsely block otherwise valid builds
-- keep the Miner rollout split between the now-staged `Mine Entrance` build and later actual extraction/tunnel-expansion behavior
+- let build previews distinguish exact block matches from compatible wrong-material matches, and let compatible player materials complete structures without blocking functionality
+- keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, and later broader tunnel-expansion behavior
+- keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
+- add a later `Tier 3+` luxury-upgrade pass where a few profession structures can prefer imported foreign-biome style variants to create prestige-material trade demand
 - keep blueprint symbols explicit for contributors; reserve shorthand aliases like `C` for backward compatibility only
 - keep a contributor-friendly blueprint authoring guide so non-technical builders can supply layered structure designs without reading Java internals
 - keep `Mason` as pending follow-up for stone labor, repairs, fortification work, and higher-tier material-upgrade passes
@@ -102,7 +106,7 @@ Status: In progress
 Focus:
 
 - keep `Roadwright` responsible for both internal route quality and outward settlement connections
-- preserve cached survey/map memory so route tools do not rebuild from scratch after reloads
+- keep the `Surveyor's Table` map sourced from current loaded-world truth so visible roads and improvements do not lag behind villager survey chores
 - extend route quality improvements without regressing the bounded-search and bounded-per-tick performance model
 - add bounded catch-up for visible road/path improvement so revisiting a settlement shows progress without requiring constant player babysitting
 - make internal path materials and road-furniture upgrades respect settlement tier and unlocked civic quality
@@ -145,10 +149,12 @@ Keep these unless the spec is intentionally changed:
 - `Cartographer` should gate efficient long-range route planning and trade beyond about `32` chunks / `512` blocks.
 - The `Trade Board` anchors a staged `Trading Post`, with a future `Shopping Mall` upgrade on the same site.
 - Settlement advancement uses four civic tiers. Unlocks are sticky progression rather than instant downgrade-on-spend behavior.
+- `Tier 3+` may unlock selective imported style preferences for a few structures, but those should behave like luxury upgrades rather than forced global palette swaps.
 - Recognized workstations and structure anchors should start staged builds when possible; do not fall back to instant full structure placement.
 - Craftable structure-anchor blocks are the preferred trigger for non-workstation civic structures unless a vanilla workstation is the better anchor.
 - The `Trade Board` should show highest-priority settlement-wide wants; profession structures should handle narrower specialist trades.
 - Trade Board trading stays centered on `Your Goods` and `Village Goods`, with direct donation support and protected settlement reserves.
+- Inter-settlement trade should eventually support direct `emerald` movement and a small amount of brokered demand for goods wanted by downstream partner settlements.
 - Revisit the Trade Board UX so `Village Asks` can show top wants even when the player lacks them, and so later donation flows can handle arbitrary inventory goods without forcing the current narrow selection model.
 - Player-placed vanilla `Cartography Table` blocks should anchor a staged `Cartographer's House`.
 - Player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`.
@@ -168,7 +174,7 @@ These matter enough to keep in the plan:
 
 Keep these visible, but not as active work:
 
-- `Baker`, `Beekeeper`, loaded Miner extraction and tunnel-expansion behavior beyond the starter `Mine Entrance`, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
+- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, and shaft-lighting loop, including primary and secondary tunnel expansion, richer mined-resource stock handling, ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - an in-game authoring capture tool that lets a player look at a structure, press a key, and export a blueprint in the mod's structure-definition format for later curation

@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
@@ -85,14 +86,14 @@ public final class BuildSiteAssistedPlacement {
 			}
 
 			List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks());
-			placePlannedBlock(level, buildSite, rootBlock.block(), rootBlock.pos());
+			placePlannedBlock(level, buildSite, rootBlock.block(), rootBlock.pos(), stack);
 			updatedBlocks.set(rootBlock.index(), rootBlock.block().withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, ""));
 			savedData.releaseConstructionDeliveriesForBlock(buildSite.settlementId(), buildSite.id(), rootBlock.block().position());
 
 			AssistedBuildBlock pairedBlock = pairedBuildBlock(level, buildSite, rootBlock).orElse(null);
 
 			if (pairedBlock != null) {
-				placePlannedBlock(level, buildSite, pairedBlock.block(), pairedBlock.pos());
+				placePlannedBlock(level, buildSite, pairedBlock.block(), pairedBlock.pos(), stack);
 				updatedBlocks.set(pairedBlock.index(), pairedBlock.block().withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, ""));
 				savedData.releaseConstructionDeliveriesForBlock(buildSite.settlementId(), buildSite.id(), pairedBlock.block().position());
 			}
@@ -192,12 +193,25 @@ public final class BuildSiteAssistedPlacement {
 			&& candidatePos.equals(rootPos.relative(rootState.getValue(BedBlock.FACING)));
 	}
 
-	private static void placePlannedBlock(ServerLevel level, SettlementBuildSite buildSite, SettlementBuildBlockState block, BlockPos pos) {
+	private static void placePlannedBlock(ServerLevel level, SettlementBuildSite buildSite, SettlementBuildBlockState block, BlockPos pos, ItemStack stack) {
 		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
 		if (plannedState != null) {
-			level.setBlock(pos, plannedState, BLOCK_UPDATE_FLAGS);
+			level.setBlock(pos, assistedPlacementState(plannedState, block.expectedMaterialKey(), stack), BLOCK_UPDATE_FLAGS);
 		}
+	}
+
+	private static BlockState assistedPlacementState(BlockState plannedState, String expectedMaterialKey, ItemStack stack) {
+		if (!(stack.getItem() instanceof BlockItem blockItem)) {
+			return plannedState;
+		}
+
+		BlockState heldState = blockItem.getBlock().defaultBlockState();
+		if (!SettlementConstruction.isFlexibleMaterialMatch(heldState, plannedState, expectedMaterialKey)) {
+			return plannedState;
+		}
+
+		return SettlementConstruction.copySharedPlacementProperties(heldState, plannedState);
 	}
 
 	private static boolean isComplete(List<SettlementBuildBlockState> blocks) {

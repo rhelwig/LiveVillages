@@ -116,6 +116,12 @@ public final class SettlementVillagers {
 			.toList();
 	}
 
+	public static List<Villager> nearbyMiners(ServerLevel level, SettlementState settlement) {
+		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+			.filter(villager -> !villager.isBaby() && isCustomMiner(villager))
+			.toList();
+	}
+
 	public static List<Villager> nearbyFletchers(ServerLevel level, SettlementState settlement) {
 		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FLETCHER))
@@ -1601,6 +1607,14 @@ public final class SettlementVillagers {
 			}
 		}
 
+		if (isCustomMiner(villager)) {
+			Optional<String> minerTask = SettlementMinerWork.loadedMinerTaskKey(level, villager);
+
+			if (minerTask.isPresent()) {
+				return minerTask.get();
+			}
+		}
+
 		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
 			Optional<String> butcherTask = SettlementButcherWork.loadedButcherTaskKey(level, villager);
 
@@ -2034,6 +2048,7 @@ public final class SettlementVillagers {
 			case "collecting_forest_drops" -> "collecting forest drops";
 			case "cutting_trees" -> "cutting trees";
 			case "depositing_into_trading_post" -> "depositing into Trading Post";
+			case "digging_mine_shaft" -> "digging mine shaft";
 			case "fishing" -> "fishing";
 			case "growing_up" -> "growing up";
 			case "heading_to_gathering" -> "heading to gathering";
@@ -2041,22 +2056,28 @@ public final class SettlementVillagers {
 			case "idle" -> "idle";
 			case "improving_paths" -> "improving paths";
 			case "lighting_lighthouse" -> "lighting lighthouse";
+			case "lighting_cave" -> "lighting cave";
+			case "lighting_mine_shaft" -> "lighting mine shaft";
 			case "inspecting_docks" -> "inspecting docks";
 			case "checking_lighthouse" -> "checking lighthouse";
 			case "extinguishing_lighthouse" -> "extinguishing lighthouse";
+			case "mining_ore_vein" -> "mining ore vein";
 			case "maintaining_tools" -> "maintaining tools";
 			case "maintaining_workshop" -> "maintaining workshop";
 			case "managing_harbor" -> "managing harbor";
 			case "managing_trades" -> "managing trades";
 			case "mingling" -> "mingling";
+			case "mining_shaft_stone" -> "mining shaft stone";
 			case "playing" -> "playing";
 			case "planning_docks" -> "planning docks";
 			case "profession_work" -> "profession work";
 			case "raising_child" -> "raising child";
+			case "reinforcing_shaft_support" -> "reinforcing shaft support";
 			case "returning_home" -> "returning home";
 			case "seeking_bed" -> "seeking bed";
 			case "sleeping" -> "sleeping";
 			case "sleeping_in_bed" -> "sleeping in bed";
+			case "placing_shaft_ladders" -> "placing shaft ladders";
 			case "warning_harbor" -> "warning harbor";
 			case "stonework" -> "stonework";
 			case "defending_village" -> "defending village";
