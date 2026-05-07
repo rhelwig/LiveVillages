@@ -83,12 +83,18 @@ Build with the Gradle wrapper:
 
 ```sh
 ./gradlew build
+
+on Windows
+./gradlew.bat build
 ```
 
 Run a development client with:
 
 ```sh
 ./gradlew runClient
+
+on Windows
+./gradlew.bat runClient
 ```
 
 The repository currently assumes Java `25`.

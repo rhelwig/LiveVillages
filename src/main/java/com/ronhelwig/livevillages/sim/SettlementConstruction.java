@@ -34,6 +34,7 @@ import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -766,109 +767,151 @@ public final class SettlementConstruction {
 		}
 	);
 	private static final StructureBlueprint TRADING_POST_BLUEPRINT = new StructureBlueprint(
-		-4,
 		-2,
+		-4,
 		6,
 		new String[][] {
 			{
-				"MMMMMMMM",
-				"MMMMMMMM",
-				"MMMMMMMM",
-				"MMMMMMMM",
-				"MMMMMMMM"
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
 			},
 			{
-				"LFGLMMML",
-				"FAAMABBM",
-				"WAADAAAM",
-				"FAAMAHHM",
-				"LFGLMMML"
+				"LMMML",
+				"MBAHM",
+				"MBAHM",
+				"MAAAM",
+				"LMDML",
+				"GAAAG",
+				"FAAAF",
+				"LFWFL"
 			},
 			{
-				"LAALPVPL",
-				"AAAVAAAV",
-				"AAADAAAV",
-				"AAAVAAAV",
-				"LAALPVPL"
+				"LVVVL",
+				"PAAAP",
+				"VAAAV",
+				"PAAAP",
+				"LVDVL",
+				"AAAAA",
+				"AAAAA",
+				"LAAAL"
 			},
 			{
-				"LSSLPPPL",
-				"SAAPAAAP",
-				"SAAPAATP",
-				"SAAPAAAP",
-				"LSSLPPPL"
+				"LPPPL",
+				"PATAP",
+				"PAAAP",
+				"PAAAP",
+				"LPPPL",
+				"SAAAS",
+				"SAAAS",
+				"LSSSL"
 			},
 			{
-				"BBBSPPPS",
-				"BBBSAAAS",
-				"BBBSAAAS",
-				"BBBSAAAS",
-				"BBBSPPPS"
+				"SSSSS",
+				"PAAAP",
+				"PAAAP",
+				"PAAAP",
+				"SSSSS",
+				"BBBBB",
+				"BBBBB",
+				"BBBBB"
 			},
 			{
-				"AAAASPSA",
-				"AAAASPSA",
-				"AAAASPSA",
-				"AAAASPSA",
-				"AAAASPSA"
+				"AAAAA",
+				"SSSSS",
+				"PPPPP",
+				"SSSSS",
+				"AAAAA",
+				"AAAAA",
+				"AAAAA",
+				"AAAAA"
 			},
 			{
-				"AAAAABAA",
-				"AAAAABAA",
-				"AAAAABAA",
-				"AAAAABAA",
-				"AAAAABAA"
+				"AAAAA",
+				"AAAAA",
+				"BBBBB",
+				"AAAAA",
+				"AAAAA",
+				"AAAAA",
+				"AAAAA",
+				"AAAAA"
 			}
 		},
 		new String[][] {
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				"....."
 			},
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				"....."
 			},
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				"....."
 			},
 			{
-				"........",
-				"L.......",
-				"L.......",
-				"L.......",
-				"........"
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				"l...r",
+				"l...r",
+				".fff."
 			},
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				"FFFFF",
+				".....",
+				".....",
+				".....",
+				"BBBBB",
+				".....",
+				".....",
+				"....."
 			},
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				".....",
+				"FFFFF",
+				".....",
+				"BBBBB",
+				".....",
+				".....",
+				".....",
+				"....."
 			},
 			{
-				"........",
-				"........",
-				"........",
-				"........",
-				"........"
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				".....",
+				"....."
 			}
 		}
 	);
@@ -1522,13 +1565,33 @@ public final class SettlementConstruction {
 		Optional<SettlementBuildSite> existingBuildSite,
 		boolean placeBlockedSign
 	) {
+		Direction boardFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		Direction structureFacing = boardFacing;
+		BlockPos origin = boardPos.relative(boardFacing.getOpposite(), 3).below();
+		long tick = level.getServer().getTickCount();
+
 		if (existingBuildSite.isPresent()) {
-			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+			SettlementBuildSite buildSite = existingBuildSite.get();
+
+			if (buildSite.origin().equals(origin)
+				&& buildSite.facing() == structureFacing
+				&& anchoredWorkstationStillMapsToBlueprint(buildSite, StructureKind.TRADING_POST, boardPos)) {
+				return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(buildSite, stock, tick));
+			}
+
+			return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+				level,
+				StructureKind.TRADING_POST,
+				TRADING_POST_BLUEPRINT,
+				settlementId,
+				origin,
+				boardPos.immutable(),
+				boardPos.immutable(),
+				structureFacing,
+				tick
+			), stock, tick));
 		}
 
-		Direction boardFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
-		Direction structureFacing = boardFacing.getClockWise();
-		BlockPos origin = boardPos.relative(boardFacing.getOpposite(), 4).below();
 		AnchoredStructureSite site = findAnchoredStructureSite(
 			level,
 			origin,
@@ -1558,8 +1621,8 @@ public final class SettlementConstruction {
 			boardPos.immutable(),
 			boardPos.immutable(),
 			site.facing(),
-			level.getServer().getTickCount()
-		), stock, level.getServer().getTickCount()));
+			tick
+		), stock, tick));
 	}
 
 	public static WorkstationBuildResult tryStartDockAtPortmasterAnchor(
@@ -1734,8 +1797,8 @@ public final class SettlementConstruction {
 
 	public static StructurePreview previewTradingPostAtWorkstation(ServerLevel level, String settlementId, BlockPos boardPos, Direction facing) {
 		Direction boardFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
-		Direction structureFacing = boardFacing.getClockWise();
-		BlockPos origin = boardPos.relative(boardFacing.getOpposite(), 4).below();
+		Direction structureFacing = boardFacing;
+		BlockPos origin = boardPos.relative(boardFacing.getOpposite(), 3).below();
 		return previewAnchoredStructure(
 			level,
 			settlementId,
@@ -2504,12 +2567,26 @@ public final class SettlementConstruction {
 
 	private static boolean sharesPlacementProperties(BlockState currentState, BlockState plannedState) {
 		for (Property<?> property : plannedState.getProperties()) {
+			if (shouldIgnorePlacementProperty(currentState, plannedState, property)) {
+				continue;
+			}
+
 			if (currentState.hasProperty(property) && !samePropertyValue(currentState, plannedState, property)) {
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	private static boolean shouldIgnorePlacementProperty(BlockState currentState, BlockState plannedState, Property<?> property) {
+		if ((currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock)
+			|| (currentState.getBlock() instanceof FenceGateBlock && plannedState.getBlock() instanceof FenceGateBlock)) {
+			String name = property.getName();
+			return "open".equals(name) || "powered".equals(name);
+		}
+
+		return false;
 	}
 
 	private static boolean isFlexibleStoneMaterial(BlockState state) {
@@ -2546,6 +2623,7 @@ public final class SettlementConstruction {
 
 		if (isReplaceable(currentState)) {
 			level.setBlock(pos, plannedState, BLOCK_UPDATE_FLAGS);
+			updateChestStateAfterPlacement(level, pos);
 			return true;
 		}
 
@@ -2560,6 +2638,7 @@ public final class SettlementConstruction {
 		}
 
 		level.setBlock(pos, plannedState, BLOCK_UPDATE_FLAGS);
+		updateChestStateAfterPlacement(level, pos);
 		return true;
 	}
 
@@ -3136,12 +3215,12 @@ public final class SettlementConstruction {
 					|| structureKind == StructureKind.BUTCHER_SHOP)
 				? stoneBlock(stoneMaterial).defaultBlockState()
 				: woodPlankBlock(woodFamily).defaultBlockState();
-			case 'H' -> Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing.getOpposite());
+			case 'H' -> chestStateFor(blueprint, facing, right, forward, up);
 			case 'L' -> logStateFor(blueprint, facing, woodFamily, right, forward, up);
 			case 'M' -> stoneBlock(stoneMaterial).defaultBlockState();
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
 			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
-			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, facing);
+			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, fenceGateFacingFor(blueprint, structureKind, facing, right, forward, up));
 			case 'N' -> lanternStateFor(structureKind);
 			case 'R' -> ladderStateFor(blueprint, facing, right, forward, up);
 			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
@@ -3152,6 +3231,59 @@ public final class SettlementConstruction {
 			case 'S' -> stairStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			default -> null;
 		};
+	}
+
+	private static BlockState chestStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
+		return Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, chestFacingFor(blueprint, facing, right, forward, up));
+	}
+
+	private static Direction chestFacingFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
+		boolean pairAlongRight = isChestSymbol(blueprintSymbolAt(blueprint, right - 1, forward, up))
+			|| isChestSymbol(blueprintSymbolAt(blueprint, right + 1, forward, up));
+		boolean pairAlongForward = isChestSymbol(blueprintSymbolAt(blueprint, right, forward - 1, up))
+			|| isChestSymbol(blueprintSymbolAt(blueprint, right, forward + 1, up));
+
+		if (pairAlongRight) {
+			if (isChestFrontOpen(blueprint, facing, right, forward, up, facing)) {
+				return facing;
+			}
+
+			if (isChestFrontOpen(blueprint, facing, right, forward, up, facing.getOpposite())) {
+				return facing.getOpposite();
+			}
+
+			return facing.getOpposite();
+		}
+
+		if (pairAlongForward) {
+			if (isChestFrontOpen(blueprint, facing, right, forward, up, facing.getCounterClockWise())) {
+				return facing.getCounterClockWise();
+			}
+
+			if (isChestFrontOpen(blueprint, facing, right, forward, up, facing.getClockWise())) {
+				return facing.getClockWise();
+			}
+
+			return facing.getCounterClockWise();
+		}
+
+		for (Direction direction : new Direction[] {facing.getOpposite(), facing, facing.getCounterClockWise(), facing.getClockWise()}) {
+			if (isChestFrontOpen(blueprint, facing, right, forward, up, direction)) {
+				return direction;
+			}
+		}
+
+		return facing.getOpposite();
+	}
+
+	private static boolean isChestFrontOpen(StructureBlueprint blueprint, Direction structureFacing, int right, int forward, int up, Direction chestFacing) {
+		BlueprintRelativeStep step = relativeStepForDirection(structureFacing, chestFacing);
+		char symbol = blueprintSymbolAt(blueprint, right + step.right(), forward + step.forward(), up);
+		return symbol == 'A' || symbol == 'D' || symbol == 'E';
+	}
+
+	private static boolean isChestSymbol(char symbol) {
+		return symbol == 'H';
 	}
 
 	private static BlockState logStateFor(StructureBlueprint blueprint, Direction facing, String woodFamily, int right, int forward, int up) {
@@ -3193,13 +3325,38 @@ public final class SettlementConstruction {
 		return state;
 	}
 
+	private static Direction fenceGateFacingFor(
+		StructureBlueprint blueprint,
+		StructureKind structureKind,
+		Direction facing,
+		int right,
+		int forward,
+		int up
+	) {
+		boolean supportedLeft = fenceConnectsToSymbol(structureKind, blueprintSymbolAt(blueprint, right - 1, forward, up), up);
+		boolean supportedRight = fenceConnectsToSymbol(structureKind, blueprintSymbolAt(blueprint, right + 1, forward, up), up);
+		boolean supportedBack = fenceConnectsToSymbol(structureKind, blueprintSymbolAt(blueprint, right, forward - 1, up), up);
+		boolean supportedFront = fenceConnectsToSymbol(structureKind, blueprintSymbolAt(blueprint, right, forward + 1, up), up);
+
+		if ((supportedBack || supportedFront) && !(supportedLeft || supportedRight)) {
+			int midRight = blueprint.minRight() + ((blueprint.maxRight() - blueprint.minRight()) / 2);
+			return right <= midRight ? facing.getClockWise() : facing.getCounterClockWise();
+		}
+
+		if ((supportedLeft || supportedRight) && !(supportedBack || supportedFront)) {
+			return facing;
+		}
+
+		return facing;
+	}
+
 	private static BlockState workstationStateFor(StructureKind structureKind, Direction facing) {
 		if (structureKind == StructureKind.LIGHTHOUSE) {
 			return LiveVillagesBlocks.LIGHTHOUSE.defaultBlockState();
 		}
 
 		if (structureKind == StructureKind.TRADING_POST) {
-			return LiveVillagesBlocks.TRADE_BOARD.defaultBlockState().setValue(TradeBoardBlock.FACING, facing.getCounterClockWise());
+			return LiveVillagesBlocks.TRADE_BOARD.defaultBlockState().setValue(TradeBoardBlock.FACING, facing);
 		}
 
 		if (structureKind == StructureKind.ROADWRIGHT_WORKSHOP) {
@@ -3289,14 +3446,6 @@ public final class SettlementConstruction {
 
 		if (explicitFacing != null) {
 			return explicitFacing;
-		}
-
-		if (structureKind == StructureKind.TRADING_POST && (up == 4 || up == 5)) {
-			return right <= 0 ? facing.getClockWise() : facing.getCounterClockWise();
-		}
-
-		if (structureKind == StructureKind.TRADING_POST && up == 3 && forward == 0 && right >= -4 && right <= -2) {
-			return facing.getClockWise();
 		}
 
 		if (structureKind == StructureKind.CARPENTER_WORKSHOP
@@ -3481,10 +3630,6 @@ public final class SettlementConstruction {
 	}
 
 	private static Direction blueprintDoorFacing(StructureKind structureKind, Direction facing) {
-		if (structureKind == StructureKind.TRADING_POST) {
-			return facing.getCounterClockWise();
-		}
-
 		if (structureKind == StructureKind.CARTOGRAPHER_HOUSE) {
 			return facing.getCounterClockWise();
 		}
@@ -3524,10 +3669,12 @@ public final class SettlementConstruction {
 				.setValue(BedBlock.FACING, facing.getOpposite());
 		}
 
-		if (structureKind == StructureKind.TRADING_POST && forward == -1 && (right == 1 || right == 2)) {
+		if (structureKind == StructureKind.TRADING_POST
+			&& right == -1
+			&& (forward == -3 || forward == -2)) {
 			return Blocks.WHITE_BED.defaultBlockState()
-				.setValue(BedBlock.PART, right == 2 ? BedPart.HEAD : BedPart.FOOT)
-				.setValue(BedBlock.FACING, facing.getClockWise());
+				.setValue(BedBlock.PART, forward == -3 ? BedPart.HEAD : BedPart.FOOT)
+				.setValue(BedBlock.FACING, facing.getOpposite());
 		}
 
 		if (structureKind == StructureKind.HOUSING_SHELTER
@@ -3554,7 +3701,7 @@ public final class SettlementConstruction {
 			|| ((structureKind == StructureKind.FLETCHER_HUT || structureKind == StructureKind.BUTCHER_SHOP) && (right == -1 || right == 1) && forward == -2 && up == 1)
 			|| (structureKind == StructureKind.HOUSING_SHELTER && (right == -1 || right == 1) && forward == 0 && up == 1)
 			|| (structureKind == StructureKind.SIMPLE_HOUSING_SHELTER && right == -1 && forward == 1 && up == 1)
-			|| (structureKind == StructureKind.TRADING_POST && right == 1 && forward == -1 && up == 1);
+			|| (structureKind == StructureKind.TRADING_POST && right == -1 && forward == -2 && up == 1);
 	}
 
 	private static void placeBlueprintBeds(ServerLevel level, BlockPos origin, Direction facing, StructureKind structureKind) {
@@ -3569,7 +3716,7 @@ public final class SettlementConstruction {
 		} else if (structureKind == StructureKind.SIMPLE_HOUSING_SHELTER) {
 			placeBed(level, offset(origin, facing, -1, 0, 1), offset(origin, facing, -1, 1, 1), facing.getOpposite());
 		} else if (structureKind == StructureKind.TRADING_POST) {
-			placeBed(level, offset(origin, facing, 2, -1, 1), offset(origin, facing, 1, -1, 1), facing.getClockWise());
+			placeBed(level, offset(origin, facing, -1, -3, 1), offset(origin, facing, -1, -2, 1), facing.getOpposite());
 		}
 	}
 
@@ -3598,6 +3745,57 @@ public final class SettlementConstruction {
 		}
 
 		level.setBlock(pos, state, BLOCK_UPDATE_FLAGS);
+		updateChestStateAfterPlacement(level, pos);
+	}
+
+	public static void updateChestStateAfterPlacement(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+
+		if (!(state.getBlock() instanceof ChestBlock) || !state.hasProperty(ChestBlock.FACING)) {
+			return;
+		}
+
+		Direction facing = state.getValue(ChestBlock.FACING);
+		Direction adjacentDirection = null;
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockState adjacentState = level.getBlockState(pos.relative(direction));
+
+			if (adjacentState.getBlock() instanceof ChestBlock
+				&& adjacentState.hasProperty(ChestBlock.FACING)
+				&& adjacentState.getValue(ChestBlock.FACING) == facing) {
+				adjacentDirection = direction;
+				break;
+			}
+		}
+
+		if (adjacentDirection == null) {
+			if (state.hasProperty(ChestBlock.TYPE) && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
+				level.setBlock(pos, state.setValue(ChestBlock.TYPE, ChestType.SINGLE), BLOCK_UPDATE_FLAGS);
+			}
+
+			return;
+		}
+
+		BlockPos adjacentPos = pos.relative(adjacentDirection);
+		BlockState adjacentState = level.getBlockState(adjacentPos);
+		ChestType chestType = chestTypeForFacingAndAdjacentDirection(facing, adjacentDirection);
+		ChestType adjacentType = chestType == ChestType.LEFT ? ChestType.RIGHT : ChestType.LEFT;
+
+		level.setBlock(pos, state.setValue(ChestBlock.TYPE, chestType), BLOCK_UPDATE_FLAGS);
+		level.setBlock(adjacentPos, adjacentState.setValue(ChestBlock.TYPE, adjacentType), BLOCK_UPDATE_FLAGS);
+	}
+
+	private static ChestType chestTypeForFacingAndAdjacentDirection(Direction chestFacing, Direction adjacentDirection) {
+		if (adjacentDirection == chestFacing.getClockWise()) {
+			return ChestType.LEFT;
+		}
+
+		if (adjacentDirection == chestFacing.getCounterClockWise()) {
+			return ChestType.RIGHT;
+		}
+
+		return ChestType.SINGLE;
 	}
 
 	private static SettlementBuildSite createPendingBuildSite(
@@ -3678,6 +3876,22 @@ public final class SettlementConstruction {
 			tick,
 			tick
 		);
+	}
+
+	private static boolean anchoredWorkstationStillMapsToBlueprint(SettlementBuildSite buildSite, StructureKind structureKind, BlockPos workstationPos) {
+		if (!buildSite.anchorPos().equals(workstationPos) || !buildSite.workstationPos().equals(workstationPos)) {
+			return false;
+		}
+
+		String position = relativeBlueprintPositionFromWorld(buildSite.origin(), buildSite.facing(), workstationPos);
+		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(position);
+
+		if (relativePos == null) {
+			return false;
+		}
+
+		StructureBlueprint blueprint = blueprintFor(structureKind);
+		return isAnchoredWorkstationSymbol(structureKind, blueprintSymbolAt(blueprint, relativePos.right(), relativePos.forward(), relativePos.up()), relativePos.up());
 	}
 
 	public static SettlementBuildSite updateBuildSiteMaterialStatus(SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {

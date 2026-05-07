@@ -15,6 +15,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
@@ -883,6 +884,7 @@ public final class SettlementConstructionWork {
 
 			if (normalizedWorld) {
 				level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
+				SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 			}
 
 			return ConstructionActionResult.blockStatusChanged(
@@ -922,6 +924,7 @@ public final class SettlementConstructionWork {
 		}
 
 		level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
+		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 		return ConstructionActionResult.placed(
 			updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
 			!hasDelivery
@@ -953,10 +956,12 @@ public final class SettlementConstructionWork {
 		if (currentMatches && pairedMatches) {
 			if (shouldNormalizeToPlannedState(task.buildSite(), block, currentState, plannedState)) {
 				level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
+				SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 			}
 
 			if (shouldNormalizeToPlannedState(task.buildSite(), pairedBlock.block(), pairedCurrentState, pairedPlannedState)) {
 				level.setBlock(pairedPos.get(), pairedPlannedState, BLOCK_UPDATE_FLAGS);
+				SettlementConstruction.updateChestStateAfterPlacement(level, pairedPos.get());
 			}
 
 			return ConstructionActionResult.blockStatusChanged(
@@ -1017,6 +1022,8 @@ public final class SettlementConstructionWork {
 
 		level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
 		level.setBlock(pairedPos.get(), pairedPlannedState, BLOCK_UPDATE_FLAGS);
+		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
+		SettlementConstruction.updateChestStateAfterPlacement(level, pairedPos.get());
 		return ConstructionActionResult.placed(
 			updateTwoBlockStatuses(
 				task.buildSite(),
@@ -1063,7 +1070,7 @@ public final class SettlementConstructionWork {
 					case MINE_ENTRANCE -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
-					case TRADING_POST -> relativePosition(2, -1, 1);
+					case TRADING_POST -> relativePosition(-1, -3, 1);
 				};
 		}
 
@@ -1123,8 +1130,8 @@ public final class SettlementConstructionWork {
 				&& relativePos.forward() == 1
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
-				&& relativePos.right() == 1
-				&& relativePos.forward() == -1
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -2
 				&& relativePos.up() == 1);
 	}
 
@@ -1158,8 +1165,8 @@ public final class SettlementConstructionWork {
 				&& relativePos.forward() == 0
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
-				&& relativePos.right() == 2
-				&& relativePos.forward() == -1
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -3
 				&& relativePos.up() == 1);
 	}
 
@@ -1210,6 +1217,14 @@ public final class SettlementConstructionWork {
 			return doorStatesMatchIntent(currentState, plannedState);
 		}
 
+		if (currentState.getBlock() instanceof FenceGateBlock && plannedState.getBlock() instanceof FenceGateBlock) {
+			return gateStatesMatchIntent(currentState, plannedState);
+		}
+
+		if (currentState.getBlock() instanceof ChestBlock && plannedState.getBlock() instanceof ChestBlock) {
+			return chestStatesMatchIntent(currentState, plannedState);
+		}
+
 		if (requiresExactState(currentState) || requiresExactState(plannedState)) {
 			return currentState.equals(plannedState);
 		}
@@ -1239,6 +1254,10 @@ public final class SettlementConstructionWork {
 			return doorStatesMatchIntent(currentState, plannedState);
 		}
 
+		if (currentState.getBlock() instanceof FenceGateBlock && plannedState.getBlock() instanceof FenceGateBlock) {
+			return gateStatesMatchIntent(currentState, plannedState);
+		}
+
 		if (isCompatiblePlacedBlock(currentState, plannedState)) {
 			return true;
 		}
@@ -1262,6 +1281,18 @@ public final class SettlementConstructionWork {
 			return false;
 		}
 
+		if (currentState.getBlock() instanceof FenceGateBlock
+			&& plannedState.getBlock() instanceof FenceGateBlock
+			&& gateStatesMatchIntent(currentState, plannedState)) {
+			return false;
+		}
+
+		if (currentState.getBlock() instanceof ChestBlock
+			&& plannedState.getBlock() instanceof ChestBlock
+			&& chestStatesMatchIntent(currentState, plannedState)) {
+			return false;
+		}
+
 		return !currentState.equals(plannedState)
 			&& !SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
@@ -1275,6 +1306,20 @@ public final class SettlementConstructionWork {
 			&& currentState.hasProperty(DoorBlock.HALF)
 			&& plannedState.hasProperty(DoorBlock.HALF)
 			&& currentState.getValue(DoorBlock.HALF) == plannedState.getValue(DoorBlock.HALF);
+	}
+
+	private static boolean gateStatesMatchIntent(BlockState currentState, BlockState plannedState) {
+		return currentState.is(plannedState.getBlock())
+			&& currentState.hasProperty(FenceGateBlock.FACING)
+			&& plannedState.hasProperty(FenceGateBlock.FACING)
+			&& currentState.getValue(FenceGateBlock.FACING) == plannedState.getValue(FenceGateBlock.FACING);
+	}
+
+	private static boolean chestStatesMatchIntent(BlockState currentState, BlockState plannedState) {
+		return currentState.is(plannedState.getBlock())
+			&& currentState.hasProperty(ChestBlock.FACING)
+			&& plannedState.hasProperty(ChestBlock.FACING)
+			&& currentState.getValue(ChestBlock.FACING) == plannedState.getValue(ChestBlock.FACING);
 	}
 
 	private static boolean isIntegratedMineEntranceStone(

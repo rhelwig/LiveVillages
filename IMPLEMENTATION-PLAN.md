@@ -96,6 +96,7 @@ Focus:
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
 - add a later `Tier 3+` luxury-upgrade pass where a few profession structures can prefer imported foreign-biome style variants to create prestige-material trade demand
 - keep blueprint symbols explicit for contributors; reserve shorthand aliases like `C` for backward compatibility only
+- keep directional blueprint row order standardized for contributors: first row is the rear, last row is the front unless an inline comment documents an intentional exception
 - keep a contributor-friendly blueprint authoring guide so non-technical builders can supply layered structure designs without reading Java internals
 - keep `Mason` as pending follow-up for stone labor, repairs, fortification work, and higher-tier material-upgrade passes
 

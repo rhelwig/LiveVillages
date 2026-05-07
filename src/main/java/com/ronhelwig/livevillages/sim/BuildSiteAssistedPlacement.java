@@ -198,6 +198,7 @@ public final class BuildSiteAssistedPlacement {
 
 		if (plannedState != null) {
 			level.setBlock(pos, assistedPlacementState(plannedState, block.expectedMaterialKey(), stack), BLOCK_UPDATE_FLAGS);
+			SettlementConstruction.updateChestStateAfterPlacement(level, pos);
 		}
 	}
 

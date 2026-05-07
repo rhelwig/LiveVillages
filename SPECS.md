@@ -181,30 +181,36 @@ Profession structures can expose targeted trades that fill gaps left by the Trad
 - A completed `Trading Post` may later be upgraded to better stone. Upgrades follow the same visible construction rules: villagers remove old blocks and replace them one block at a time when the settlement has enough better material.
 - The same site should be upgradeable later into a larger `Shopping Mall` tier rather than requiring a different workstation block.
 
-The first-tier footprint is `5x8`. These layer diagrams are authoritative for placement and composition. `A` means air or an intentionally empty block.
+The first-tier footprint is `5x8`. These layer diagrams are authoritative for placement and composition. `A` means air or an intentionally empty block. As with the other directional structure diagrams, the first row is the back of the building and the last row is the front.
 
 Floor:
 
 ```text
 M = cobblestone or better
 
-MMMMMMMM
-MMMMMMMM
-MMMMMMMM
-MMMMMMMM
-MMMMMMMM
+MMMMM
+MMMMM
+MMMMM
+MMMMM
+MMMMM
+MMMMM
+MMMMM
+MMMMM
 ```
 
 1st level:
 
 ```text
-M = cobblestone or better, W = Trade Board, L = log, P = planks, B = bed, D = door, F = fence, G = fence gate, A = air
+M = cobblestone or better, W = Trade Board, L = log, P = planks, B = bed, D = door, F = fence, G = fence gate, H = chest, A = air
 
-LFGLMMML
-FAAMABBM
-WAADAAAM
-FAAMAAAM
-LFGLMMML
+LMMML
+MBAHM
+MBAHM
+MAAAM
+LMDML
+GAAAG
+FAAAF
+LFWFL
 ```
 
 2nd level:
@@ -212,11 +218,14 @@ LFGLMMML
 ```text
 L = log, P = planks, D = door, V = glass block, A = air
 
-LAALPVPL
-AAAVAAAV
-AAADAAAV
-AAAVAAAV
-LAALPVPL
+LVVVL
+PAAAP
+VAAAV
+PAAAP
+LVDVL
+AAAAA
+AAAAA
+LAAAL
 ```
 
 3rd level:
@@ -224,11 +233,14 @@ LAALPVPL
 ```text
 L = log, P = planks, S = upside-down stair, T = wall torch, A = air
 
-LSSLPPPL
-AAAPAAAP
-AAAPAATP
-AAAPAAAP
-LSSLPPPL
+LPPPL
+PATAP
+PAAAP
+PAAAP
+LPPPL
+SAAAS
+SAAAS
+LSSSL
 ```
 
 4th level:
@@ -236,11 +248,14 @@ LSSLPPPL
 ```text
 P = planks, B = slab, S = stair, A = air
 
-BBBSPPPS
-BBBSAAAS
-BBBSAAAS
-BBBSAAAS
-BBBSPPPS
+SSSSS
+PAAAP
+PAAAP
+PAAAP
+SSSSS
+BBBBB
+BBBBB
+BBBBB
 ```
 
 5th level:
@@ -248,11 +263,14 @@ BBBSPPPS
 ```text
 P = planks, S = stair, A = air
 
-AAAASPSA
-AAAASPSA
-AAAASPSA
-AAAASPSA
-AAAASPSA
+AAAAA
+SSSSS
+PPPPP
+SSSSS
+AAAAA
+AAAAA
+AAAAA
+AAAAA
 ```
 
 The stairs on this top roof level should be oriented to form a longitudinal roofline rather than short crosswise ridges.
@@ -264,11 +282,14 @@ The sleeping area should include a wall torch on the wall opposite the door at t
 ```text
 B = slab, A = air
 
-AAAAABAA
-AAAAABAA
-AAAAABAA
-AAAAABAA
-AAAAABAA
+AAAAA
+AAAAA
+BBBBB
+AAAAA
+AAAAA
+AAAAA
+AAAAA
+AAAAA
 ```
 
 ### Visible Settlement Name
