@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.MenuScreens;
 import com.ronhelwig.livevillages.client.hud.SettlementInventoryOverlay;
 import com.ronhelwig.livevillages.client.render.BuildSiteWireframePreview;
 import com.ronhelwig.livevillages.client.render.MilepostBlockEntityRenderer;
+import com.ronhelwig.livevillages.client.render.StructureCaptureHotkey;
 import com.ronhelwig.livevillages.client.render.TradeBoardBlockEntityRenderer;
 import com.ronhelwig.livevillages.client.screen.CarpenterBenchScreen;
 import com.ronhelwig.livevillages.client.screen.FletchingTableScreen;
@@ -29,5 +30,6 @@ public class LiveVillagesClient implements ClientModInitializer {
 		PortmasterMapScreen.registerNetworking();
 		SettlementInventoryOverlay.register();
 		BuildSiteWireframePreview.register();
+		StructureCaptureHotkey.register();
 	}
 }

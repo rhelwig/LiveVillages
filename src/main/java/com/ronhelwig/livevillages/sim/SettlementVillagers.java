@@ -31,6 +31,7 @@ public final class SettlementVillagers {
 	private static final int VILLAGE_RADIUS_BLOCKS = 96;
 	private static final int JOB_SITE_SEARCH_RADIUS_BLOCKS = 48;
 	private static final int CARPENTER_HOME_SEARCH_RADIUS_BLOCKS = 5;
+	private static final int WORKSTATION_HOME_SEARCH_RADIUS_BLOCKS = 5;
 	private static final int HOME_SEARCH_RADIUS_BLOCKS = 96;
 	private static final int CHILDCARE_RADIUS_BLOCKS = 5;
 	private static final int GATHERING_RADIUS_BLOCKS = 12;
@@ -501,23 +502,42 @@ public final class SettlementVillagers {
 			return false;
 		}
 
+		List<SettlementBuildSite> buildSites = LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id());
 		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
-			.sorted(Comparator.comparing(villager -> villager.getUUID().toString()))
+			.sorted(Comparator.comparingInt((Villager villager) -> homeAssignmentPriority(level, villager, buildSites))
+				.thenComparing(villager -> villager.getUUID().toString()))
 			.toList();
 		Set<BlockPos> claimedHomes = new LinkedHashSet<>();
 		boolean changed = false;
 
 		for (Villager villager : villagers) {
-			Optional<BlockPos> currentHome = heldHome(level, villager)
+			Optional<BlockPos> originalHome = heldHome(level, villager);
+			Optional<BlockPos> currentHome = originalHome
 				.filter(home -> isValidHome(level, settlement, home))
 				.filter(home -> !claimedHomes.contains(home));
+			List<BlockPos> preferredHomes = preferredWorkstationHomes(level, villager, buildSites);
+
+			if (currentHome.isPresent() && (preferredHomes.isEmpty() || preferredHomes.contains(currentHome.get()))) {
+				claimedHomes.add(currentHome.get());
+				continue;
+			}
+
+			Optional<BlockPos> preferredHome = preferredHomes.stream()
+				.filter(home -> !claimedHomes.contains(home))
+				.findFirst();
+
+			if (preferredHome.isPresent()) {
+				changed |= assignHome(level, villager, preferredHome.get(), originalHome);
+				claimedHomes.add(preferredHome.get());
+				continue;
+			}
 
 			if (currentHome.isPresent()) {
 				claimedHomes.add(currentHome.get());
 				continue;
 			}
 
-			if (heldHome(level, villager).isPresent()) {
+			if (originalHome.isPresent()) {
 				villager.releasePoi(MemoryModuleType.HOME);
 				villager.getBrain().eraseMemory(MemoryModuleType.HOME);
 				changed = true;
@@ -529,8 +549,7 @@ public final class SettlementVillagers {
 				continue;
 			}
 
-			villager.releasePoi(MemoryModuleType.HOME);
-			villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), home.get()));
+			assignHome(level, villager, home.get(), Optional.empty());
 			claimedHomes.add(home.get());
 			changed = true;
 		}
@@ -1194,6 +1213,22 @@ public final class SettlementVillagers {
 			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(LiveVillagesVillagerProfessions.PORTMASTER_POI)));
 	}
 
+	private static Optional<BlockPos> heldButcherJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos)
+			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(PoiTypes.BUTCHER)));
+	}
+
+	private static Optional<BlockPos> heldCartographerJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos)
+			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(PoiTypes.CARTOGRAPHER)));
+	}
+
 	private static Optional<BlockPos> heldFarmerJobSite(ServerLevel level, Villager villager) {
 		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
 			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
@@ -1234,6 +1269,70 @@ public final class SettlementVillagers {
 			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
 			.map(com.mojang.datafixers.util.Pair::getSecond)
 			.findFirst();
+	}
+
+	private static int homeAssignmentPriority(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
+		return preferredWorkstationHomes(level, villager, buildSites).isEmpty() ? 1 : 0;
+	}
+
+	private static List<BlockPos> preferredWorkstationHomes(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
+		Optional<BlockPos> preferredJobSite = preferredWorkstationHomeJobSite(level, villager, buildSites);
+
+		if (preferredJobSite.isEmpty()) {
+			return List.of();
+		}
+
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.HOME),
+			pos -> true,
+			preferredJobSite.get(),
+			WORKSTATION_HOME_SEARCH_RADIUS_BLOCKS,
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.toList();
+	}
+
+	private static Optional<BlockPos> preferredWorkstationHomeJobSite(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
+		if (isCustomCarpenter(villager)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.CARPENTER_WORKSHOP, () -> heldCarpenterJobSite(level, villager));
+		}
+
+		if (isCustomRoadwright(villager)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.ROADWRIGHT_WORKSHOP, () -> heldRoadwrightJobSite(level, villager));
+		}
+
+		if (isCustomForester(villager)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.FORESTER_WORKSHOP, () -> heldForesterJobSite(level, villager));
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.FLETCHER)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.FLETCHER_HUT, () -> heldFletcherJobSite(level, villager));
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.CARTOGRAPHER)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.CARTOGRAPHER_HOUSE, () -> heldCartographerJobSite(level, villager));
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.BUTCHER_SHOP, () -> heldButcherJobSite(level, villager));
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BlockPos> preferredWorkstationHomeJobSite(
+		ServerLevel level,
+		Villager villager,
+		List<SettlementBuildSite> buildSites,
+		SettlementBuildSiteType expectedBuildSiteType,
+		java.util.function.Supplier<Optional<BlockPos>> heldJobSite
+	) {
+		return heldJobSite.get()
+			.filter(jobSite -> buildSites.stream()
+				.anyMatch(buildSite -> buildSite.blueprintId() == expectedBuildSiteType && buildSite.workstationPos().equals(jobSite)));
 	}
 
 	private static Optional<BlockPos> findReachableCarpenterJobSite(ServerLevel level, Villager villager) {
@@ -1454,6 +1553,16 @@ public final class SettlementVillagers {
 		)
 			.map(com.mojang.datafixers.util.Pair::getSecond)
 			.findFirst();
+	}
+
+	private static boolean assignHome(ServerLevel level, Villager villager, BlockPos homePos, Optional<BlockPos> currentHome) {
+		if (currentHome.filter(homePos::equals).isPresent()) {
+			return false;
+		}
+
+		villager.releasePoi(MemoryModuleType.HOME);
+		villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), homePos));
+		return true;
 	}
 
 	private static Optional<BlockPos> heldHome(ServerLevel level, Villager villager) {

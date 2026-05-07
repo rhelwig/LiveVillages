@@ -74,6 +74,7 @@ Focus:
 - bell response should separate noncombatant panic from rally behavior for combat-capable professions
 - bell influence radius should be `max(25, half settlement radius)` rather than a tiny fixed center
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
+- keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
 
 ### 4. Construction And Profession Structures
@@ -85,11 +86,13 @@ Focus:
 - continue turning staged construction into generic reusable infrastructure instead of a set of one-off structure rules
 - add generic duplicate suppression, repair reopening, and upgrade handling across all staged structure types
 - make structure blueprints and retrofit logic tier-aware without requiring every tier bump to place a duplicate building
+- keep the first-pass authoring capture tool bounded and text-export oriented: capture the looked-at structure, normalize facing/layers, write a file for later curation, and avoid turning the first implementation into a full editor
 - make the first-pass `Tier 1` palisade concrete: log wall at least `4` blocks high, interior slab firing walk below the top log, torch spacing about every `10` blocks, stair access about every `30` blocks, and simple path-aligned gatehouses
 - keep early fortification radius smaller for starter villages, with `Tier 1` aiming for about `80%` of settlement radius before later tiers expand toward the full radius
 - keep preview and site-validation logic permissive for removable natural vegetation so trees or brush do not falsely block otherwise valid builds
 - let build previews distinguish exact block matches from compatible wrong-material matches, and let compatible player materials complete structures without blocking functionality
 - keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, and later broader tunnel-expansion behavior
+- keep profession-linked housing sticky where structures provide beds, while leaving Miners dependent on ordinary settlement housing rather than inventing beds in the `Mine Entrance`
 - keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow

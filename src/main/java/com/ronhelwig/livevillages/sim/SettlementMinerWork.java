@@ -28,6 +28,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public final class SettlementMinerWork {
 	private static final long DAY_TICKS = 24_000L;
+	private static final long VILLAGE_GATHERING_START_TICK = 9_000L;
 	private static final long VILLAGE_REST_START_TICK = 12_000L;
 	private static final double MINING_WORK_REACH_DISTANCE_SQUARED = 6.25D;
 	private static final double SHAFT_ENTRY_SNAP_DISTANCE_SQUARED = 25.0D;
@@ -77,7 +78,7 @@ public final class SettlementMinerWork {
 				continue;
 			}
 
-			if (isVillageRestTime(level)) {
+			if (isVillageGatheringTime(level) || isVillageRestTime(level)) {
 				ACTIVE_TASKS.remove(miner.getUUID().toString());
 				moveMinerTowardSurface(level, miner, mineSite.get());
 				continue;
@@ -818,6 +819,15 @@ public final class SettlementMinerWork {
 		BlockPos surfaceLadderPos = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), -1);
 
 		if (currentPos.getY() >= surfaceLadderPos.getY()) {
+			if (currentPos.getX() == surfaceLadderPos.getX() && currentPos.getZ() == surfaceLadderPos.getZ()) {
+				Optional<BlockPos> exitPos = surfaceExitPos(level, mineSite);
+
+				if (exitPos.isPresent()) {
+					miner.getNavigation().stop();
+					miner.setPos(exitPos.get().getX() + 0.5D, exitPos.get().getY(), exitPos.get().getZ() + 0.5D);
+				}
+			}
+
 			return;
 		}
 
@@ -977,6 +987,40 @@ public final class SettlementMinerWork {
 	private static boolean isVillageRestTime(ServerLevel level) {
 		long dayTime = Math.floorMod(level.getOverworldClockTime(), DAY_TICKS);
 		return dayTime >= VILLAGE_REST_START_TICK;
+	}
+
+	private static boolean isVillageGatheringTime(ServerLevel level) {
+		long dayTime = Math.floorMod(level.getOverworldClockTime(), DAY_TICKS);
+		return dayTime >= VILLAGE_GATHERING_START_TICK && dayTime < VILLAGE_REST_START_TICK;
+	}
+
+	private static Optional<BlockPos> surfaceExitPos(ServerLevel level, MineSite mineSite) {
+		BlockPos surfaceLadderPos = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), -1);
+		List<BlockPos> candidates = new ArrayList<>();
+		BlockPos workstationPos = mineSite.buildSite().workstationPos();
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			candidates.add(surfaceLadderPos.relative(direction));
+		}
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			candidates.add(workstationPos.relative(direction));
+		}
+
+		candidates.add(workstationPos.above());
+
+		return candidates.stream()
+			.filter(candidate -> candidate.getY() >= surfaceLadderPos.getY())
+			.filter(candidate -> isStandableSurfaceCell(level, candidate))
+			.sorted(Comparator.comparingDouble(candidate -> candidate.distSqr(workstationPos)))
+			.findFirst()
+			.map(BlockPos::immutable);
+	}
+
+	private static boolean isStandableSurfaceCell(ServerLevel level, BlockPos pos) {
+		return level.getBlockState(pos).isAir()
+			&& level.getBlockState(pos.above()).isAir()
+			&& level.getBlockState(pos.below()).isSolid();
 	}
 
 	private static BlockState findTemplateLadderState(ServerLevel level, SettlementBuildSite buildSite, ShaftLayout layout) {

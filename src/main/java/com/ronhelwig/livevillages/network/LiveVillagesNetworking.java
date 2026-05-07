@@ -44,6 +44,7 @@ import com.ronhelwig.livevillages.sim.SettlementRoadwrightWork;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementTradeRange;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
+import com.ronhelwig.livevillages.sim.StructureBlueprintCapture;
 
 public final class LiveVillagesNetworking {
 	private static final double OVERLAY_MAX_DISTANCE_BLOCKS = 192.0D;
@@ -72,6 +73,7 @@ public final class LiveVillagesNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(SettlementOverlayRequestPayload.TYPE, SettlementOverlayRequestPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(SettlementOverlayStatePayload.TYPE, SettlementOverlayStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(BuildSitePreviewRequestPayload.TYPE, BuildSitePreviewRequestPayload.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(StructureCaptureRequestPayload.TYPE, StructureCaptureRequestPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BuildSitePreviewStatePayload.TYPE, BuildSitePreviewStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(TradeBoardRefreshPayload.TYPE, TradeBoardRefreshPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(SurveyorMapStatePayload.TYPE, SurveyorMapStatePayload.STREAM_CODEC);
@@ -91,6 +93,9 @@ public final class LiveVillagesNetworking {
 			BuildSitePreviewSnapshot snapshot = buildBuildSitePreviewSnapshot(context.player(), payload.targetPos());
 			ServerPlayNetworking.send(context.player(), new BuildSitePreviewStatePayload(snapshot));
 		});
+		ServerPlayNetworking.registerGlobalReceiver(StructureCaptureRequestPayload.TYPE, (payload, context) ->
+			StructureBlueprintCapture.exportLookedAtStructure(context.player(), payload.targetPos())
+		);
 	}
 
 	public static boolean isBuildSitePreviewActive(ServerPlayer player) {
