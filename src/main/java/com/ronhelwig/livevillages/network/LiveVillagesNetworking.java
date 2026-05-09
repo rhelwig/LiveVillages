@@ -583,11 +583,13 @@ public final class LiveVillagesNetworking {
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition())));
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			preview.statusMessage(),
 			settlement.get().name(),
 			preview.previewId(),
 			preview.previewType(),
 			distanceBlocks,
 			preview.placementValid(),
+			preview.blockerPositions(),
 			preview.blocks().stream()
 				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
 				.toList()
@@ -653,11 +655,13 @@ public final class LiveVillagesNetworking {
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(bestCandidate.distanceSquared()));
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			bestCandidate.preview().statusMessage(),
 			bestCandidate.settlement().name(),
 			bestCandidate.preview().previewId(),
 			bestCandidate.preview().previewType(),
 			distanceBlocks,
 			bestCandidate.preview().placementValid(),
+			bestCandidate.preview().blockerPositions(),
 			bestCandidate.preview().blocks().stream()
 				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
 					.toList()
@@ -704,11 +708,13 @@ public final class LiveVillagesNetworking {
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(anchorPos.distSqr(player.blockPosition())));
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			preview.statusMessage(),
 			settlement.get().name(),
 			preview.previewId(),
 			preview.previewType(),
 			distanceBlocks,
 			preview.placementValid(),
+			preview.blockerPositions(),
 			preview.blocks().stream()
 				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
 					.toList()

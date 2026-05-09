@@ -382,16 +382,16 @@ public final class SettlementLoadedObservation {
 			return "trail";
 		}
 
-		if (state.is(Blocks.GRAVEL)) {
-			return "gravel";
-		}
-
-		if (state.is(Blocks.COBBLESTONE) || state.is(Blocks.COBBLESTONE_STAIRS) || state.is(Blocks.COBBLESTONE_SLAB) || state.is(Blocks.STONE) || state.is(Blocks.STONE_STAIRS) || state.is(Blocks.STONE_SLAB)) {
+		if (state.is(Blocks.COBBLESTONE) || state.is(Blocks.COBBLESTONE_STAIRS) || state.is(Blocks.COBBLESTONE_SLAB)) {
 			return "cobble";
 		}
 
-		if (state.is(Blocks.STONE_BRICKS) || state.is(Blocks.STONE_BRICK_STAIRS) || state.is(Blocks.STONE_BRICK_SLAB) || state.is(Blocks.BRICKS) || state.is(Blocks.BRICK_STAIRS) || state.is(Blocks.BRICK_SLAB) || state.is(Blocks.SMOOTH_STONE) || state.is(Blocks.SMOOTH_STONE_SLAB)) {
-			return "finished";
+		if (state.is(Blocks.SMOOTH_STONE) || state.is(Blocks.SMOOTH_STONE_SLAB) || state.is(Blocks.STONE_STAIRS) || state.is(Blocks.STONE_SLAB)) {
+			return "smooth";
+		}
+
+		if (state.is(Blocks.STONE_BRICKS) || state.is(Blocks.STONE_BRICK_STAIRS) || state.is(Blocks.STONE_BRICK_SLAB) || state.is(Blocks.BRICKS) || state.is(Blocks.BRICK_STAIRS) || state.is(Blocks.BRICK_SLAB)) {
+			return "brick";
 		}
 
 		return "";

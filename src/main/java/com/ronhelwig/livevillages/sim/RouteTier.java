@@ -7,8 +7,10 @@ import net.minecraft.util.StringRepresentable;
 public enum RouteTier implements StringRepresentable {
 	NONE("none"),
 	TRAIL("trail"),
+	// Legacy tier kept for save compatibility; new road surveying should not produce it.
 	GRAVEL("gravel"),
 	COBBLE("cobble"),
+	SMOOTH_STONE("smooth_stone"),
 	BRICK("brick"),
 	RIVER("river"),
 	CANAL("canal"),

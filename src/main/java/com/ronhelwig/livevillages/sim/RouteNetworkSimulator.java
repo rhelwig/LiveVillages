@@ -86,8 +86,8 @@ public final class RouteNetworkSimulator {
 
 	private static SurveyStats collectSurveyStats(ServerLevel level, BlockPos from, BlockPos to, int sampleCount) {
 		int pathSamples = 0;
-		int gravelSamples = 0;
 		int cobbleSamples = 0;
+		int smoothStoneSamples = 0;
 		int brickSamples = 0;
 		int loadedSamples = 0;
 
@@ -105,16 +105,16 @@ public final class RouteNetworkSimulator {
 
 			if (sample.kind() == RoadSampleKind.BRICK) {
 				brickSamples++;
+			} else if (sample.kind() == RoadSampleKind.SMOOTH_STONE) {
+				smoothStoneSamples++;
 			} else if (sample.kind() == RoadSampleKind.COBBLE) {
 				cobbleSamples++;
-			} else if (sample.kind() == RoadSampleKind.GRAVEL) {
-				gravelSamples++;
 			} else if (sample.kind() == RoadSampleKind.TRAIL) {
 				pathSamples++;
 			}
 		}
 
-		return new SurveyStats(loadedSamples, pathSamples, gravelSamples, cobbleSamples, brickSamples);
+		return new SurveyStats(loadedSamples, pathSamples, cobbleSamples, smoothStoneSamples, brickSamples);
 	}
 
 	private static RoadSample bestRoadSampleNear(ServerLevel level, int x, int z, int referenceY) {
@@ -166,12 +166,12 @@ public final class RouteNetworkSimulator {
 			return RoadSampleKind.BRICK;
 		}
 
-		if (isCobbleRoad(surfaceState, belowState)) {
-			return RoadSampleKind.COBBLE;
+		if (isSmoothStoneRoad(surfaceState, belowState)) {
+			return RoadSampleKind.SMOOTH_STONE;
 		}
 
-		if (isGravelRoad(surfaceState, belowState)) {
-			return RoadSampleKind.GRAVEL;
+		if (isCobbleRoad(surfaceState, belowState)) {
+			return RoadSampleKind.COBBLE;
 		}
 
 		if (isTrail(surfaceState, belowState)) {
@@ -402,6 +402,7 @@ public final class RouteNetworkSimulator {
 			case TRAIL -> 0.25D;
 			case GRAVEL -> 0.75D;
 			case COBBLE, RIVER -> 1.25D;
+			case SMOOTH_STONE -> 1.50D;
 			case BRICK, CANAL -> 1.75D;
 			case SEA_LANE -> 2.25D;
 		};
@@ -416,12 +417,12 @@ public final class RouteNetworkSimulator {
 			return RouteTier.BRICK;
 		}
 
-		if (surveyStats.brickSamples() + surveyStats.cobbleSamples() >= Math.max(2, surveyStats.loadedSamples() / 4)) {
-			return RouteTier.COBBLE;
+		if (surveyStats.smoothStoneSamples() >= Math.max(2, surveyStats.loadedSamples() / 4)) {
+			return RouteTier.SMOOTH_STONE;
 		}
 
-		if (surveyStats.brickSamples() + surveyStats.cobbleSamples() + surveyStats.gravelSamples() >= Math.max(2, surveyStats.loadedSamples() / 4)) {
-			return RouteTier.GRAVEL;
+		if (surveyStats.smoothStoneSamples() + surveyStats.cobbleSamples() >= Math.max(2, surveyStats.loadedSamples() / 4)) {
+			return RouteTier.COBBLE;
 		}
 
 		if (surveyStats.pathSamples() > 0) {
@@ -437,8 +438,8 @@ public final class RouteNetworkSimulator {
 		}
 
 		double pavedSamples = surveyStats.pathSamples()
-			+ surveyStats.gravelSamples() * 1.2D
 			+ surveyStats.cobbleSamples() * 1.5D
+			+ surveyStats.smoothStoneSamples() * 1.65D
 			+ surveyStats.brickSamples() * 1.8D;
 		double coverage = pavedSamples / (surveyStats.loadedSamples() * 1.8D);
 		double distancePenalty = Math.min(0.18D, distanceBlocks / 8_192.0D);
@@ -456,6 +457,7 @@ public final class RouteNetworkSimulator {
 			case TRAIL -> 64;
 			case GRAVEL -> 84;
 			case COBBLE -> 112;
+			case SMOOTH_STONE -> 128;
 			case BRICK -> 144;
 			case RIVER -> 128;
 			case CANAL -> 164;
@@ -471,6 +473,7 @@ public final class RouteNetworkSimulator {
 			case TRAIL -> 0.40D;
 			case GRAVEL -> 0.55D;
 			case COBBLE -> 0.72D;
+			case SMOOTH_STONE -> 0.78D;
 			case BRICK -> 0.84D;
 			case RIVER -> 0.72D;
 			case CANAL -> 0.84D;
@@ -485,37 +488,36 @@ public final class RouteNetworkSimulator {
 			|| surfaceState.is(Blocks.DIRT);
 	}
 
-	private static boolean isGravelRoad(BlockState surfaceState, BlockState belowState) {
-		return surfaceState.is(Blocks.GRAVEL) || belowState.is(Blocks.GRAVEL);
-	}
-
 	private static boolean isCobbleRoad(BlockState surfaceState, BlockState belowState) {
 		return surfaceState.is(Blocks.COBBLESTONE)
 			|| surfaceState.is(Blocks.MOSSY_COBBLESTONE)
 			|| surfaceState.is(Blocks.COBBLESTONE_SLAB)
 			|| surfaceState.is(Blocks.COBBLESTONE_STAIRS)
-			|| surfaceState.is(Blocks.STONE)
-			|| surfaceState.is(Blocks.STONE_SLAB)
-			|| surfaceState.is(Blocks.STONE_STAIRS)
 			|| isWoodenBridgeDeck(surfaceState)
 			|| belowState.is(Blocks.COBBLESTONE)
 			|| belowState.is(Blocks.MOSSY_COBBLESTONE)
-			|| belowState.is(Blocks.STONE)
 			|| isWoodenBridgeDeck(belowState);
+	}
+
+	private static boolean isSmoothStoneRoad(BlockState surfaceState, BlockState belowState) {
+		return surfaceState.is(Blocks.SMOOTH_STONE)
+			|| surfaceState.is(Blocks.SMOOTH_STONE_SLAB)
+			|| surfaceState.is(Blocks.STONE_SLAB)
+			|| surfaceState.is(Blocks.STONE_STAIRS)
+			|| belowState.is(Blocks.SMOOTH_STONE);
 	}
 
 	private static boolean isBrickRoad(BlockState surfaceState, BlockState belowState) {
 		return surfaceState.is(Blocks.BRICKS)
 			|| surfaceState.is(Blocks.BRICK_SLAB)
+			|| surfaceState.is(Blocks.BRICK_STAIRS)
 			|| surfaceState.is(Blocks.STONE_BRICKS)
 			|| surfaceState.is(Blocks.MOSSY_STONE_BRICKS)
 			|| surfaceState.is(Blocks.STONE_BRICK_SLAB)
-			|| surfaceState.is(Blocks.SMOOTH_STONE)
-			|| surfaceState.is(Blocks.SMOOTH_STONE_SLAB)
+			|| surfaceState.is(Blocks.STONE_BRICK_STAIRS)
 			|| belowState.is(Blocks.BRICKS)
 			|| belowState.is(Blocks.STONE_BRICKS)
-			|| belowState.is(Blocks.MOSSY_STONE_BRICKS)
-			|| belowState.is(Blocks.SMOOTH_STONE);
+			|| belowState.is(Blocks.MOSSY_STONE_BRICKS);
 	}
 
 	private static boolean isWoodenBridgeDeck(BlockState state) {
@@ -571,14 +573,14 @@ public final class RouteNetworkSimulator {
 	public record RouteAdvanceResult(RouteState route, SettlementState fromSettlement, SettlementState toSettlement) {
 	}
 
-	private record SurveyStats(int loadedSamples, int pathSamples, int gravelSamples, int cobbleSamples, int brickSamples) {
+	private record SurveyStats(int loadedSamples, int pathSamples, int cobbleSamples, int smoothStoneSamples, int brickSamples) {
 	}
 
 	private enum RoadSampleKind {
 		NONE(0),
 		TRAIL(1),
-		GRAVEL(2),
-		COBBLE(3),
+		COBBLE(2),
+		SMOOTH_STONE(3),
 		BRICK(4);
 
 		private final int weight;

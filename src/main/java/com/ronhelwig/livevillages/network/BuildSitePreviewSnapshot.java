@@ -6,6 +6,8 @@ import java.util.Objects;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import net.minecraft.core.BlockPos;
+
 public record BuildSitePreviewSnapshot(
 	String statusMessage,
 	String settlementName,
@@ -14,6 +16,7 @@ public record BuildSitePreviewSnapshot(
 	int distanceBlocks,
 	boolean prospective,
 	boolean placementValid,
+	List<BlockPos> blockerPositions,
 	List<BuildSitePreviewBlockView> blocks
 ) {
 	public static final Codec<BuildSitePreviewSnapshot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -24,6 +27,7 @@ public record BuildSitePreviewSnapshot(
 		Codec.INT.optionalFieldOf("distance_blocks", -1).forGetter(BuildSitePreviewSnapshot::distanceBlocks),
 		Codec.BOOL.optionalFieldOf("prospective", false).forGetter(BuildSitePreviewSnapshot::prospective),
 		Codec.BOOL.optionalFieldOf("placement_valid", true).forGetter(BuildSitePreviewSnapshot::placementValid),
+		BlockPos.CODEC.listOf().optionalFieldOf("blocker_positions", List.of()).forGetter(BuildSitePreviewSnapshot::blockerPositions),
 		BuildSitePreviewBlockView.CODEC.listOf().optionalFieldOf("blocks", List.of()).forGetter(BuildSitePreviewSnapshot::blocks)
 	).apply(instance, BuildSitePreviewSnapshot::new));
 
@@ -32,11 +36,12 @@ public record BuildSitePreviewSnapshot(
 		Objects.requireNonNull(settlementName, "settlementName");
 		Objects.requireNonNull(buildSiteId, "buildSiteId");
 		Objects.requireNonNull(buildSiteType, "buildSiteType");
+		blockerPositions = blockerPositions.stream().map(BlockPos::immutable).toList();
 		blocks = List.copyOf(blocks);
 	}
 
 	public static BuildSitePreviewSnapshot unavailable(String statusMessage) {
-		return new BuildSitePreviewSnapshot(statusMessage, "", "", "", -1, false, false, List.of());
+		return new BuildSitePreviewSnapshot(statusMessage, "", "", "", -1, false, false, List.of(), List.of());
 	}
 
 	public static BuildSitePreviewSnapshot active(
@@ -46,18 +51,20 @@ public record BuildSitePreviewSnapshot(
 		int distanceBlocks,
 		List<BuildSitePreviewBlockView> blocks
 	) {
-		return new BuildSitePreviewSnapshot("", settlementName, buildSiteId, buildSiteType, distanceBlocks, false, true, blocks);
+		return new BuildSitePreviewSnapshot("", settlementName, buildSiteId, buildSiteType, distanceBlocks, false, true, List.of(), blocks);
 	}
 
 	public static BuildSitePreviewSnapshot prospective(
+		String statusMessage,
 		String settlementName,
 		String buildSiteId,
 		String buildSiteType,
 		int distanceBlocks,
 		boolean placementValid,
+		List<BlockPos> blockerPositions,
 		List<BuildSitePreviewBlockView> blocks
 	) {
-		return new BuildSitePreviewSnapshot("", settlementName, buildSiteId, buildSiteType, distanceBlocks, true, placementValid, blocks);
+		return new BuildSitePreviewSnapshot(statusMessage, settlementName, buildSiteId, buildSiteType, distanceBlocks, true, placementValid, blockerPositions, blocks);
 	}
 
 	public boolean available() {

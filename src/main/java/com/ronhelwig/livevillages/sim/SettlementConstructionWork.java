@@ -225,6 +225,28 @@ public final class SettlementConstructionWork {
 			char currentSymbol = SettlementConstruction.currentBlueprintSymbol(buildSite, block);
 
 			if (currentSymbol == 'A') {
+				if (SettlementConstruction.isStructureMarginGroundBackfillBlock(block)) {
+					SettlementBuildBlockState updatedBlock = block;
+
+					if (SettlementConstruction.matchesStructureMarginGroundReplacement(currentState)) {
+						updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
+					} else if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+						updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
+					} else if (block.status() == SettlementBuildBlockStatus.BLOCKED
+						&& (SettlementConstruction.isBuildSiteReplaceable(currentState)
+							|| SettlementConstruction.canHarvestStructureMarginGroundResource(currentState))) {
+						updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
+					}
+
+					if (!updatedBlock.equals(block)) {
+						changed = true;
+					}
+
+					updatedBlocks.add(updatedBlock);
+					retainedPositions.add(updatedBlock.position());
+					continue;
+				}
+
 				if ("A".equals(block.blueprintSymbol())) {
 					SettlementBuildBlockState updatedBlock = block;
 
@@ -864,6 +886,10 @@ public final class SettlementConstructionWork {
 		long tick,
 		boolean hasDelivery
 	) {
+		if (SettlementConstruction.isStructureMarginGroundBackfillBlock(block)) {
+			return performStructureMarginGroundBackfill(level, stock, task, block, tick);
+		}
+
 		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(task.buildSite(), block);
 
 		if (plannedState == null) {
@@ -928,6 +954,47 @@ public final class SettlementConstructionWork {
 		return ConstructionActionResult.placed(
 			updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
 			!hasDelivery
+		);
+	}
+
+	private static ConstructionActionResult performStructureMarginGroundBackfill(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		ConstructionTask task,
+		SettlementBuildBlockState block,
+		long tick
+	) {
+		BlockState currentState = level.getBlockState(task.targetPos());
+
+		if (SettlementConstruction.matchesStructureMarginGroundReplacement(currentState)) {
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLAYER_PLACED, "", tick),
+				false
+			);
+		}
+
+		if (SettlementConstruction.canHarvestStructureMarginGroundResource(currentState)) {
+			if (SettlementConstruction.tryHarvestStructureMarginGroundResource(level, task.targetPos(), stock)) {
+				return ConstructionActionResult.worldChanged(task.buildSite(), true);
+			}
+
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, "blocked", tick),
+				false
+			);
+		}
+
+		if (currentState.isAir() || SettlementConstruction.isBuildSiteReplaceable(currentState)) {
+			SettlementConstruction.placeStructureMarginGroundReplacement(level, task.targetPos());
+			return ConstructionActionResult.placed(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
+				false
+			);
+		}
+
+		return ConstructionActionResult.blockStatusChanged(
+			updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, "blocked", tick),
+			false
 		);
 	}
 

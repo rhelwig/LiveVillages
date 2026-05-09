@@ -1,8 +1,10 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +31,7 @@ import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StandingSignBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
@@ -58,6 +61,9 @@ public final class SettlementConstruction {
 	private static final int MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS = 140;
 	private static final int MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS = 8;
 	private static final int MIN_STRUCTURE_SPACING_BLOCKS = 3;
+	private static final int MINE_ENTRANCE_FRONT_ACCESS_DEPTH_BLOCKS = 3;
+	private static final int MINE_ENTRANCE_FRONT_ACCESS_HEIGHT_BLOCKS = 2;
+	private static final int MAX_CONSTRUCTION_TREE_BLOCKS = 192;
 	private static final double WORKSTATION_SETTLEMENT_LINK_RADIUS_BLOCKS = 128.0D;
 	private static final int VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS = 64;
 	private static final int VANILLA_WORKSTATION_SCAN_DEPTH_BELOW_SURFACE_BLOCKS = 64;
@@ -73,6 +79,7 @@ public final class SettlementConstruction {
 	private static final int MIN_HARBOR_WATER_SURFACE_COLUMNS = 32;
 	private static final int MIN_HARBOR_DEEP_WATER_COLUMNS = 12;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
+	private static final String STRUCTURE_MARGIN_GROUND_BACKFILL_KEY = "__margin_ground_backfill__";
 	/*
 	 * Blueprint legend:
 	 *
@@ -1246,11 +1253,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			CARPENTER_WORKSHOP_BLUEPRINT.minRight(),
-			CARPENTER_WORKSHOP_BLUEPRINT.maxRight(),
-			CARPENTER_WORKSHOP_BLUEPRINT.minForward(),
-			CARPENTER_WORKSHOP_BLUEPRINT.maxForward(),
-			CARPENTER_WORKSHOP_BLUEPRINT.clearHeight(),
+			StructureKind.CARPENTER_WORKSHOP,
+			CARPENTER_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(benchPos.immutable())
 		);
@@ -1291,11 +1295,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			ROADWRIGHT_WORKSHOP_BLUEPRINT.minRight(),
-			ROADWRIGHT_WORKSHOP_BLUEPRINT.maxRight(),
-			ROADWRIGHT_WORKSHOP_BLUEPRINT.minForward(),
-			ROADWRIGHT_WORKSHOP_BLUEPRINT.maxForward(),
-			ROADWRIGHT_WORKSHOP_BLUEPRINT.clearHeight(),
+			StructureKind.ROADWRIGHT_WORKSHOP,
+			ROADWRIGHT_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(tablePos.immutable())
 		);
@@ -1336,11 +1337,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			FORESTER_WORKSHOP_BLUEPRINT.minRight(),
-			FORESTER_WORKSHOP_BLUEPRINT.maxRight(),
-			FORESTER_WORKSHOP_BLUEPRINT.minForward(),
-			FORESTER_WORKSHOP_BLUEPRINT.maxForward(),
-			FORESTER_WORKSHOP_BLUEPRINT.clearHeight(),
+			StructureKind.FORESTER_WORKSHOP,
+			FORESTER_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(tablePos.immutable())
 		);
@@ -1381,11 +1379,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			MINE_ENTRANCE_BLUEPRINT.minRight(),
-			MINE_ENTRANCE_BLUEPRINT.maxRight(),
-			MINE_ENTRANCE_BLUEPRINT.minForward(),
-			MINE_ENTRANCE_BLUEPRINT.maxForward(),
-			MINE_ENTRANCE_BLUEPRINT.clearHeight(),
+			StructureKind.MINE_ENTRANCE,
+			MINE_ENTRANCE_BLUEPRINT,
 			MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS,
 			MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS,
 			Set.of(workstationPos.immutable())
@@ -1428,11 +1423,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			FLETCHER_HUT_BLUEPRINT.minRight(),
-			FLETCHER_HUT_BLUEPRINT.maxRight(),
-			FLETCHER_HUT_BLUEPRINT.minForward(),
-			FLETCHER_HUT_BLUEPRINT.maxForward(),
-			FLETCHER_HUT_BLUEPRINT.clearHeight(),
+			StructureKind.FLETCHER_HUT,
+			FLETCHER_HUT_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(tablePos.immutable())
 		);
@@ -1473,11 +1465,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			FLETCHER_HUT_BLUEPRINT.minRight(),
-			FLETCHER_HUT_BLUEPRINT.maxRight(),
-			FLETCHER_HUT_BLUEPRINT.minForward(),
-			FLETCHER_HUT_BLUEPRINT.maxForward(),
-			FLETCHER_HUT_BLUEPRINT.clearHeight(),
+			StructureKind.BUTCHER_SHOP,
+			FLETCHER_HUT_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(smokerPos.immutable())
 		);
@@ -1518,11 +1507,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			CARTOGRAPHER_HOUSE_BLUEPRINT.minRight(),
-			CARTOGRAPHER_HOUSE_BLUEPRINT.maxRight(),
-			CARTOGRAPHER_HOUSE_BLUEPRINT.minForward(),
-			CARTOGRAPHER_HOUSE_BLUEPRINT.maxForward(),
-			CARTOGRAPHER_HOUSE_BLUEPRINT.clearHeight(),
+			StructureKind.CARTOGRAPHER_HOUSE,
+			CARTOGRAPHER_HOUSE_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(tablePos.immutable())
 		);
@@ -1596,11 +1582,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			structureFacing,
-			TRADING_POST_BLUEPRINT.minRight(),
-			TRADING_POST_BLUEPRINT.maxRight(),
-			TRADING_POST_BLUEPRINT.minForward(),
-			TRADING_POST_BLUEPRINT.maxForward(),
-			TRADING_POST_BLUEPRINT.clearHeight(),
+			StructureKind.TRADING_POST,
+			TRADING_POST_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
 			Set.of(boardPos.immutable())
 		);
@@ -1890,6 +1873,8 @@ public final class SettlementConstruction {
 			settlementId + ":dock:" + anchorPos.getX() + "_" + anchorPos.getY() + "_" + anchorPos.getZ(),
 			"Dock",
 			site != null,
+			site != null ? "" : "Dock needs deeper adjacent water and shoreline access.",
+			site != null ? List.of() : List.of(anchorPos.immutable()),
 			buildDockPreviewBlocks(level, anchorPos, origin, dockFacing, site != null)
 		);
 	}
@@ -1906,7 +1891,13 @@ public final class SettlementConstruction {
 			Direction.NORTH,
 			0L
 		);
-		return previewBuildSite(previewBuildSite, "Lighthouse", evaluateLighthouseMarkerSite(level, markerPos) != null);
+		return previewBuildSite(
+			previewBuildSite,
+			"Lighthouse",
+			evaluateLighthouseMarkerSite(level, markerPos) != null
+				? PlacementPreviewResult.valid(null)
+				: PlacementPreviewResult.invalid("Lighthouse needs a better shoreline marker site.", markerPos)
+		);
 	}
 
 	public static List<BlockPos> findPlacedCartographyTables(ServerLevel level, SettlementState settlement) {
@@ -2181,15 +2172,12 @@ public final class SettlementConstruction {
 		int maxLandscapingBlocks,
 		int maxTerrainCutBlocks
 	) {
-		AnchoredStructureSite validSite = findAnchoredStructureSite(
+		PlacementPreviewResult placement = evaluateAnchoredStructureSite(
 			level,
 			origin,
 			facing,
-			blueprint.minRight(),
-			blueprint.maxRight(),
-			blueprint.minForward(),
-			blueprint.maxForward(),
-			blueprint.clearHeight(),
+			structureKind,
+			blueprint,
 			maxLandscapingBlocks,
 			maxTerrainCutBlocks,
 			Set.of(anchorPos.immutable())
@@ -2205,7 +2193,7 @@ public final class SettlementConstruction {
 			facing,
 			0L
 		);
-		return previewBuildSite(previewBuildSite, previewType, validSite != null);
+		return previewBuildSite(previewBuildSite, previewType, placement);
 	}
 
 	private static StructurePreview previewDoorAnchoredStructure(
@@ -2220,15 +2208,12 @@ public final class SettlementConstruction {
 	) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = shelterOriginForDoor(doorPos, horizontalFacing);
-		AnchoredStructureSite validSite = findAnchoredStructureSite(
+		PlacementPreviewResult placement = evaluateAnchoredStructureSite(
 			level,
 			origin,
 			horizontalFacing,
-			blueprint.minRight(),
-			blueprint.maxRight(),
-			blueprint.minForward(),
-			blueprint.maxForward(),
-			blueprint.clearHeight(),
+			structureKind,
+			blueprint,
 			maxLandscapingBlocks,
 			Set.of(doorPos.immutable())
 		);
@@ -2243,7 +2228,7 @@ public final class SettlementConstruction {
 			horizontalFacing,
 			0L
 		);
-		return previewBuildSite(previewBuildSite, previewType, validSite != null);
+		return previewBuildSite(previewBuildSite, previewType, placement);
 	}
 
 	private static WorkstationBuildResult tryStartDoorAnchoredStructure(
@@ -2267,11 +2252,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			horizontalFacing,
-			blueprint.minRight(),
-			blueprint.maxRight(),
-			blueprint.minForward(),
-			blueprint.maxForward(),
-			blueprint.clearHeight(),
+			structureKind,
+			blueprint,
 			maxLandscapingBlocks,
 			Set.of(doorPos.immutable())
 		);
@@ -2294,6 +2276,14 @@ public final class SettlementConstruction {
 	}
 
 	private static StructurePreview previewBuildSite(SettlementBuildSite buildSite, String previewType, boolean placementValid) {
+		return previewBuildSite(
+			buildSite,
+			previewType,
+			placementValid ? PlacementPreviewResult.valid(null) : PlacementPreviewResult.invalid("This structure cannot be placed here.", buildSite.origin())
+		);
+	}
+
+	private static StructurePreview previewBuildSite(SettlementBuildSite buildSite, String previewType, PlacementPreviewResult placement) {
 		List<StructurePreviewBlock> blocks = new ArrayList<>();
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
@@ -2301,7 +2291,7 @@ public final class SettlementConstruction {
 			previewBlock.ifPresent(blocks::add);
 		}
 
-		return new StructurePreview(buildSite.id(), previewType, placementValid, blocks);
+		return new StructurePreview(buildSite.id(), previewType, placement.valid(), placement.statusMessage(), placement.blockerPositions(), blocks);
 	}
 
 	private static Optional<StructurePreviewBlock> structurePreviewBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
@@ -2468,6 +2458,7 @@ public final class SettlementConstruction {
 		StructureKind structureKind = structureKindFor(buildSite.blueprintId());
 		StructureBlueprint blueprint = blueprintFor(structureKind);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
+		Set<String> plannedPositions = new HashSet<>();
 
 		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
 			int up = blueprint.minUp() + layerIndex;
@@ -2502,7 +2493,38 @@ public final class SettlementConstruction {
 	}
 
 	public static boolean isBuildSiteReplaceable(BlockState state) {
-		return isReplaceable(state);
+		return isReplaceable(state) || isShovelPathSurface(state);
+	}
+
+	static boolean isStructureMarginGroundBackfillBlock(SettlementBuildBlockState block) {
+		return STRUCTURE_MARGIN_GROUND_BACKFILL_KEY.equals(block.expectedMaterialKey());
+	}
+
+	static boolean matchesStructureMarginGroundReplacement(BlockState state) {
+		if (!state.isSolid() || isNaturalOreBlock(state)) {
+			return false;
+		}
+
+		return isBuildGroundSurface(state) || isShovelPathSurface(state) || isRouteFloorReplacementSurface(state);
+	}
+
+	static boolean tryHarvestStructureMarginGroundResource(ServerLevel level, BlockPos pos, Map<String, Integer> stock) {
+		BlockState state = level.getBlockState(pos);
+
+		if (!canHarvestStructureMarginGroundResource(state)) {
+			return false;
+		}
+
+		clearBlockToWarehouse(level, pos, stock);
+		return true;
+	}
+
+	static boolean canHarvestStructureMarginGroundResource(BlockState state) {
+		return shouldHarvestStructureMarginGroundResource(state);
+	}
+
+	static void placeStructureMarginGroundReplacement(ServerLevel level, BlockPos pos) {
+		level.setBlock(pos, structureMarginGroundReplacementState(level, pos), BLOCK_UPDATE_FLAGS);
 	}
 
 	public static boolean isFlexibleMaterialMatch(BlockState currentState, BlockState plannedState, String materialKey) {
@@ -2540,7 +2562,7 @@ public final class SettlementConstruction {
 			return true;
 		}
 
-		if (!canLandscapeRemove(level, pos, state) && !canRecoverConstructionBlock(level, pos, state)) {
+		if (!canClearForConstruction(level, pos, state)) {
 			return false;
 		}
 
@@ -2621,13 +2643,13 @@ public final class SettlementConstruction {
 			return true;
 		}
 
-		if (isReplaceable(currentState)) {
+		if (isBuildSiteReplaceable(currentState)) {
 			level.setBlock(pos, plannedState, BLOCK_UPDATE_FLAGS);
 			updateChestStateAfterPlacement(level, pos);
 			return true;
 		}
 
-		if (!canLandscapeRemove(level, pos, currentState) && !canRecoverConstructionBlock(level, pos, currentState)) {
+		if (!canClearForConstruction(level, pos, currentState)) {
 			return false;
 		}
 
@@ -2722,11 +2744,8 @@ public final class SettlementConstruction {
 		ServerLevel level,
 		BlockPos origin,
 		Direction facing,
-		int minRight,
-		int maxRight,
-		int minForward,
-		int maxForward,
-		int maxClearHeight,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
 		int maxLandscapingBlocks,
 		Set<BlockPos> protectedPositions
 	) {
@@ -2734,11 +2753,8 @@ public final class SettlementConstruction {
 			level,
 			origin,
 			facing,
-			minRight,
-			maxRight,
-			minForward,
-			maxForward,
-			maxClearHeight,
+			structureKind,
+			blueprint,
 			maxLandscapingBlocks,
 			MAX_TERRAIN_CUT_BLOCKS,
 			protectedPositions
@@ -2749,20 +2765,73 @@ public final class SettlementConstruction {
 		ServerLevel level,
 		BlockPos origin,
 		Direction facing,
-		int minRight,
-		int maxRight,
-		int minForward,
-		int maxForward,
-		int maxClearHeight,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		int maxTerrainCutBlocks,
+		Set<BlockPos> protectedPositions
+	) {
+		return evaluateAnchoredStructureSite(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			maxTerrainCutBlocks,
+			protectedPositions
+		).site();
+	}
+
+	private static PlacementPreviewResult evaluateAnchoredStructureSite(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		Set<BlockPos> protectedPositions
+	) {
+		return evaluateAnchoredStructureSite(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			MAX_TERRAIN_CUT_BLOCKS,
+			protectedPositions
+		);
+	}
+
+	private static PlacementPreviewResult evaluateAnchoredStructureSite(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
 		int maxLandscapingBlocks,
 		int maxTerrainCutBlocks,
 		Set<BlockPos> protectedPositions
 	) {
 		int baseY = origin.getY();
 		int landscapingBlocks = 0;
+		int minRight = blueprint.minRight();
+		int maxRight = blueprint.maxRight();
+		int minForward = blueprint.minForward();
+		int maxForward = blueprint.maxForward();
+		int maxClearHeight = blueprint.clearHeight();
 
-		if (!hasStructureSpacingClearance(level, origin, facing, minRight, maxRight, minForward, maxForward, maxClearHeight, protectedPositions)) {
-			return null;
+		PlacementPreviewResult spacingResult = evaluateStructureSpacingClearance(level, origin, facing, minRight, maxRight, minForward, maxForward, maxClearHeight, protectedPositions);
+		if (!spacingResult.valid()) {
+			return spacingResult;
+		}
+
+		if (structureKind == StructureKind.MINE_ENTRANCE) {
+			PlacementPreviewResult frontAccessResult = evaluateMineEntranceFrontAccessClearance(level, origin, facing, protectedPositions);
+			if (!frontAccessResult.valid()) {
+				return frontAccessResult;
+			}
 		}
 
 		for (int right = minRight; right <= maxRight; right++) {
@@ -2770,13 +2839,13 @@ public final class SettlementConstruction {
 				BlockPos floorPos = offset(origin, facing, right, forward, 0);
 
 				if (!level.hasChunkAt(floorPos)) {
-					return null;
+					return PlacementPreviewResult.invalid("Site extends into unloaded terrain.", floorPos);
 				}
 
 				BlockPos groundPos = resolveStructureGroundPos(level, floorPos);
 
 				if (groundPos == null) {
-					return null;
+					return PlacementPreviewResult.invalid("Could not find suitable ground for this structure.", floorPos);
 				}
 				int groundY = groundPos.getY();
 
@@ -2786,11 +2855,11 @@ public final class SettlementConstruction {
 				}
 
 				if (groundY > baseY + maxTerrainCutBlocks || groundY < baseY - MAX_TERRAIN_FILL_BLOCKS) {
-					return null;
+					return PlacementPreviewResult.invalid("Terrain is too uneven for this structure.", groundPos);
 				}
 
 				if (!hasStableBuildGround(level, groundPos)) {
-					return null;
+					return PlacementPreviewResult.invalid("Ground is not stable enough to support this structure.", groundPos);
 				}
 
 				if (groundY < baseY) {
@@ -2801,8 +2870,10 @@ public final class SettlementConstruction {
 							continue;
 						}
 
-						if (!isReplaceable(level.getBlockState(fillPos))) {
-							return null;
+						BlockState fillState = level.getBlockState(fillPos);
+
+						if (!isAllowedFootprintFillBlock(level, fillPos, fillState)) {
+							return PlacementPreviewResult.invalid(footprintFillFailureMessage(level, fillPos, fillState), fillPos);
 						}
 
 						landscapingBlocks++;
@@ -2810,9 +2881,14 @@ public final class SettlementConstruction {
 				} else {
 					BlockPos supportPos = new BlockPos(floorPos.getX(), baseY, floorPos.getZ());
 					BlockState supportState = level.getBlockState(supportPos);
+					char baseSymbol = blueprintSymbolAt(blueprint, right, forward, 0);
 
 					if (!supportState.isSolid()) {
-						return null;
+						return PlacementPreviewResult.invalid("Ground support is too weak at the structure base.", supportPos);
+					}
+
+					if (!isAllowedFootprintBaseBlock(level, supportPos, supportState, structureKind, baseSymbol)) {
+						return PlacementPreviewResult.invalid(footprintBaseFailureMessage(level, supportPos, supportState), supportPos);
 					}
 				}
 
@@ -2825,30 +2901,35 @@ public final class SettlementConstruction {
 
 					BlockState clearState = level.getBlockState(clearPos);
 
+					if (isStructuredGardenBlock(level, clearPos, clearState)) {
+						return PlacementPreviewResult.invalid("Blocked by an existing structured garden or decorative planting.", clearPos);
+					}
+
 					if (isReplaceable(clearState)) {
 						continue;
 					}
 
 					if (!canLandscapeRemove(level, clearPos, clearState)) {
-						return null;
+						return PlacementPreviewResult.invalid(clearanceFailureMessage(level, clearPos, clearState), clearPos);
 					}
 
 					landscapingBlocks++;
 				}
 
 				if (landscapingBlocks > maxLandscapingBlocks) {
-					return null;
+					return PlacementPreviewResult.invalid("Too much clearing or fill would be required here.", floorPos);
 				}
 			}
 		}
 
-		return new AnchoredStructureSite(origin, facing);
+		return PlacementPreviewResult.valid(new AnchoredStructureSite(origin, facing));
 	}
 
 	private static HousingSite findFreestandingStructureSite(
 		ServerLevel level,
 		BlockPos anchor,
 		Direction facing,
+		StructureKind structureKind,
 		StructureBlueprint blueprint,
 		int maxLandscapingBlocks
 	) {
@@ -2927,7 +3008,9 @@ public final class SettlementConstruction {
 					for (int y = groundY + 1; y <= baseY; y++) {
 						BlockPos fillPos = new BlockPos(floorPos.getX(), y, floorPos.getZ());
 
-						if (!isReplaceable(level.getBlockState(fillPos))) {
+						BlockState fillState = level.getBlockState(fillPos);
+
+						if (!isAllowedFootprintFillBlock(level, fillPos, fillState)) {
 							return null;
 						}
 
@@ -2936,8 +3019,9 @@ public final class SettlementConstruction {
 				} else {
 					BlockPos supportPos = new BlockPos(floorPos.getX(), baseY, floorPos.getZ());
 					BlockState supportState = level.getBlockState(supportPos);
+					char baseSymbol = blueprintSymbolAt(blueprint, right, forward, 0);
 
-					if (!supportState.isSolid()) {
+					if (!supportState.isSolid() || !isAllowedFootprintBaseBlock(level, supportPos, supportState, structureKind, baseSymbol)) {
 						return null;
 					}
 				}
@@ -2945,6 +3029,10 @@ public final class SettlementConstruction {
 				for (int y = baseY + 1; y <= Math.max(baseY + blueprint.clearHeight(), groundY); y++) {
 					BlockPos clearPos = new BlockPos(floorPos.getX(), y, floorPos.getZ());
 					BlockState clearState = level.getBlockState(clearPos);
+
+					if (isStructuredGardenBlock(level, clearPos, clearState)) {
+						return null;
+					}
 
 					if (isReplaceable(clearState)) {
 						continue;
@@ -2967,7 +3055,7 @@ public final class SettlementConstruction {
 	}
 
 	private static HousingSite findCarpenterWorkshopSite(ServerLevel level, BlockPos anchor, Direction facing) {
-		return findFreestandingStructureSite(level, anchor, facing, CARPENTER_WORKSHOP_BLUEPRINT, MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS);
+		return findFreestandingStructureSite(level, anchor, facing, StructureKind.CARPENTER_WORKSHOP, CARPENTER_WORKSHOP_BLUEPRINT, MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS);
 	}
 
 	private static CompletionResult tryPlaceComposter(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -3008,7 +3096,7 @@ public final class SettlementConstruction {
 	}
 
 	private static HousingSite findHousingSite(ServerLevel level, BlockPos anchor, Direction facing) {
-		return findFreestandingStructureSite(level, anchor, facing, HOUSING_SHELTER_BLUEPRINT, MAX_SITE_LANDSCAPING_BLOCKS);
+		return findFreestandingStructureSite(level, anchor, facing, StructureKind.HOUSING_SHELTER, HOUSING_SHELTER_BLUEPRINT, MAX_SITE_LANDSCAPING_BLOCKS);
 	}
 
 	private static void placeHousingShelter(ServerLevel level, BlockPos origin, Direction facing, Map<String, Integer> stock) {
@@ -3034,6 +3122,7 @@ public final class SettlementConstruction {
 							level,
 							footPos,
 							shelterFacing,
+							StructureKind.SIMPLE_HOUSING_SHELTER,
 							SIMPLE_HOUSING_SHELTER_BLUEPRINT,
 							MAX_SITE_LANDSCAPING_BLOCKS
 						);
@@ -3811,6 +3900,7 @@ public final class SettlementConstruction {
 	) {
 		StructureMaterialPalette palette = materialPaletteFor(level, anchorPos);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
+		Set<String> plannedPositions = new HashSet<>();
 		String anchorPosition = relativeBlueprintPositionFromWorld(origin, facing, anchorPos);
 		boolean anchorMappedInBlueprint = false;
 
@@ -3853,13 +3943,18 @@ public final class SettlementConstruction {
 					} else {
 						blocks.add(SettlementBuildBlockState.pending(position, symbol, materialKey));
 					}
+
+					plannedPositions.add(position);
 				}
 			}
 		}
 
 		if (!anchorPos.equals(workstationPos) && !anchorMappedInBlueprint) {
 			blocks.add(SettlementBuildBlockState.pending(anchorPosition, 'A', ""));
+			plannedPositions.add(anchorPosition);
 		}
+
+		addPlacementClearanceBlocks(level, structureKind, blueprint, origin, facing, blocks, plannedPositions);
 
 		return new SettlementBuildSite(
 			buildSiteId(settlementId, structureKind, anchorPos),
@@ -3876,6 +3971,142 @@ public final class SettlementConstruction {
 			tick,
 			tick
 		);
+	}
+
+	private static void addPlacementClearanceBlocks(
+		ServerLevel level,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		BlockPos origin,
+		Direction facing,
+		List<SettlementBuildBlockState> blocks,
+		Set<String> plannedPositions
+	) {
+		if (structureKind == StructureKind.MINE_ENTRANCE) {
+			addMineEntranceFrontAccessBlocks(level, origin, facing, blocks, plannedPositions);
+			return;
+		}
+
+		for (int right = blueprint.minRight() - MIN_STRUCTURE_SPACING_BLOCKS; right <= blueprint.maxRight() + MIN_STRUCTURE_SPACING_BLOCKS; right++) {
+			for (int forward = blueprint.minForward() - MIN_STRUCTURE_SPACING_BLOCKS; forward <= blueprint.maxForward() + MIN_STRUCTURE_SPACING_BLOCKS; forward++) {
+				if (right >= blueprint.minRight() && right <= blueprint.maxRight() && forward >= blueprint.minForward() && forward <= blueprint.maxForward()) {
+					continue;
+				}
+
+				BlockPos columnPos = offset(origin, facing, right, forward, 0);
+
+				if (!level.hasChunkAt(columnPos)) {
+					continue;
+				}
+
+				BlockPos groundPos = resolveStructureGroundPos(level, columnPos);
+
+				if (groundPos == null) {
+					continue;
+				}
+
+				BlockState groundState = level.getBlockState(groundPos);
+
+				if (shouldHarvestStructureMarginGroundResource(groundState)) {
+					addPendingMarginGroundBackfillBlock(blocks, plannedPositions, relativeBlueprintPositionFromWorld(origin, facing, groundPos));
+				}
+
+				int minClearY = groundPos.getY() + 1;
+				int maxClearY = Math.max(origin.getY() + blueprint.clearHeight(), groundPos.getY() + blueprint.clearHeight());
+
+				for (int y = minClearY; y <= maxClearY; y++) {
+					BlockPos worldPos = new BlockPos(columnPos.getX(), y, columnPos.getZ());
+
+					if (!level.hasChunkAt(worldPos)) {
+						continue;
+					}
+
+					BlockState state = level.getBlockState(worldPos);
+
+					if (!shouldClearStructureMarginBlock(level, worldPos, state)) {
+						continue;
+					}
+
+					addPendingAirBlock(blocks, plannedPositions, right, forward, y - origin.getY());
+				}
+			}
+		}
+	}
+
+	private static void addMineEntranceFrontAccessBlocks(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		List<SettlementBuildBlockState> blocks,
+		Set<String> plannedPositions
+	) {
+		for (int forward = MINE_ENTRANCE_BLUEPRINT.maxForward() + 1; forward <= MINE_ENTRANCE_BLUEPRINT.maxForward() + MINE_ENTRANCE_FRONT_ACCESS_DEPTH_BLOCKS; forward++) {
+			for (int right = 0; right <= 1; right++) {
+				for (int up = 1; up <= MINE_ENTRANCE_FRONT_ACCESS_HEIGHT_BLOCKS; up++) {
+					BlockPos worldPos = offset(origin, facing, right, forward, up);
+
+					if (!level.hasChunkAt(worldPos)) {
+						continue;
+					}
+
+					BlockState state = level.getBlockState(worldPos);
+
+					if (!shouldClearMineEntranceAccessBlock(level, worldPos, state)) {
+						continue;
+					}
+
+					addPendingAirBlock(blocks, plannedPositions, right, forward, up);
+				}
+			}
+		}
+	}
+
+	private static void addPendingAirBlock(
+		List<SettlementBuildBlockState> blocks,
+		Set<String> plannedPositions,
+		int right,
+		int forward,
+		int up
+	) {
+		String position = relativeBlueprintPosition(right, forward, up);
+
+		if (!plannedPositions.add(position)) {
+			return;
+		}
+
+		blocks.add(SettlementBuildBlockState.pending(position, 'A', ""));
+	}
+
+	private static void addPendingMarginGroundBackfillBlock(
+		List<SettlementBuildBlockState> blocks,
+		Set<String> plannedPositions,
+		String position
+	) {
+		if (!plannedPositions.add(position)) {
+			return;
+		}
+
+		blocks.add(SettlementBuildBlockState.pending(position, 'A', STRUCTURE_MARGIN_GROUND_BACKFILL_KEY));
+	}
+
+	private static boolean shouldClearStructureMarginBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		if (state.isAir() || isShovelPathSurface(state) || isStructuredGardenBlock(level, pos, state)) {
+			return false;
+		}
+
+		return isReplaceable(state) || canLandscapeRemove(level, pos, state);
+	}
+
+	private static boolean shouldHarvestStructureMarginGroundResource(BlockState state) {
+		return isNaturalOreBlock(state);
+	}
+
+	private static boolean shouldClearMineEntranceAccessBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		if (state.isAir()) {
+			return false;
+		}
+
+		return canClearForConstruction(level, pos, state);
 	}
 
 	private static boolean anchoredWorkstationStillMapsToBlueprint(SettlementBuildSite buildSite, StructureKind structureKind, BlockPos workstationPos) {
@@ -5160,14 +5391,33 @@ public final class SettlementConstruction {
 			return false;
 		}
 
-		BlockPos belowPos = groundPos.below();
+		return hasStableSubgrade(level, groundPos.below());
+	}
 
-		if (belowPos.getY() < level.getMinY()) {
-			return true;
+	private static boolean hasStableSubgrade(ServerLevel level, BlockPos startPos) {
+		BlockPos.MutableBlockPos scanPos = startPos.mutable();
+		int removableDepth = 0;
+
+		while (scanPos.getY() >= level.getMinY()) {
+			BlockState scanState = level.getBlockState(scanPos);
+
+			if (!scanState.isSolid()) {
+				return false;
+			}
+
+			if (isBuildGroundSurface(scanState)) {
+				return true;
+			}
+
+			if (!canLandscapeRemove(level, scanPos, scanState) || removableDepth >= MAX_TERRAIN_FILL_BLOCKS + 1) {
+				return false;
+			}
+
+			removableDepth++;
+			scanPos.move(Direction.DOWN);
 		}
 
-		BlockState belowState = level.getBlockState(belowPos);
-		return belowState.isSolid() && isBuildGroundSurface(belowState);
+		return true;
 	}
 
 	private static BlockPos resolveStructureGroundPos(ServerLevel level, BlockPos columnPos) {
@@ -5179,23 +5429,25 @@ public final class SettlementConstruction {
 
 		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos(columnPos.getX(), groundY, columnPos.getZ());
 
-		while (scanPos.getY() > level.getMinY()) {
+		while (scanPos.getY() >= level.getMinY()) {
 			BlockState state = level.getBlockState(scanPos);
 
 			// Treat ordinary visible terrain as valid ground. Only drill downward through
-			// removable clutter such as trees or brush that sits on top of that surface.
+			// removable clutter such as trees or brush, plus any empty space directly
+			// beneath that clutter, until we reach the real terrain surface.
 			if (state.isSolid() && isBuildGroundSurface(state)) {
-				break;
+				return scanPos.immutable();
 			}
 
-			if (!canLandscapeRemove(level, scanPos, state)) {
-				break;
+			if (isReplaceable(state) || canLandscapeRemove(level, scanPos, state)) {
+				scanPos.move(Direction.DOWN);
+				continue;
 			}
 
-			scanPos.move(Direction.DOWN);
+			return scanPos.immutable();
 		}
 
-		return scanPos.immutable();
+		return null;
 	}
 
 	private static boolean canAfford(Map<String, Integer> stock, Map<String, Integer> cost) {
@@ -5219,11 +5471,19 @@ public final class SettlementConstruction {
 	}
 
 	private static boolean canLandscapeRemove(ServerLevel level, BlockPos pos, BlockState state) {
-		if (state.isAir() || state.liquid() || state.hasBlockEntity() || level.getBlockEntity(pos) != null) {
+		if (state.isAir() || state.liquid() || state.hasBlockEntity() || level.getBlockEntity(pos) != null || isStructuredGardenBlock(level, pos, state)) {
 			return false;
 		}
 
 		return isNaturalLandscapeBlock(state);
+	}
+
+	private static boolean canClearForConstruction(ServerLevel level, BlockPos pos, BlockState state) {
+		if (isShovelPathSurface(state)) {
+			return true;
+		}
+
+		return canLandscapeRemove(level, pos, state) || canRecoverConstructionBlock(level, pos, state);
 	}
 
 	private static boolean canRecoverConstructionBlock(ServerLevel level, BlockPos pos, BlockState state) {
@@ -5250,6 +5510,11 @@ public final class SettlementConstruction {
 			return;
 		}
 
+		if (isConstructionTreeBlock(state) && isNaturalTreeCluster(level, pos)) {
+			clearNaturalTreeToWarehouse(level, pos, stock);
+			return;
+		}
+
 		String goodsKey = recoveredGoodsKey(state);
 
 		if (goodsKey != null) {
@@ -5257,6 +5522,87 @@ public final class SettlementConstruction {
 		}
 
 		level.setBlock(pos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+	}
+
+	private static void clearNaturalTreeToWarehouse(ServerLevel level, BlockPos startPos, Map<String, Integer> stock) {
+		Set<BlockPos> treeBlocks = connectedNaturalTreeBlocks(level, startPos);
+
+		if (treeBlocks.isEmpty()) {
+			return;
+		}
+
+		for (BlockPos treePos : treeBlocks) {
+			BlockState treeState = level.getBlockState(treePos);
+
+			if (!isConstructionTreeBlock(treeState)) {
+				continue;
+			}
+
+			String goodsKey = recoveredGoodsKey(treeState);
+
+			if (goodsKey != null) {
+				stock.merge(goodsKey, 1, Integer::sum);
+			}
+
+			level.setBlock(treePos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		}
+	}
+
+	private static Set<BlockPos> connectedNaturalTreeBlocks(ServerLevel level, BlockPos startPos) {
+		Set<BlockPos> visited = new LinkedHashSet<>();
+		ArrayDeque<BlockPos> open = new ArrayDeque<>();
+		open.add(startPos.immutable());
+
+		while (!open.isEmpty() && visited.size() < MAX_CONSTRUCTION_TREE_BLOCKS) {
+			BlockPos current = open.removeFirst();
+
+			if (visited.contains(current) || current.distSqr(startPos) > 196.0D) {
+				continue;
+			}
+
+			BlockState currentState = level.getBlockState(current);
+
+			if (!isConstructionTreeBlock(currentState)) {
+				continue;
+			}
+
+			visited.add(current.immutable());
+
+			for (Direction direction : Direction.values()) {
+				open.add(current.relative(direction));
+			}
+		}
+
+		return visited;
+	}
+
+	private static boolean isNaturalTreeCluster(ServerLevel level, BlockPos startPos) {
+		Set<BlockPos> treeBlocks = connectedNaturalTreeBlocks(level, startPos);
+
+		if (treeBlocks.isEmpty()) {
+			return false;
+		}
+
+		boolean hasLeaves = false;
+		boolean hasNaturalRoot = false;
+
+		for (BlockPos treePos : treeBlocks) {
+			BlockState treeState = level.getBlockState(treePos);
+
+			if (isInTag(treeState, BlockTags.LEAVES)) {
+				hasLeaves = true;
+			}
+
+			if (isInTag(treeState, BlockTags.LOGS) && isBuildGroundSurface(level.getBlockState(treePos.below()))) {
+				hasNaturalRoot = true;
+			}
+
+			if (hasLeaves && hasNaturalRoot) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static String recoveredGoodsKey(BlockState state) {
@@ -5281,6 +5627,34 @@ public final class SettlementConstruction {
 
 		if (state.is(Blocks.IRON_ORE) || state.is(Blocks.DEEPSLATE_IRON_ORE) || isInTag(state, BlockTags.IRON_ORES)) {
 			return "iron_ingot";
+		}
+
+		if (state.is(Blocks.COPPER_ORE) || state.is(Blocks.DEEPSLATE_COPPER_ORE) || isInTag(state, BlockTags.COPPER_ORES)) {
+			return "copper_ingot";
+		}
+
+		if (state.is(Blocks.COAL_ORE) || state.is(Blocks.DEEPSLATE_COAL_ORE) || isInTag(state, BlockTags.COAL_ORES)) {
+			return "coal";
+		}
+
+		if (state.is(Blocks.REDSTONE_ORE) || state.is(Blocks.DEEPSLATE_REDSTONE_ORE) || isInTag(state, BlockTags.REDSTONE_ORES)) {
+			return "redstone";
+		}
+
+		if (state.is(Blocks.LAPIS_ORE) || state.is(Blocks.DEEPSLATE_LAPIS_ORE) || isInTag(state, BlockTags.LAPIS_ORES)) {
+			return "lapis";
+		}
+
+		if (state.is(Blocks.DIAMOND_ORE) || state.is(Blocks.DEEPSLATE_DIAMOND_ORE) || isInTag(state, BlockTags.DIAMOND_ORES)) {
+			return "diamond";
+		}
+
+		if (state.is(Blocks.EMERALD_ORE) || state.is(Blocks.DEEPSLATE_EMERALD_ORE) || isInTag(state, BlockTags.EMERALD_ORES)) {
+			return "emerald";
+		}
+
+		if (state.is(Blocks.GOLD_ORE) || state.is(Blocks.DEEPSLATE_GOLD_ORE) || isInTag(state, BlockTags.GOLD_ORES)) {
+			return "raw_gold";
 		}
 
 		if (isInTag(state, BlockTags.LOGS)) {
@@ -5402,11 +5776,32 @@ public final class SettlementConstruction {
 			|| state.is(Blocks.DIRT)
 			|| state.is(Blocks.COARSE_DIRT)
 			|| state.is(Blocks.ROOTED_DIRT)
-			|| state.is(Blocks.GRAVEL);
+			|| state.is(Blocks.GRAVEL)
+			|| state.is(Blocks.RED_MUSHROOM)
+			|| state.is(Blocks.BROWN_MUSHROOM)
+			|| state.is(Blocks.RED_MUSHROOM_BLOCK)
+			|| state.is(Blocks.BROWN_MUSHROOM_BLOCK)
+			|| state.is(Blocks.MUSHROOM_STEM);
+	}
+
+	private static boolean isNaturalOreBlock(BlockState state) {
+		return isInTag(state, BlockTags.COAL_ORES)
+			|| isInTag(state, BlockTags.COPPER_ORES)
+			|| isInTag(state, BlockTags.DIAMOND_ORES)
+			|| isInTag(state, BlockTags.EMERALD_ORES)
+			|| isInTag(state, BlockTags.GOLD_ORES)
+			|| isInTag(state, BlockTags.IRON_ORES)
+			|| isInTag(state, BlockTags.LAPIS_ORES)
+			|| isInTag(state, BlockTags.REDSTONE_ORES);
+	}
+
+	private static boolean isConstructionTreeBlock(BlockState state) {
+		return isInTag(state, BlockTags.LOGS) || isInTag(state, BlockTags.LEAVES);
 	}
 
 	private static boolean isBuildGroundSurface(BlockState state) {
 		return isInTag(state, BlockTags.BASE_STONE_OVERWORLD)
+			|| isNaturalOreBlock(state)
 			|| isInTag(state, BlockTags.DIRT)
 			|| isInTag(state, BlockTags.SAND)
 			|| state.is(Blocks.GRASS_BLOCK)
@@ -5427,7 +5822,126 @@ public final class SettlementConstruction {
 		return state.is(tag, blockState -> true);
 	}
 
+	private static boolean isShovelPathSurface(BlockState state) {
+		return state.is(Blocks.DIRT_PATH);
+	}
+
+	private static boolean isImprovedRouteSurface(BlockState state) {
+		return state.is(Blocks.COBBLESTONE)
+			|| state.is(Blocks.SMOOTH_STONE)
+			|| state.is(Blocks.POLISHED_GRANITE)
+			|| state.is(Blocks.POLISHED_DIORITE)
+			|| state.is(Blocks.POLISHED_ANDESITE)
+			|| state.is(Blocks.STONE_BRICKS)
+			|| state.is(Blocks.BRICKS)
+			|| isImprovedRouteSlope(state);
+	}
+
+	private static boolean isImprovedRouteSlope(BlockState state) {
+		return state.is(Blocks.COBBLESTONE_STAIRS)
+			|| state.is(Blocks.COBBLESTONE_SLAB)
+			|| state.is(Blocks.STONE_STAIRS)
+			|| state.is(Blocks.STONE_SLAB)
+			|| state.is(Blocks.STONE_BRICK_STAIRS)
+			|| state.is(Blocks.STONE_BRICK_SLAB)
+			|| state.is(Blocks.BRICK_STAIRS)
+			|| state.is(Blocks.BRICK_SLAB)
+			|| state.is(Blocks.SMOOTH_STONE_SLAB);
+	}
+
+	private static boolean isRouteFloorReplacementSurface(BlockState state) {
+		return state.is(Blocks.COBBLESTONE)
+			|| state.is(Blocks.SMOOTH_STONE)
+			|| state.is(Blocks.POLISHED_GRANITE)
+			|| state.is(Blocks.POLISHED_DIORITE)
+			|| state.is(Blocks.POLISHED_ANDESITE)
+			|| state.is(Blocks.STONE_BRICKS)
+			|| state.is(Blocks.BRICKS)
+			|| state.is(Blocks.DIRT_PATH);
+	}
+
+	private static BlockState structureMarginGroundReplacementState(ServerLevel level, BlockPos pos) {
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockState neighborState = level.getBlockState(pos.relative(direction));
+
+			if (neighborState.is(Blocks.DIRT_PATH)) {
+				return Blocks.DIRT_PATH.defaultBlockState();
+			}
+		}
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockState neighborState = level.getBlockState(pos.relative(direction));
+
+			if (isRouteFloorReplacementSurface(neighborState) && !neighborState.is(Blocks.DIRT_PATH)) {
+				return neighborState.getBlock().defaultBlockState();
+			}
+		}
+
+		return Blocks.DIRT.defaultBlockState();
+	}
+
+	private static boolean isStructuredGardenBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		return isBorderedGardenPlant(level, pos, state) || isBorderedGardenSupport(level, pos, state);
+	}
+
+	private static boolean isBorderedGardenPlant(ServerLevel level, BlockPos pos, BlockState state) {
+		return isDecorativePlant(state) && isBorderedGardenSupport(level, pos.below(), level.getBlockState(pos.below()));
+	}
+
+	private static boolean isBorderedGardenSupport(ServerLevel level, BlockPos pos, BlockState state) {
+		if (!isGardenSoil(state)) {
+			return false;
+		}
+
+		if (!isDecorativePlant(level.getBlockState(pos.above()))) {
+			return false;
+		}
+
+		int borderBlocks = 0;
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockState neighborState = level.getBlockState(pos.relative(direction));
+
+			if (neighborState.getBlock() instanceof TrapDoorBlock || isInTag(neighborState, BlockTags.LOGS)) {
+				borderBlocks++;
+			}
+		}
+
+		return borderBlocks >= 2;
+	}
+
+	private static boolean isGardenSoil(BlockState state) {
+		return state.is(Blocks.FARMLAND)
+			|| state.is(Blocks.DIRT)
+			|| state.is(Blocks.GRASS_BLOCK)
+			|| state.is(Blocks.COARSE_DIRT)
+			|| state.is(Blocks.ROOTED_DIRT);
+	}
+
+	private static boolean isDecorativePlant(BlockState state) {
+		return isInTag(state, BlockTags.FLOWERS)
+			|| state.is(Blocks.SHORT_GRASS)
+			|| state.is(Blocks.FERN)
+			|| state.is(Blocks.TALL_GRASS)
+			|| state.is(Blocks.LARGE_FERN)
+			|| state.is(Blocks.DEAD_BUSH);
+	}
+
 	private static boolean hasStructureSpacingClearance(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		int minRight,
+		int maxRight,
+		int minForward,
+		int maxForward,
+		int clearHeight,
+		Set<BlockPos> protectedPositions
+	) {
+		return evaluateStructureSpacingClearance(level, origin, facing, minRight, maxRight, minForward, maxForward, clearHeight, protectedPositions).valid();
+	}
+
+	private static PlacementPreviewResult evaluateStructureSpacingClearance(
 		ServerLevel level,
 		BlockPos origin,
 		Direction facing,
@@ -5446,7 +5960,7 @@ public final class SettlementConstruction {
 
 				BlockPos columnPos = offset(origin, facing, right, forward, 0);
 				if (!level.hasChunkAt(columnPos)) {
-					return false;
+					return PlacementPreviewResult.invalid("Site extends into unloaded terrain.", columnPos);
 				}
 
 				int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnPos.getX(), columnPos.getZ()) - 1;
@@ -5460,18 +5974,31 @@ public final class SettlementConstruction {
 					}
 
 					if (isStructureSpacingObstacle(level, checkPos, groundY)) {
-						return false;
+						return PlacementPreviewResult.invalid(structureSpacingFailureMessage(level, checkPos), checkPos);
 					}
 				}
 			}
 		}
 
-		return true;
+		return PlacementPreviewResult.valid(null);
 	}
 
 	private static boolean isStructureSpacingObstacle(ServerLevel level, BlockPos pos, int groundY) {
 		BlockState state = level.getBlockState(pos);
-		if (isReplaceable(state) || state.liquid()) {
+
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return true;
+		}
+
+		if (state.liquid()) {
+			return true;
+		}
+
+		if (isShovelPathSurface(state) || isImprovedRouteSurface(state)) {
+			return false;
+		}
+
+		if (isReplaceable(state)) {
 			return false;
 		}
 
@@ -5480,6 +6007,150 @@ public final class SettlementConstruction {
 		}
 
 		return !canLandscapeRemove(level, pos, state);
+	}
+
+	private static boolean isAllowedFootprintBaseBlock(
+		ServerLevel level,
+		BlockPos pos,
+		BlockState state,
+		StructureKind structureKind,
+		char baseSymbol
+	) {
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return false;
+		}
+
+		if (isShovelPathSurface(state)) {
+			return true;
+		}
+
+		if (isImprovedRouteSurface(state)) {
+			return false;
+		}
+
+		if (canLandscapeRemove(level, pos, state)) {
+			return true;
+		}
+
+		if ((baseSymbol == 'A' || baseSymbol == 'E') && isBuildGroundSurface(state)) {
+			return true;
+		}
+
+		if (structureKind == StructureKind.MINE_ENTRANCE && (baseSymbol == 'M' || baseSymbol == 'C') && isMineEntranceIntegratedStone(state)) {
+			return true;
+		}
+
+		return isBuildGroundSurface(state);
+	}
+
+	private static boolean isAllowedFootprintFillBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		if (isStructuredGardenBlock(level, pos, state) || isImprovedRouteSurface(state)) {
+			return false;
+		}
+
+		if (isReplaceable(state) || isShovelPathSurface(state)) {
+			return true;
+		}
+
+		return canLandscapeRemove(level, pos, state);
+	}
+
+	private static String structureSpacingFailureMessage(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return "Blocked by an existing structured garden or decorative planting within the 3-block clearance.";
+		}
+
+		if (state.liquid()) {
+			return "Blocked by water or lava within the 3-block clearance.";
+		}
+
+		return "Blocked by existing " + blockingBlockName(state) + " within the 3-block clearance.";
+	}
+
+	private static String footprintFillFailureMessage(ServerLevel level, BlockPos pos, BlockState state) {
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return "Blocked by an existing structured garden or decorative planting inside the structure footprint.";
+		}
+
+		if (isImprovedRouteSurface(state)) {
+			return "Blocked by an existing improved road surface inside the structure footprint.";
+		}
+
+		return "Blocked by " + blockingBlockName(state) + " inside the structure footprint.";
+	}
+
+	private static String footprintBaseFailureMessage(ServerLevel level, BlockPos pos, BlockState state) {
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return "Blocked by an existing structured garden or decorative planting inside the structure footprint.";
+		}
+
+		if (isImprovedRouteSurface(state)) {
+			return "Blocked by an existing improved road surface inside the structure footprint.";
+		}
+
+		return "Ground block " + blockingBlockName(state) + " cannot support this structure footprint.";
+	}
+
+	private static String clearanceFailureMessage(ServerLevel level, BlockPos pos, BlockState state) {
+		if (isStructuredGardenBlock(level, pos, state)) {
+			return "Blocked by an existing structured garden or decorative planting.";
+		}
+
+		if (state.liquid()) {
+			return "Blocked by water or lava inside the required structure volume.";
+		}
+
+		return "Blocked by " + blockingBlockName(state) + " inside the required structure volume.";
+	}
+
+	private static String blockingBlockName(BlockState state) {
+		return state.getBlock().getName().getString();
+	}
+
+	private static boolean hasMineEntranceFrontAccessClearance(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		Set<BlockPos> protectedPositions
+	) {
+		return evaluateMineEntranceFrontAccessClearance(level, origin, facing, protectedPositions).valid();
+	}
+
+	private static PlacementPreviewResult evaluateMineEntranceFrontAccessClearance(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		Set<BlockPos> protectedPositions
+	) {
+		for (int forward = MINE_ENTRANCE_BLUEPRINT.maxForward() + 1; forward <= MINE_ENTRANCE_BLUEPRINT.maxForward() + MINE_ENTRANCE_FRONT_ACCESS_DEPTH_BLOCKS; forward++) {
+			for (int right = 0; right <= 1; right++) {
+				for (int up = 1; up <= MINE_ENTRANCE_FRONT_ACCESS_HEIGHT_BLOCKS; up++) {
+					BlockPos checkPos = offset(origin, facing, right, forward, up);
+
+					if (protectedPositions.contains(checkPos)) {
+						continue;
+					}
+
+					if (!level.hasChunkAt(checkPos)) {
+						return PlacementPreviewResult.invalid("Mine Entrance approach extends into unloaded terrain.", checkPos);
+					}
+
+					BlockState state = level.getBlockState(checkPos);
+
+					if (state.isAir()) {
+						continue;
+					}
+
+					if (!canClearForConstruction(level, checkPos, state)) {
+						return PlacementPreviewResult.invalid("Mine Entrance needs a clear front entry; blocked by " + blockingBlockName(state) + ".", checkPos);
+					}
+				}
+			}
+		}
+
+		return PlacementPreviewResult.valid(null);
 	}
 
 	private static int buildRadius(SettlementState settlement) {
@@ -5517,8 +6188,17 @@ public final class SettlementConstruction {
 		}
 	}
 
-	public record StructurePreview(String previewId, String previewType, boolean placementValid, List<StructurePreviewBlock> blocks) {
+	public record StructurePreview(
+		String previewId,
+		String previewType,
+		boolean placementValid,
+		String statusMessage,
+		List<BlockPos> blockerPositions,
+		List<StructurePreviewBlock> blocks
+	) {
 		public StructurePreview {
+			statusMessage = statusMessage == null ? "" : statusMessage;
+			blockerPositions = blockerPositions.stream().map(BlockPos::immutable).toList();
 			blocks = List.copyOf(blocks);
 		}
 	}
@@ -5526,6 +6206,21 @@ public final class SettlementConstruction {
 	public record StructurePreviewBlock(BlockPos pos, String materialKey, String blockId) {
 		public StructurePreviewBlock {
 			pos = pos.immutable();
+		}
+	}
+
+	private record PlacementPreviewResult(AnchoredStructureSite site, boolean valid, String statusMessage, List<BlockPos> blockerPositions) {
+		private PlacementPreviewResult {
+			statusMessage = statusMessage == null ? "" : statusMessage;
+			blockerPositions = blockerPositions.stream().map(BlockPos::immutable).toList();
+		}
+
+		private static PlacementPreviewResult valid(AnchoredStructureSite site) {
+			return new PlacementPreviewResult(site, true, "", List.of());
+		}
+
+		private static PlacementPreviewResult invalid(String statusMessage, BlockPos blockerPos) {
+			return new PlacementPreviewResult(null, false, statusMessage, blockerPos == null ? List.of() : List.of(blockerPos.immutable()));
 		}
 	}
 

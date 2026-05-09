@@ -90,10 +90,17 @@ Focus:
 - make the first-pass `Tier 1` palisade concrete: log wall at least `4` blocks high, interior slab firing walk below the top log, torch spacing about every `10` blocks, stair access about every `30` blocks, and simple path-aligned gatehouses
 - keep early fortification radius smaller for starter villages, with `Tier 1` aiming for about `80%` of settlement radius before later tiers expand toward the full radius
 - keep preview and site-validation logic permissive for removable natural vegetation so trees or brush do not falsely block otherwise valid builds
+- keep structure-spacing validation strict against existing crafted infrastructure while allowing natural terrain or vegetation to be cleared, with special handling so simple shovel-made dirt paths do not block placement and improved route surfaces only block the actual footprint
+- keep footprint fill validation consistent with the rest of placement rules so clearable natural blocks inside raised or filled columns do not falsely fail shifted previews
+- treat exposed natural ore and buried natural roots or branches as ordinary terrain support for preview validation when they do not require moat clearing, so forests and rocky ground do not create false negatives
+- resolve ground columns by drilling through removable canopy clutter and the empty air directly beneath it before judging stability, so overhanging branches do not anchor false “ground not stable” failures
+- keep the moat floor intact during ordinary structure-margin clearing; only recover explicit ground-level resource blocks there, and immediately backfill those spots with dirt or matching route surface
+- surface prospective placement failures directly in the build preview with a short reason string and highlighted blocker positions so invalid sites can be diagnosed in-world
+- align road-quality detection and Surveyor map rendering with the intended upgrade ladder: `Dirt Path` -> `Cobblestone` -> `Smooth Stone` -> `Stone Bricks` / `Bricks`, while ignoring plain natural `Stone` and `Gravel` as autonomous road upgrades
 - let build previews distinguish exact block matches from compatible wrong-material matches, and let compatible player materials complete structures without blocking functionality
 - keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, and later broader tunnel-expansion behavior
 - keep profession-linked housing sticky where structures provide beds, while leaving Miners dependent on ordinary settlement housing rather than inventing beds in the `Mine Entrance`
-- keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing
+- keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing, and the site rules should require a clear front entry approach without forcing the whole hillside facade to be carved back
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
@@ -110,9 +117,11 @@ Status: In progress
 Focus:
 
 - keep `Roadwright` responsible for both internal route quality and outward settlement connections
+- keep route vocabulary explicit: routes are traversable links between POIs, while paths or roads are the visible terrain improvements laid along those routes
 - keep the `Surveyor's Table` map sourced from current loaded-world truth so visible roads and improvements do not lag behind villager survey chores
 - extend route quality improvements without regressing the bounded-search and bounded-per-tick performance model
 - add bounded catch-up for visible road/path improvement so revisiting a settlement shows progress without requiring constant player babysitting
+- keep route planning biased toward existing path surfaces and nearby `Mileposts`, and keep first-pass route targets centered on bells, structure entrances, standalone workstations, civic anchors, and neighboring settlements
 - make internal path materials and road-furniture upgrades respect settlement tier and unlocked civic quality
 - keep `Surveyor's Table`, harbor map views, and `Milepost` guidance useful for both debugging and gameplay
 

@@ -383,7 +383,8 @@ public class SurveyorMapScreen extends Screen {
 		return switch (quality) {
 			case "gravel" -> 0xFF9C9C9C;
 			case "cobble" -> 0xFF7C7C7C;
-			case "finished" -> 0xFFD2D2D2;
+			case "smooth" -> 0xFFC7C7C7;
+			case "brick", "finished" -> 0xFFD2B48C;
 			default -> 0xFFB99758;
 		};
 	}

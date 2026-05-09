@@ -1,6 +1,7 @@
 package com.ronhelwig.livevillages.client.render;
 
 import java.util.Optional;
+import java.util.Set;
 
 import org.lwjgl.glfw.GLFW;
 
@@ -47,6 +48,7 @@ public final class BuildSiteWireframePreview {
 	private static final int AMBER_WIREFRAME_COLOR = 0xFFFFB347;
 	private static final int PLACEMENT_WIREFRAME_COLOR = 0xFF66FF66;
 	private static final int EXCAVATION_WIREFRAME_COLOR = 0xFF66CCFF;
+	private static final int BLOCKER_WIREFRAME_COLOR = 0xFFFF55FF;
 	private static final double WIREFRAME_THICKNESS_OFFSET = 0.012D;
 	private static final VoxelShape BLOCK_SHAPE = Shapes.block();
 
@@ -54,6 +56,7 @@ public final class BuildSiteWireframePreview {
 	private static boolean waitingForSnapshot;
 	private static long nextRefreshTick;
 	private static BuildSitePreviewSnapshot latestSnapshot;
+	private static String lastStatusMessage = "";
 
 	private BuildSiteWireframePreview() {
 	}
@@ -62,6 +65,10 @@ public final class BuildSiteWireframePreview {
 		ClientTickEvents.END_CLIENT_TICK.register(BuildSiteWireframePreview::tick);
 		ClientPlayNetworking.registerGlobalReceiver(BuildSitePreviewStatePayload.TYPE, (payload, context) -> {
 			latestSnapshot = payload.snapshot();
+			if (!latestSnapshot.statusMessage().equals(lastStatusMessage) && !latestSnapshot.statusMessage().isBlank()) {
+				showActionbar(Minecraft.getInstance(), latestSnapshot.statusMessage());
+			}
+			lastStatusMessage = latestSnapshot.statusMessage();
 			waitingForSnapshot = false;
 		});
 		LevelRenderEvents.END_MAIN.register(BuildSiteWireframePreview::render);
@@ -73,6 +80,7 @@ public final class BuildSiteWireframePreview {
 			latestSnapshot = null;
 			waitingForSnapshot = false;
 			nextRefreshTick = 0L;
+			lastStatusMessage = "";
 
 			if (visible) {
 				showActionbar(client, "Build preview on");
@@ -87,6 +95,7 @@ public final class BuildSiteWireframePreview {
 			latestSnapshot = null;
 			waitingForSnapshot = false;
 			nextRefreshTick = 0L;
+			lastStatusMessage = "";
 			return;
 		}
 
@@ -160,11 +169,15 @@ public final class BuildSiteWireframePreview {
 		Camera camera = client.gameRenderer.getMainCamera();
 		Vec3 cameraPos = camera.position();
 		VertexConsumer buffer = context.bufferSource().getBuffer(RenderTypes.lines());
+		Set<BlockPos> blockerPositions = Set.copyOf(latestSnapshot.blockerPositions());
 
 		for (var block : latestSnapshot.blocks()) {
 			BlockPos blockPos = block.pos();
+			boolean highlightedBlocker = blockerPositions.contains(blockPos);
 			int color = block.isExcavation()
 				? EXCAVATION_WIREFRAME_COLOR
+				: highlightedBlocker
+				? BLOCKER_WIREFRAME_COLOR
 				: latestSnapshot.prospective()
 				? (latestSnapshot.placementValid() ? PLACEMENT_WIREFRAME_COLOR : RED_WIREFRAME_COLOR)
 				: previewColorForHeldItems(block, client);
@@ -175,6 +188,21 @@ public final class BuildSiteWireframePreview {
 				blockPos.getY() - cameraPos.y,
 				blockPos.getZ() - cameraPos.z,
 				color
+			);
+		}
+
+		for (BlockPos blockerPos : blockerPositions) {
+			if (latestSnapshot.blocks().stream().anyMatch(block -> block.pos().equals(blockerPos))) {
+				continue;
+			}
+
+			renderThickShape(
+				context.poseStack(),
+				buffer,
+				blockerPos.getX() - cameraPos.x,
+				blockerPos.getY() - cameraPos.y,
+				blockerPos.getZ() - cameraPos.z,
+				BLOCKER_WIREFRAME_COLOR
 			);
 		}
 
