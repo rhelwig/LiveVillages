@@ -14,9 +14,9 @@ Instructions for future Codex/agent runs:
 - Keep issue notes concise and action-oriented: include current behavior, expected behavior, files involved, and what has already been tried.
 - When creating GitHub issues from the shell, use real multiline bodies rather than escaped `\n` sequences so the stored issue text is readable without manual cleanup.
 - Do not add or track active issues in `known-issues.md` unless the user explicitly asks for a local temporary note outside GitHub.
-- If we make changes to the code that conflict with the specification (SPECS.md file), ask the user if the changes should be incorporated into the spec or rejected.
+- If we make changes to the code that conflict with the specification (`docs/SPECS.md`), ask the user if the changes should be incorporated into the spec or rejected.
 - If we add functionality to the code that isn't inlcuded in the specification but should be, and it doesn't conflict with existing specifications, then add it to the spec.
-- Keep track of what you are doing in the IMPLEMENTATION-PLAN.md file.
+- Keep track of what you are doing in `docs/IMPLEMENTATION-PLAN.md`.
 
 ## Project Specific
 

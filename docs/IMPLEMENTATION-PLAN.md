@@ -4,6 +4,8 @@ This file is the working plan for upcoming implementation. It is intentionally n
 
 It should stay aligned with [SPECS.md](SPECS.md) and [PROFESSIONS.md](PROFESSIONS.md).
 
+Repository documentation lives under `docs/`, except for the root [README.md](../README.md) and [AGENTS.md](../AGENTS.md).
+
 ## How To Use This File
 
 - Keep active work and durable implementation constraints here.
@@ -29,6 +31,7 @@ Already solid enough to plan from:
 
 - settlement persistence, village autodetection, route state, and Trade Board UI/trading
 - staged construction with persistent build sites, assisted player placement, and preview overlays
+- an in-game structure capture hotkey that exports the looked-at structure as a text blueprint draft for later curation
 - custom anchors and workstations for `Trade Board`, `Carpenter's Bench`, `Forester's Table`, `Surveyor's Table`, `Portmaster's Anchor`, `Lighthouse`, `Milepost`, `Simple Housing Shelter`, and `Housing Shelter`
 - custom professions for `Trademaster`, `Carpenter`, `Forester`, `Portmaster`, and `Roadwright`
 - harbor map, terrain-memory cache, lighthouse support, and water-trade infrastructure bonuses
@@ -190,7 +193,6 @@ Keep these visible, but not as active work:
 - `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, and shaft-lighting loop, including primary and secondary tunnel expansion, richer mined-resource stock handling, ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
-- an in-game authoring capture tool that lets a player look at a structure, press a key, and export a blueprint in the mod's structure-definition format for later curation
 - hostile outposts as self-building raiding settlements with different staffing and growth rules
 
 ## Maintenance Notes

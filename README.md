@@ -16,7 +16,7 @@ This repository is in active development and already contains a playable foundat
 - loaded-world villager work for roles such as `Carpenter`, `Butcher`, `Portmaster`, and `Roadwright`, alongside abstract catch-up simulation when chunks are unloaded
 - custom professions, workstations, structure anchors, and support tooling for inspecting and debugging settlements
 
-The full design and implementation specification lives in [SPECS.md](SPECS.md).
+The full design and implementation specification lives in [docs/SPECS.md](docs/SPECS.md).
 
 ## Player-Facing Content
 
@@ -71,9 +71,9 @@ Server/debug utilities:
 
 ## Project Docs
 
-- [SPECS.md](SPECS.md): full gameplay and systems specification
-- [PROFESSIONS.md](PROFESSIONS.md): profession-specific design notes
-- [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
+- [docs/SPECS.md](docs/SPECS.md): full gameplay and systems specification
+- [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
+- [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
 - [docs/STRUCTURE-BLUEPRINT-GUIDE.md](docs/STRUCTURE-BLUEPRINT-GUIDE.md): human-friendly guide for designing importable structure blueprints
 - GitHub issues: active bug and polish tracking
 
