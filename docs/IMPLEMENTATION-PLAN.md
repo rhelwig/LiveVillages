@@ -83,6 +83,7 @@ Focus:
 - bell influence radius should be `max(25, half settlement radius)` rather than a tiny fixed center
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
 - keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
+- keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
 
 ### 4. Construction And Profession Structures

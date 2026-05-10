@@ -557,6 +557,30 @@ public final class SettlementVillagers {
 		return changed;
 	}
 
+	public static boolean ensureVillagerGatheringPoint(ServerLevel level, SettlementState settlement) {
+		if (!usesActualVillagers(settlement)) {
+			return false;
+		}
+
+		BlockPos gatheringPos = resolveGatheringPos(level, settlement);
+		boolean changed = false;
+
+		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+			Optional<BlockPos> currentMeetingPoint = villager.getBrain().getMemory(MemoryModuleType.MEETING_POINT)
+				.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+				.map(GlobalPos::pos);
+
+			if (currentMeetingPoint.filter(gatheringPos::equals).isPresent()) {
+				continue;
+			}
+
+			villager.getBrain().setMemory(MemoryModuleType.MEETING_POINT, GlobalPos.of(level.dimension(), gatheringPos));
+			changed = true;
+		}
+
+		return changed;
+	}
+
 	public static Map<String, Integer> createOperationalPopulation(int villagers) {
 		if (villagers <= 0) {
 			return Map.of();
@@ -1851,16 +1875,8 @@ public final class SettlementVillagers {
 	}
 
 	private static boolean isActuallyAtVillageGathering(ServerLevel level, SettlementState settlement, Villager villager) {
-		BlockPos meetingPos = level.getPoiManager()
-			.findClosest(
-				holder -> holder.is(PoiTypes.MEETING),
-				settlement.center(),
-				villagerRadius(settlement),
-				net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
-			)
-			.orElse(settlement.center());
-
-		return villager.blockPosition().distSqr(meetingPos) <= GATHERING_RADIUS_BLOCKS * GATHERING_RADIUS_BLOCKS;
+		BlockPos gatheringPos = resolveGatheringPos(level, settlement);
+		return villager.blockPosition().distSqr(gatheringPos) <= GATHERING_RADIUS_BLOCKS * GATHERING_RADIUS_BLOCKS;
 	}
 
 	private static boolean isVillageGatheringTime(ServerLevel level) {
@@ -1876,6 +1892,36 @@ public final class SettlementVillagers {
 	private static boolean isVillageWakeupTime(ServerLevel level) {
 		long dayTime = level.getOverworldClockTime() % 24_000L;
 		return dayTime < VILLAGE_WAKEUP_END_TICK;
+	}
+
+	private static BlockPos resolveGatheringPos(ServerLevel level, SettlementState settlement) {
+		return level.getPoiManager()
+			.findClosest(
+				holder -> holder.is(PoiTypes.MEETING),
+				settlement.center(),
+				villagerRadius(settlement),
+				net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+			)
+			.or(() -> level.getPoiManager()
+				.findClosest(
+					holder -> holder.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
+					settlement.center(),
+					villagerRadius(settlement),
+					net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+				)
+				.flatMap(pos -> SettlementStockAccess.stockAccessStandPos(level, pos).or(() -> Optional.of(pos))))
+			.or(() -> level.getPoiManager()
+				.findAllClosestFirstWithType(
+					poiType -> !poiType.is(PoiTypes.HOME) && !poiType.is(PoiTypes.MEETING),
+					pos -> true,
+					settlement.center(),
+					villagerRadius(settlement),
+					net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+				)
+				.map(com.mojang.datafixers.util.Pair::getSecond)
+				.flatMap(pos -> SettlementStockAccess.stockAccessStandPos(level, pos).or(() -> Optional.of(pos)).stream())
+				.findFirst())
+			.orElse(settlement.center());
 	}
 
 	private static int trademasterCandidateRank(Villager villager) {

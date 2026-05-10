@@ -994,6 +994,7 @@ The abstract simulation still matters for unloaded or distant settlements, but i
 - Loaded workers should remember recently unreachable tasks for a short time so they do not repeatedly path into the same blocked or invalid target.
 - Non-urgent loaded-worker chores should respect time of day and bad weather rather than running with the same urgency at all times.
 - Late in the village day, villagers should keep the vanilla-feeling bell gathering routine as an explicit social task before returning to their claimed home beds for the night.
+- Evening gathering should resolve its anchor in this order: a real `Bell` / `MEETING` POI when present, otherwise the settlement's `Trade Board` or completed `Trading Post`, otherwise another non-home POI near the settlement center, and only then the raw settlement center as a last resort.
 - Loaded villagers should keep stable professions when possible. Custom-role promotion should prefer unassigned adults and should not repurpose existing vanilla professionals just because a custom role is missing.
 - Loaded villagers should claim individual home beds when available and should keep returning to the same valid bed instead of fighting over beds every evening.
 - Home assignment should stabilize quickly into a favorite bed per villager. When a favorite bed becomes invalid or temporarily unavailable, villagers may fall back to another open bed, but they should prefer reclaiming their usual valid bed on later nights.

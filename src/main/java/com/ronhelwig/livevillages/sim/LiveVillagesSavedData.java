@@ -519,6 +519,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementVillagers.ensureMiner(level, settlement);
 			SettlementVillagers.ensureFletcher(level, settlement);
 			SettlementVillagers.ensureVillagerHomes(level, settlement);
+			SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 			SettlementState updatedSettlement = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
 
 			if (!updatedSettlement.equals(settlement)) {
@@ -792,6 +793,7 @@ public class LiveVillagesSavedData extends SavedData {
 				: settlement.withPopulation(actualPopulation);
 			long homesStart = System.nanoTime();
 			changed |= SettlementVillagers.ensureVillagerHomes(level, workingSettlement);
+			changed |= SettlementVillagers.ensureVillagerGatheringPoint(level, workingSettlement);
 			long homesTime = System.nanoTime() - homesStart;
 			if (homesTime > 100_000_000) { // >100ms
 				LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());
@@ -1207,6 +1209,7 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementVillagers.ensurePortmaster(level, settlement);
 				SettlementVillagers.ensureFletcher(level, settlement);
 				SettlementVillagers.ensureVillagerHomes(level, settlement);
+				SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 				simulationInput = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
 			}
 
@@ -1235,6 +1238,7 @@ public class LiveVillagesSavedData extends SavedData {
 					SettlementVillagers.ensureMiner(level, updatedSettlement);
 					SettlementVillagers.ensureFletcher(level, updatedSettlement);
 					SettlementVillagers.ensureVillagerHomes(level, updatedSettlement);
+					SettlementVillagers.ensureVillagerGatheringPoint(level, updatedSettlement);
 					updatedSettlement = updatedSettlement
 						.withGrowthProgress(Math.max(0.0D, updatedSettlement.growthProgress() - spawnedVillagers))
 						.withPopulation(SettlementVillagers.censusPopulation(level, updatedSettlement));
