@@ -128,13 +128,19 @@ The player trades against settlement stock rather than only a single villager in
 - Settlements can trade `emeralds` directly as one more route good and reserve asset, not only as an abstract tier-unlock counter.
 - A settlement's want list may include a small number of brokered wants for goods that one of its active trading partners needs, even if the local settlement does not directly need them. This allows trade networks to relay materials toward deeper shortages instead of only handling strictly local demand.
 - The Trade Board trading screen should support two direct selection flows:
-  - `Your Goods`: the player selects a tradable item from their inventory, then chooses from the village payout options that are valid for that good.
-  - `Village Goods`: the player selects a village stock item the village is willing to offer, then chooses which currently wanted player good to pay with.
+  - `Your Goods`: the player selects an exact inventory item row from their carried inventory, with identical item types combined into one row, then chooses from the village payout options that are valid for that good when the board recognizes a normal trade category for it.
+  - `Village Goods`: the player selects a village stock item the village is willing to offer, including arbitrary previously donated stock items when they have enough quantity for a bundle, then chooses which currently wanted player good to pay with.
 - The village must not offer goods that are currently needed for active shortages, construction blockers, or normal stock targets. Trade payouts should only spend stock above the protected reserve for that good.
-- The `Your Goods` flow should let the player donate the selected good directly to settlement stock without taking a payout. The first-pass controls support donating one item, one normal trade bundle, or all matching items from the player's inventory.
+- The `Your Goods` flow should let the player donate the selected item row directly to settlement stock without taking a payout. The first-pass controls support donating one item, one trade bundle, or the full combined amount of the selected item row.
+- The `Your Goods` list should surface every non-empty carried inventory item type, not only goods that already have settlement pricing. Unknown or not-yet-modeled items should still be donatable so settlements can hold them for future use, profession demand, or player-to-player barter through village stock.
+- The `Your Goods` list should aggregate normal identical item types into one combined row, but non-empty storage containers such as `Bundle` should stay as separate rows so the player can choose which stored contents to release.
+- If a `Your Goods` row is a non-empty carried storage container, the board should not offer the normal `Give 1`, `Bundle`, or `All` actions for that row. Instead it should expose `Donate contents`, which empties the container and merges its stored contents into settlement stock while leaving the emptied container in player inventory.
+- Hovering a non-empty carried storage container row should preview its contents so the player can tell similar containers apart before donating their contents.
+- Once a carried storage container is empty again, it may return to normal grouping and ordinary donation/trade handling as a regular item.
+- The Trade Board should show the selected bundle size clearly enough that the player can tell what the `Bundle` action means before clicking it.
 - The Trade Board trade screens should focus on actionable goods and offers. Broader stock/status details belong on overview, inventory, or route screens.
 - After a successful or failed trade, the UI should keep the player on the current tab and provide immediate in-screen feedback in addition to chat.
-- A later bulk-donation flow may still open a transfer surface and move arbitrary stacks from player inventory into village stock. This flow will likely need iteration so it is fast without accidentally taking items the player meant to keep.
+- A later bulk-donation flow may still open a faster transfer surface for moving many arbitrary stacks from player inventory into village stock at once. This flow will likely need iteration so it is fast without accidentally taking items the player meant to keep.
 
 ### Profession-Specific Trade
 

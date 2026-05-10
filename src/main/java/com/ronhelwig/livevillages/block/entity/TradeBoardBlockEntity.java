@@ -1,5 +1,6 @@
 package com.ronhelwig.livevillages.block.entity;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -26,6 +27,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardLogic;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardOpenData;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementKind;
 import com.ronhelwig.livevillages.sim.SettlementNamer;
@@ -185,6 +187,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 	private TradeBoardOpenData createOpenData(ServerLevel serverLevel) {
 		SettlementState settlement = reconcileLoadedSettlement(serverLevel, resolveSettlement(serverLevel));
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
+		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		return new TradeBoardOpenData(
 			worldPosition.immutable(),
 			TradeBoardLogic.createSettlementView(
@@ -195,7 +198,8 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 				3,
 				3,
 				SettlementVillagers.nearbyProfessionPopulation(serverLevel, settlement),
-				TradeBoardLogic.constructionTradeDemand(savedData.getBuildSitesForSettlement(settlement.id()))
+				TradeBoardLogic.constructionTradeDemand(buildSites),
+				buildSites
 			)
 		);
 	}

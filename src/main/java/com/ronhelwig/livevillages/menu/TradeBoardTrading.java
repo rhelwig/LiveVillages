@@ -21,11 +21,12 @@ import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.network.TradeBoardRefreshPayload;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.RouteState;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
 public final class TradeBoardTrading {
-	public static final int MAX_TRADE_ROWS = 6;
+	public static final int MAX_TRADE_ROWS = 64;
 	public static final int MAX_TRADE_OPTIONS = 5;
 	public static final int DONATE_ONE_INDEX = 0;
 	public static final int DONATE_BUNDLE_INDEX = 1;
@@ -34,6 +35,7 @@ public final class TradeBoardTrading {
 	private static final int PLAYER_TRADE_BUTTON_BASE = 1_000;
 	private static final int VILLAGE_TRADE_BUTTON_BASE = 2_000;
 	private static final int DONATE_BUTTON_BASE = 3_000;
+	private static final int DONATE_CONTENTS_BUTTON_BASE = 4_000;
 	private static final int DONATE_OPTION_COUNT = 3;
 
 	private TradeBoardTrading() {
@@ -49,6 +51,10 @@ public final class TradeBoardTrading {
 
 	public static int donateButtonId(int playerGoodsIndex, int donationIndex) {
 		return DONATE_BUTTON_BASE + playerGoodsIndex * DONATE_OPTION_COUNT + donationIndex;
+	}
+
+	public static int donateContentsButtonId(int playerGoodsIndex) {
+		return DONATE_CONTENTS_BUTTON_BASE + playerGoodsIndex;
 	}
 
 	public static List<PlayerGoodsOption> playerGoodsOptions(Inventory inventory, TradeBoardSettlementView view) {
@@ -84,12 +90,133 @@ public final class TradeBoardTrading {
 			.toList();
 	}
 
+	public static List<TradeBoardInventoryEntryView> playerInventoryRows(Inventory inventory, TradeBoardSettlementView view) {
+		Map<String, PlayerGoodsOption> tradeOptionsByKey = new LinkedHashMap<>();
+		for (PlayerGoodsOption option : playerGoodsOptions(inventory, view)) {
+			tradeOptionsByKey.put(option.goodsKey(), option);
+		}
+
+		List<TradeBoardInventoryEntryView> rows = new ArrayList<>();
+		int slotLimit = Math.min(36, inventory.getContainerSize());
+		Map<String, AggregatedPlayerGoodsRow> aggregatedRows = new LinkedHashMap<>();
+
+		for (int slotIndex = 0; slotIndex < slotLimit; slotIndex++) {
+			ItemStack stack = inventory.getItem(slotIndex);
+			if (stack.isEmpty()) {
+				continue;
+			}
+
+			boolean hasStoredContents = TradeBoardTradeRules.hasStoredContents(stack);
+			String exactItemKey = TradeBoardTradeRules.exactItemKeyForStack(stack);
+			String rowKey = hasStoredContents ? exactItemKey + "#slot:" + slotIndex : exactItemKey;
+			String tradeGoodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+			String stockKey = TradeBoardTradeRules.stockKeyForStack(stack);
+			if (rowKey == null || stockKey == null || exactItemKey == null) {
+				continue;
+			}
+
+			if (hasStoredContents) {
+				rows.add(new TradeBoardInventoryEntryView(
+					rowKey,
+					slotIndex,
+					exactItemKey,
+					stockKey,
+					"",
+					stack.getHoverName().getString(),
+					stack.getCount(),
+					0,
+					true,
+					TradeBoardTradeRules.storedContentsCopy(stack).size(),
+					0,
+					100,
+					false,
+					false
+				));
+				continue;
+			}
+
+			AggregatedPlayerGoodsRow row = aggregatedRows.get(rowKey);
+			if (row == null) {
+				aggregatedRows.put(rowKey, new AggregatedPlayerGoodsRow(
+					rowKey,
+					slotIndex,
+					exactItemKey,
+					stack.getHoverName().getString(),
+					tradeGoodsKey,
+					stockKey,
+					stack.getCount()
+				));
+			} else {
+				aggregatedRows.put(rowKey, row.withAddedCount(stack.getCount()));
+			}
+		}
+
+		for (AggregatedPlayerGoodsRow row : aggregatedRows.values()) {
+			PlayerGoodsOption tradeOption = row.tradeGoodsKey() == null
+				? null
+				: playerGoodsOptionForRow(row, tradeOptionsByKey.get(row.tradeGoodsKey()));
+			rows.add(new TradeBoardInventoryEntryView(
+				row.rowKey(),
+				row.primarySlotIndex(),
+				row.exactItemKey(),
+				row.stockKey(),
+				row.tradeGoodsKey() == null ? "" : row.tradeGoodsKey(),
+				row.label(),
+				row.totalCount(),
+				TradeBoardTradeRules.bundleSize(row.stockKey()),
+				false,
+				0,
+				tradeOption == null ? 0 : tradeOption.wantedAmount(),
+				tradeOption == null ? 100 : tradeOption.tradePricePercent(),
+				tradeOption != null && tradeOption.wanted(),
+				tradeOption != null && tradeOption.canOfferBundle()
+			));
+		}
+
+		rows.sort(
+			Comparator.comparingInt(TradeBoardTrading::playerGoodsPriority)
+				.thenComparingInt(TradeBoardTrading::playerGoodsBundlePriority)
+				.thenComparingInt((TradeBoardInventoryEntryView entry) -> -playerGoodsWantedAmount(entry))
+				.thenComparing(TradeBoardInventoryEntryView::label, String.CASE_INSENSITIVE_ORDER)
+				.thenComparingInt(TradeBoardInventoryEntryView::slotIndex)
+		);
+
+		return rows;
+	}
+
 	public static List<TradeBoardGoodsView> villageGoodsOptions(TradeBoardSettlementView view) {
-		return view.surpluses().stream()
+		List<TradeBoardGoodsView> options = new ArrayList<>(view.surpluses().stream()
 			.filter(entry -> entry.tradeBundleSize() > 0)
 			.filter(entry -> availableSettlementGoodsForTrade(entry) >= entry.tradeBundleSize())
-			.limit(MAX_TRADE_ROWS)
-			.toList();
+			.toList());
+
+		for (TradeBoardGoodsView stockEntry : view.stock()) {
+			if (!TradeBoardTradeRules.isExactItemKey(stockEntry.goodsKey())) {
+				continue;
+			}
+
+			int bundleSize = TradeBoardTradeRules.bundleSize(stockEntry.goodsKey());
+			if (bundleSize <= 0 || stockEntry.current() < bundleSize) {
+				continue;
+			}
+
+			options.add(new TradeBoardGoodsView(
+				stockEntry.goodsKey(),
+				stockEntry.label(),
+				stockEntry.current(),
+				0,
+				100,
+				bundleSize,
+				TradeBoardTradeRules.bundlePriceEmeralds(stockEntry.goodsKey(), 100)
+			));
+		}
+
+		options.sort(
+			Comparator.comparingInt((TradeBoardGoodsView entry) -> TradeBoardTradeRules.isExactItemKey(entry.goodsKey()) ? 1 : 0)
+				.thenComparing(TradeBoardGoodsView::label)
+		);
+
+		return options.stream().limit(MAX_TRADE_ROWS).toList();
 	}
 
 	public static List<GoodsTradeOption> payoutOptionsForPlayerGoods(PlayerGoodsOption playerGoods, TradeBoardSettlementView view) {
@@ -178,8 +305,10 @@ public final class TradeBoardTrading {
 			&& buttonId < VILLAGE_TRADE_BUTTON_BASE + MAX_TRADE_ROWS * MAX_TRADE_OPTIONS;
 		boolean isDonation = buttonId >= DONATE_BUTTON_BASE
 			&& buttonId < DONATE_BUTTON_BASE + MAX_TRADE_ROWS * DONATE_OPTION_COUNT;
+		boolean isDonateContents = buttonId >= DONATE_CONTENTS_BUTTON_BASE
+			&& buttonId < DONATE_CONTENTS_BUTTON_BASE + 128;
 
-		if (!isPlayerTrade && !isVillageTrade && !isDonation) {
+		if (!isPlayerTrade && !isVillageTrade && !isDonation && !isDonateContents) {
 			return false;
 		}
 
@@ -191,6 +320,8 @@ public final class TradeBoardTrading {
 			result = handlePlayerGoodsTrade(player, settlement, view, buttonId - PLAYER_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		} else if (isVillageTrade) {
 			result = handleVillageGoodsTrade(player, settlement, view, buttonId - VILLAGE_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+		} else if (isDonateContents) {
+			result = handleDonateContents(player, settlement, view, buttonId - DONATE_CONTENTS_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		} else {
 			result = handleDonation(player, settlement, view, buttonId - DONATE_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		}
@@ -213,33 +344,94 @@ public final class TradeBoardTrading {
 		int encodedButtonId,
 		long currentTick
 	) {
-		int playerGoodsIndex = encodedButtonId / DONATE_OPTION_COUNT;
+		int rowIndex = encodedButtonId / DONATE_OPTION_COUNT;
 		int donationIndex = encodedButtonId % DONATE_OPTION_COUNT;
-		List<PlayerGoodsOption> playerGoods = playerGoodsOptions(player.getInventory(), view);
-
-		if (playerGoodsIndex < 0 || playerGoodsIndex >= playerGoods.size()) {
-			return TradeResult.failure("That inventory good is no longer available.");
+		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
+		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
+			return TradeResult.failure("That inventory row is no longer available.");
 		}
 
-		PlayerGoodsOption donatedGoods = playerGoods.get(playerGoodsIndex);
-		int amount = donationAmount(donatedGoods, donationIndex);
+		TradeBoardInventoryEntryView selectedRow = inventoryRows.get(rowIndex);
+		if (selectedRow.hasStoredContents()) {
+			return TradeResult.failure("Use Donate contents for that container.");
+		}
+
+		int availableAmount = TradeBoardTradeRules.countPlayerGoodsByExactItemKey(player.getInventory(), selectedRow.exactItemKey());
+		int amount = donationAmount(selectedRow.stockKey(), availableAmount, donationIndex);
 		if (amount <= 0) {
 			return TradeResult.failure("There is nothing to donate.");
 		}
 
-		if (!TradeBoardTradeRules.removePlayerGoods(player.getInventory(), donatedGoods.goodsKey(), amount)) {
+		if (!TradeBoardTradeRules.removePlayerGoodsByExactItemKey(player.getInventory(), selectedRow.exactItemKey(), amount)) {
 			return TradeResult.failure("The donation failed while removing goods from your inventory.");
 		}
 
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
-		stock.merge(donatedGoods.goodsKey(), amount, Integer::sum);
+		stock.merge(selectedRow.stockKey(), amount, Integer::sum);
 		cleanMap(stock);
 
 		return TradeResult.success(
 			updateSettlementStock(settlement, stock, currentTick),
 			"Donated %d %s to %s.".formatted(
 				amount,
-				donatedGoods.label().toLowerCase(Locale.ROOT),
+				selectedRow.label(),
+				settlement.name()
+			)
+		);
+	}
+
+	private static TradeResult handleDonateContents(
+		ServerPlayer player,
+		SettlementState settlement,
+		TradeBoardSettlementView view,
+		int rowIndex,
+		long currentTick
+	) {
+		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
+		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
+			return TradeResult.failure("That container is no longer available.");
+		}
+
+		TradeBoardInventoryEntryView selectedRow = inventoryRows.get(rowIndex);
+		int slotIndex = selectedRow.slotIndex();
+		if (!selectedRow.hasStoredContents() || slotIndex < 0 || slotIndex >= player.getInventory().getContainerSize()) {
+			return TradeResult.failure("That container does not have any stored contents.");
+		}
+
+		ItemStack containerStack = player.getInventory().getItem(slotIndex);
+		if (containerStack.isEmpty()) {
+			return TradeResult.failure("That container is no longer available.");
+		}
+
+		List<ItemStack> contents = TradeBoardTradeRules.storedContentsCopy(containerStack);
+		if (contents.isEmpty()) {
+			return TradeResult.failure("That container does not have any stored contents.");
+		}
+
+		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
+		int donatedStacks = 0;
+
+		for (ItemStack content : contents) {
+			String stockKey = TradeBoardTradeRules.stockKeyForStack(content);
+			if (stockKey == null || content.isEmpty()) {
+				continue;
+			}
+
+			stock.merge(stockKey, content.getCount(), Integer::sum);
+			donatedStacks++;
+		}
+
+		if (donatedStacks <= 0) {
+			return TradeResult.failure("That container does not have any usable contents.");
+		}
+
+		TradeBoardTradeRules.clearStoredContents(containerStack);
+		cleanMap(stock);
+
+		return TradeResult.success(
+			updateSettlementStock(settlement, stock, currentTick),
+			"Donated stored contents from %s to %s.".formatted(
+				containerStack.getHoverName().getString(),
 				settlement.name()
 			)
 		);
@@ -252,15 +444,20 @@ public final class TradeBoardTrading {
 		int encodedButtonId,
 		long currentTick
 	) {
-		int playerGoodsIndex = encodedButtonId / MAX_TRADE_OPTIONS;
+		int rowIndex = encodedButtonId / MAX_TRADE_OPTIONS;
 		int payoutIndex = encodedButtonId % MAX_TRADE_OPTIONS;
-		List<PlayerGoodsOption> playerGoods = playerGoodsOptions(player.getInventory(), view);
-
-		if (playerGoodsIndex < 0 || playerGoodsIndex >= playerGoods.size()) {
-			return TradeResult.failure("That inventory good is no longer available.");
+		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
+		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
+			return TradeResult.failure("That inventory row is no longer available.");
 		}
 
-		PlayerGoodsOption offeredGoods = playerGoods.get(playerGoodsIndex);
+		TradeBoardInventoryEntryView selectedRow = inventoryRows.get(rowIndex);
+		if (selectedRow.hasStoredContents() || !selectedRow.hasTradeGoodsKey()) {
+			return TradeResult.failure("That inventory row cannot be traded here yet.");
+		}
+
+		int offeredAmount = TradeBoardTradeRules.countPlayerGoodsByExactItemKey(player.getInventory(), selectedRow.exactItemKey());
+		PlayerGoodsOption offeredGoods = playerGoodsOption(selectedRow.tradeGoodsKey(), selectedRow.label(), offeredAmount, view);
 		if (!offeredGoods.wanted()) {
 			return TradeResult.failure("%s is not asking for %s right now.".formatted(settlement.name(), offeredGoods.label().toLowerCase(Locale.ROOT)));
 		}
@@ -282,7 +479,7 @@ public final class TradeBoardTrading {
 			return TradeResult.failure("%s needs to keep its remaining %s.".formatted(settlement.name(), payout.label().toLowerCase(Locale.ROOT)));
 		}
 
-		if (!TradeBoardTradeRules.removePlayerGoods(player.getInventory(), offeredGoods.goodsKey(), amount)) {
+		if (!TradeBoardTradeRules.removePlayerGoodsByExactItemKey(player.getInventory(), selectedRow.exactItemKey(), amount)) {
 			return TradeResult.failure("The trade failed while removing goods from your inventory.");
 		}
 
@@ -356,6 +553,7 @@ public final class TradeBoardTrading {
 
 	private static TradeBoardSettlementView createTradeView(ServerLevel serverLevel, LiveVillagesSavedData savedData, SettlementState settlement) {
 		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
+		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		return TradeBoardLogic.createSettlementView(
 			settlement,
 			routes,
@@ -364,18 +562,23 @@ public final class TradeBoardTrading {
 			3,
 			3,
 			SettlementVillagers.nearbyProfessionPopulation(serverLevel, settlement),
-			TradeBoardLogic.constructionTradeDemand(savedData.getBuildSitesForSettlement(settlement.id()))
+			TradeBoardLogic.constructionTradeDemand(buildSites),
+			buildSites
 		);
 	}
 
 	private static PlayerGoodsOption playerGoodsOption(String goodsKey, int playerAmount, TradeBoardSettlementView view) {
+		return playerGoodsOption(goodsKey, humanizeKey(goodsKey), playerAmount, view);
+	}
+
+	private static PlayerGoodsOption playerGoodsOption(String goodsKey, String label, int playerAmount, TradeBoardSettlementView view) {
 		TradeBoardGoodsView shortage = goodsView(view.shortages(), goodsKey);
 		int tradeBundleSize = TradeBoardTradeRules.bundleSize(goodsKey);
 
 		if (shortage == null) {
 			return new PlayerGoodsOption(
 				goodsKey,
-				humanizeKey(goodsKey),
+				label,
 				playerAmount,
 				0,
 				tradeBundleSize,
@@ -387,7 +590,7 @@ public final class TradeBoardTrading {
 
 		return new PlayerGoodsOption(
 			goodsKey,
-			shortage.label(),
+			label,
 			playerAmount,
 			Math.max(0, shortage.target() - shortage.current()),
 			shortage.tradeBundleSize(),
@@ -448,15 +651,16 @@ public final class TradeBoardTrading {
 		return 0;
 	}
 
-	private static int donationAmount(PlayerGoodsOption goods, int donationIndex) {
-		if (goods.playerAmount() <= 0) {
+	private static int donationAmount(String stockKey, int availableAmount, int donationIndex) {
+		if (stockKey == null || availableAmount <= 0) {
 			return 0;
 		}
 
+		int bundleSize = Math.max(1, TradeBoardTradeRules.bundleSize(stockKey));
 		return switch (donationIndex) {
 			case DONATE_ONE_INDEX -> 1;
-			case DONATE_BUNDLE_INDEX -> Math.min(goods.playerAmount(), Math.max(1, goods.tradeBundleSize()));
-			case DONATE_ALL_INDEX -> goods.playerAmount();
+			case DONATE_BUNDLE_INDEX -> bundleSize > 0 ? Math.min(availableAmount, bundleSize) : 0;
+			case DONATE_ALL_INDEX -> availableAmount;
 			default -> 0;
 		};
 	}
@@ -519,7 +723,14 @@ public final class TradeBoardTrading {
 
 	private static void sendTradeResult(ServerPlayer player, BlockPos boardPos, TradeBoardSettlementView view, TradeResult result) {
 		player.sendSystemMessage(Component.literal(result.message()));
-		ServerPlayNetworking.send(player, new TradeBoardRefreshPayload(boardPos.immutable(), view, result.message(), result.success(), playerGoodsCounts(player.getInventory())));
+		ServerPlayNetworking.send(player, new TradeBoardRefreshPayload(
+			boardPos.immutable(),
+			view,
+			result.message(),
+			result.success(),
+			playerGoodsCounts(player.getInventory()),
+			playerInventoryRows(player.getInventory(), view)
+		));
 	}
 
 	private static void giveStack(ServerPlayer player, ItemStack stack) {
@@ -556,6 +767,58 @@ public final class TradeBoardTrading {
 		return result.toString();
 	}
 
+	private static int playerGoodsPriority(TradeBoardInventoryEntryView entry) {
+		if (entry.hasStoredContents()) {
+			return 2;
+		}
+
+		if (!entry.hasTradeGoodsKey()) {
+			return 3;
+		}
+
+		return entry.wanted() ? 0 : 1;
+	}
+
+	private static int playerGoodsBundlePriority(TradeBoardInventoryEntryView entry) {
+		if (entry.hasStoredContents()) {
+			return 1;
+		}
+
+		if (!entry.hasTradeGoodsKey()) {
+			return 1;
+		}
+
+		return entry.canOfferBundle() ? 0 : 1;
+	}
+
+	private static int playerGoodsWantedAmount(TradeBoardInventoryEntryView entry) {
+		return entry.wanted() ? entry.wantedAmount() : 0;
+	}
+
+	private static PlayerGoodsOption playerGoodsOptionForRow(AggregatedPlayerGoodsRow row, PlayerGoodsOption aggregatedOption) {
+		if (row.tradeGoodsKey() == null) {
+			return null;
+		}
+
+		int bundleSize = aggregatedOption == null
+			? TradeBoardTradeRules.bundleSize(row.tradeGoodsKey())
+			: aggregatedOption.tradeBundleSize();
+		int tradePricePercent = aggregatedOption == null ? 100 : aggregatedOption.tradePricePercent();
+		int wantedAmount = aggregatedOption == null ? 0 : aggregatedOption.wantedAmount();
+		boolean wanted = aggregatedOption != null && aggregatedOption.wanted();
+
+		return new PlayerGoodsOption(
+			row.tradeGoodsKey(),
+			row.label(),
+			row.totalCount(),
+			wantedAmount,
+			bundleSize,
+			tradePricePercent,
+			wanted,
+			row.totalCount() >= Math.max(1, bundleSize)
+		);
+	}
+
 	public record PlayerGoodsOption(
 		String goodsKey,
 		String label,
@@ -569,6 +832,20 @@ public final class TradeBoardTrading {
 	}
 
 	public record GoodsTradeOption(String goodsKey, String label, int amount, int valuePoints, int overpayValuePoints) {
+	}
+
+	private record AggregatedPlayerGoodsRow(
+		String rowKey,
+		int primarySlotIndex,
+		String exactItemKey,
+		String label,
+		String tradeGoodsKey,
+		String stockKey,
+		int totalCount
+	) {
+		private AggregatedPlayerGoodsRow withAddedCount(int extraCount) {
+			return new AggregatedPlayerGoodsRow(rowKey, primarySlotIndex, exactItemKey, label, tradeGoodsKey, stockKey, totalCount + extraCount);
+		}
 	}
 
 	private record TradeResult(boolean success, SettlementState updatedSettlement, String message) {

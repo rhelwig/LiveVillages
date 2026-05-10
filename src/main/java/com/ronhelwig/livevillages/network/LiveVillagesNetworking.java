@@ -438,6 +438,7 @@ public final class LiveVillagesNetworking {
 		SettlementState settlement = nearestSettlement.get();
 		savedData.restoreSettlementMapMemory((ServerLevel) player.level(), settlement);
 		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
+		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		TradeBoardSettlementView view = TradeBoardLogic.createSettlementView(
 			settlement,
 			routes,
@@ -446,10 +447,10 @@ public final class LiveVillagesNetworking {
 			OVERLAY_ROUTE_ROWS,
 			OVERLAY_PROJECT_ROWS,
 			SettlementVillagers.nearbyProfessionPopulation((ServerLevel) player.level(), settlement),
-			TradeBoardLogic.constructionTradeDemand(savedData.getBuildSitesForSettlement(settlement.id()))
+			TradeBoardLogic.constructionTradeDemand(buildSites),
+			buildSites
 		);
 		int distanceBlocks = (int) Math.round(Math.sqrt(settlement.center().distSqr(player.blockPosition())));
-		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		List<SettlementConstructionDelivery> deliveries = savedData.getConstructionDeliveries().stream()
 			.filter(delivery -> delivery.settlementId().equals(settlement.id()))
 			.toList();

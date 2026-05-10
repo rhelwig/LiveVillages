@@ -48,6 +48,11 @@ Focus:
 
 - keep abstract and loaded settlement outputs aligned, especially for harbor-adjacent production such as `Fisherman`
 - make infrastructure bonuses visible in actual trade cadence, quality, and route usefulness, not only in hidden scoring
+- surface active `Trading Post` and other build-site progress directly in the board/overlay project views so route/build/trade state is legible before retuning deeper priorities
+- keep Trade Board goods panes usable with longer inventories by scrolling instead of truncating rows, and keep row selection visuals aligned with the actual click targets
+- keep Trade Board inventory rows aggregated by exact item type so duplicate stacks do not crowd the list, while still letting village stock retain the abstract recognized-goods model where that supports settlement simulation
+- keep Trade Board player-row refreshes authoritative after donations and trades so aggregated exact-item rows update counts immediately and do not break when the first contributing stack is exhausted
+- keep non-empty carried containers such as `Bundle` separate from aggregated rows, preview their contents on hover, and donate their contents into settlement stock without trading away the still-useful empty container
 - keep Trade Board shortage/surplus output accurate when construction blockers, protected reserves, or build-site demand are involved
 - keep route-transfer demand aware of active staged build-site materials so visible construction stalls can be supplied by trade
 - preserve completed harbor/trade build-site effects for route planning even while the corresponding chunks are unloaded
@@ -170,8 +175,10 @@ Keep these unless the spec is intentionally changed:
 - Craftable structure-anchor blocks are the preferred trigger for non-workstation civic structures unless a vanilla workstation is the better anchor.
 - The `Trade Board` should show highest-priority settlement-wide wants; profession structures should handle narrower specialist trades.
 - Trade Board trading stays centered on `Your Goods` and `Village Goods`, with direct donation support and protected settlement reserves.
+- The Trade Board goods panes are the first vanilla-widget migration target: use `ObjectSelectionList` for the left-side `Your Goods` and `Village Goods` lists, while map screens and recipe grids stay custom because they are not a good one-column list fit.
+- Non-empty carried containers should use a dedicated `Donate contents` path instead of the normal donation buttons, and their contents should move into village stock rather than storing the full container as opaque stock.
 - Inter-settlement trade should eventually support direct `emerald` movement and a small amount of brokered demand for goods wanted by downstream partner settlements.
-- Revisit the Trade Board UX so `Village Asks` can show top wants even when the player lacks them, and so later donation flows can handle arbitrary inventory goods without forcing the current narrow selection model.
+- Revisit the Trade Board UX so `Village Asks` can show top wants even when the player lacks them, and keep refining how arbitrary donated inventory goods are priced, grouped, and explained once they enter the village-side trade inventory.
 - Player-placed vanilla `Cartography Table` blocks should anchor a staged `Cartographer's House`.
 - Player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`.
 - The vanilla `Fletching Table` should remain a real player-use arrow workstation with material-arrow variants rather than staying decorative.

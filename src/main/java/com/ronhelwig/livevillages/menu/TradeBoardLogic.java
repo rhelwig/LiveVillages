@@ -12,6 +12,7 @@ import com.ronhelwig.livevillages.sim.RouteState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockStatus;
 import com.ronhelwig.livevillages.sim.SettlementBuildSite;
+import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementProjectType;
@@ -68,6 +69,30 @@ public final class TradeBoardLogic {
 		Map<String, Integer> rolePopulation,
 		Map<String, Integer> constructionDemand
 	) {
+		return createSettlementView(
+			settlement,
+			routes,
+			settlementNameResolver,
+			maxStockRows,
+			maxRouteRows,
+			maxProjectRows,
+			rolePopulation,
+			constructionDemand,
+			List.of()
+		);
+	}
+
+	public static TradeBoardSettlementView createSettlementView(
+		SettlementState settlement,
+		List<RouteState> routes,
+		Function<String, String> settlementNameResolver,
+		int maxStockRows,
+		int maxRouteRows,
+		int maxProjectRows,
+		Map<String, Integer> rolePopulation,
+		Map<String, Integer> constructionDemand,
+		List<SettlementBuildSite> buildSites
+	) {
 		int population = Math.max(1, settlement.totalPopulation());
 		List<TradeBoardGoodsView> shortages = new ArrayList<>();
 		List<TradeBoardGoodsView> surpluses = new ArrayList<>();
@@ -116,7 +141,15 @@ public final class TradeBoardLogic {
 		List<TradeBoardGoodsView> stock = settlement.stock().entrySet().stream()
 			.filter(entry -> entry.getValue() > 0)
 			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-			.map(entry -> new TradeBoardGoodsView(entry.getKey(), humanizeKey(entry.getKey()), entry.getValue(), 0, 100, 0, 0))
+			.map(entry -> new TradeBoardGoodsView(
+				entry.getKey(),
+				TradeBoardTradeRules.displayLabel(entry.getKey(), humanizeKey(entry.getKey())),
+				entry.getValue(),
+				0,
+				100,
+				0,
+				0
+			))
 			.toList();
 		List<TradeBoardRoleView> roleCounts = createRoleCounts(rolePopulation);
 		List<TradeBoardRouteView> routeViews = routes.stream()
@@ -130,14 +163,12 @@ public final class TradeBoardLogic {
 				routeSummary(route)
 			))
 			.toList();
-		List<TradeBoardProjectView> projects = settlement.projects().stream()
-			.sorted(
-				Comparator.comparingInt((SettlementProject project) -> project.type() == SettlementProjectType.ROAD ? 0 : 1)
-					.thenComparing(Comparator.comparingInt(SettlementProject::progressPercent).reversed())
-			)
-			.limit(Math.max(0, maxProjectRows))
-			.map(project -> new TradeBoardProjectView(projectLabel(project, settlementNameResolver), project.progressPercent()))
-			.toList();
+		List<TradeBoardProjectView> projects = createProjectViews(
+			settlement.projects(),
+			buildSites,
+			settlementNameResolver,
+			maxProjectRows
+		);
 
 		return new TradeBoardSettlementView(
 			settlement.id(),
@@ -329,6 +360,130 @@ public final class TradeBoardLogic {
 				yield targetName.isBlank() ? "Road Survey" : "Road to " + targetName;
 			}
 			case STORAGE -> "Storage Chest";
+		};
+	}
+
+	private static List<TradeBoardProjectView> createProjectViews(
+		List<SettlementProject> queuedProjects,
+		List<SettlementBuildSite> buildSites,
+		Function<String, String> settlementNameResolver,
+		int maxProjectRows
+	) {
+		List<TradeBoardProjectView> combined = new ArrayList<>();
+		combined.addAll(buildSiteProjectViews(buildSites));
+		combined.addAll(queuedProjects.stream()
+			.sorted(
+				Comparator.comparingInt((SettlementProject project) -> project.type() == SettlementProjectType.ROAD ? 0 : 1)
+					.thenComparing(Comparator.comparingInt(SettlementProject::progressPercent).reversed())
+			)
+			.map(project -> new TradeBoardProjectView(projectLabel(project, settlementNameResolver), project.progressPercent()))
+			.toList());
+		return combined.stream()
+			.limit(Math.max(0, maxProjectRows))
+			.toList();
+	}
+
+	private static List<TradeBoardProjectView> buildSiteProjectViews(List<SettlementBuildSite> buildSites) {
+		return buildSites.stream()
+			.filter(buildSite -> !buildSite.complete())
+			.sorted(
+				Comparator.comparingInt(TradeBoardLogic::buildSitePriority)
+					.thenComparingLong(SettlementBuildSite::createdTick)
+					.thenComparing(buildSite -> buildSite.blueprintId().getSerializedName())
+			)
+			.map(buildSite -> new TradeBoardProjectView(
+				buildSiteProjectLabel(buildSite),
+				buildSiteProgressPercent(buildSite)
+			))
+			.toList();
+	}
+
+	private static int buildSitePriority(SettlementBuildSite buildSite) {
+		return switch (buildSite.blueprintId()) {
+			case TRADING_POST -> 0;
+			case DOCK, LIGHTHOUSE -> 1;
+			case ROADWRIGHT_WORKSHOP, CARTOGRAPHER_HOUSE -> 2;
+			default -> 3;
+		};
+	}
+
+	private static String buildSiteProjectLabel(SettlementBuildSite buildSite) {
+		String status = buildSiteStatus(buildSite);
+		return status.isBlank()
+			? buildSiteTypeLabel(buildSite.blueprintId()) + " Site"
+			: buildSiteTypeLabel(buildSite.blueprintId()) + " Site (" + status + ")";
+	}
+
+	private static int buildSiteProgressPercent(SettlementBuildSite buildSite) {
+		if (buildSite.complete()) {
+			return 100;
+		}
+
+		int totalBlocks = buildSite.blocks().size();
+
+		if (totalBlocks <= 0) {
+			return 0;
+		}
+
+		int placedBlocks = 0;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+				placedBlocks++;
+			}
+		}
+
+		return Math.max(0, Math.min(100, (int) Math.round((placedBlocks * 100.0D) / totalBlocks)));
+	}
+
+	private static String buildSiteStatus(SettlementBuildSite buildSite) {
+		int pendingBlocks = 0;
+		int missingMaterialBlocks = 0;
+		int blockedBlocks = 0;
+		int placedBlocks = 0;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			switch (block.status()) {
+				case PENDING -> pendingBlocks++;
+				case MISSING_MATERIAL -> missingMaterialBlocks++;
+				case BLOCKED -> blockedBlocks++;
+				case PLACED, PLAYER_PLACED -> placedBlocks++;
+			}
+		}
+
+		if (blockedBlocks > 0) {
+			return "blocked";
+		}
+
+		if (missingMaterialBlocks > 0) {
+			return "missing materials";
+		}
+
+		if (pendingBlocks > 0 && placedBlocks > 0) {
+			return "under construction";
+		}
+
+		if (pendingBlocks > 0) {
+			return "planned";
+		}
+
+		return "";
+	}
+
+	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
+		return switch (type) {
+			case BUTCHER_SHOP -> "Butcher Shop";
+			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
+			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
+			case DOCK -> "Dock";
+			case LIGHTHOUSE -> "Lighthouse";
+			case MINE_ENTRANCE -> "Mine Entrance";
+			case FLETCHER_HUT -> "Fletcher's Hut";
+			case FORESTER_WORKSHOP -> "Forester's Workshop";
+			case HOUSING_SHELTER -> "Housing Shelter";
+			case ROADWRIGHT_WORKSHOP -> "Roadwright's Workshop";
+			case SIMPLE_HOUSING_SHELTER -> "Simple Housing Shelter";
+			case TRADING_POST -> "Trade Post";
 		};
 	}
 

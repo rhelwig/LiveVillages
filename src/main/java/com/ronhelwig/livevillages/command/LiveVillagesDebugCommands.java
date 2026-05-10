@@ -98,6 +98,7 @@ public final class LiveVillagesDebugCommands {
 
 		SettlementState settlement = nearestSettlement.get();
 		List<com.ronhelwig.livevillages.sim.RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
+		List<com.ronhelwig.livevillages.sim.SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		TradeBoardSettlementView view = TradeBoardLogic.createSettlementView(
 			settlement,
 			routes,
@@ -105,7 +106,9 @@ public final class LiveVillagesDebugCommands {
 			5,
 			3,
 			3,
-			SettlementVillagers.nearbyProfessionPopulation(source.getLevel(), settlement)
+			SettlementVillagers.nearbyProfessionPopulation(source.getLevel(), settlement),
+			TradeBoardLogic.constructionTradeDemand(buildSites),
+			buildSites
 		);
 		source.sendSystemMessage(Component.literal(
 			"Settlement: %s [%s] @ %d, %d, %d"

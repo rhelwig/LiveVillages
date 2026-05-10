@@ -197,7 +197,7 @@ public final class SettlementInventoryOverlay {
 
 		rightY = drawGoodsSection(graphics, font, rightX, rightY, RIGHT_COLUMN_WIDTH, "Top Needs", settlement.shortages(), 6, true, 0xFFF0D6B2);
 		rightY += LINE_HEIGHT;
-		drawProjectSection(graphics, font, rightX, rightY, RIGHT_COLUMN_WIDTH, "Queued Projects", settlement.projects(), 4);
+		drawProjectSection(graphics, font, rightX, rightY, RIGHT_COLUMN_WIDTH, "Projects & Sites", settlement.projects(), 4);
 	}
 
 	private static void renderInventory(

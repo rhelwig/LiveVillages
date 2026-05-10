@@ -12,6 +12,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.menu.TradeBoardInventoryEntryView;
 import com.ronhelwig.livevillages.menu.TradeBoardPlayerGoodsView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 
@@ -20,7 +21,8 @@ public record TradeBoardRefreshPayload(
 	TradeBoardSettlementView settlement,
 	String message,
 	boolean success,
-	List<TradeBoardPlayerGoodsView> playerGoods
+	List<TradeBoardPlayerGoodsView> playerGoods,
+	List<TradeBoardInventoryEntryView> inventoryRows
 ) implements CustomPacketPayload {
 	public static final Type<TradeBoardRefreshPayload> TYPE = new Type<>(LiveVillages.id("trade_board_refresh"));
 	public static final Codec<TradeBoardRefreshPayload> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -28,7 +30,8 @@ public record TradeBoardRefreshPayload(
 		TradeBoardSettlementView.CODEC.fieldOf("settlement").forGetter(TradeBoardRefreshPayload::settlement),
 		Codec.STRING.optionalFieldOf("message", "").forGetter(TradeBoardRefreshPayload::message),
 		Codec.BOOL.optionalFieldOf("success", false).forGetter(TradeBoardRefreshPayload::success),
-		TradeBoardPlayerGoodsView.CODEC.listOf().optionalFieldOf("player_goods", List.of()).forGetter(TradeBoardRefreshPayload::playerGoods)
+		TradeBoardPlayerGoodsView.CODEC.listOf().optionalFieldOf("player_goods", List.of()).forGetter(TradeBoardRefreshPayload::playerGoods),
+		TradeBoardInventoryEntryView.CODEC.listOf().optionalFieldOf("inventory_rows", List.of()).forGetter(TradeBoardRefreshPayload::inventoryRows)
 	).apply(instance, TradeBoardRefreshPayload::new));
 	public static final StreamCodec<RegistryFriendlyByteBuf, TradeBoardRefreshPayload> STREAM_CODEC = ByteBufCodecs.fromCodecWithRegistries(CODEC);
 

@@ -2,13 +2,21 @@ package com.ronhelwig.livevillages.menu;
 
 import java.util.List;
 
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BundleContents;
+import net.minecraft.world.item.component.ItemContainerContents;
 
 public final class TradeBoardTradeRules {
 	private static final int VALUE_POINTS_PER_EMERALD = 240;
+	private static final String ITEM_KEY_PREFIX = "item:";
 	private static final List<String> TRADEABLE_GOODS_KEYS = List.of(
 		"bread",
 		"beef",
@@ -60,7 +68,32 @@ public final class TradeBoardTradeRules {
 		return bundleSize(goodsKey) > 0;
 	}
 
+	public static boolean isExactItemKey(String goodsKey) {
+		return goodsKey != null && goodsKey.startsWith(ITEM_KEY_PREFIX);
+	}
+
+	public static String exactItemKeyForStack(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return null;
+		}
+
+		return ITEM_KEY_PREFIX + BuiltInRegistries.ITEM.getKey(stack.getItem());
+	}
+
+	public static String stockKeyForStack(ItemStack stack) {
+		String goodsKey = goodsKeyForStack(stack);
+		if (goodsKey != null) {
+			return goodsKey;
+		}
+
+		return exactItemKeyForStack(stack);
+	}
+
 	public static int bundleSize(String goodsKey) {
+		if (isExactItemKey(goodsKey)) {
+			return exactItemBundleSize(itemForExactKey(goodsKey));
+		}
+
 		return switch (goodsKey) {
 			case "bread" -> 6;
 			case "beef" -> 4;
@@ -172,6 +205,113 @@ public final class TradeBoardTradeRules {
 		return remaining == 0;
 	}
 
+	public static boolean removePlayerGoodsFromSlot(Inventory inventory, int slot, int amount) {
+		if (amount <= 0 || slot < 0 || slot >= inventory.getContainerSize()) {
+			return false;
+		}
+
+		ItemStack stack = inventory.getItem(slot);
+		if (stack.isEmpty() || stack.getCount() < amount) {
+			return false;
+		}
+
+		stack.shrink(amount);
+		if (stack.isEmpty()) {
+			inventory.setItem(slot, ItemStack.EMPTY);
+		}
+
+		return true;
+	}
+
+	public static boolean hasStoredContents(ItemStack stack) {
+		return !storedContentsCopy(stack).isEmpty();
+	}
+
+	public static List<ItemStack> storedContentsCopy(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return List.of();
+		}
+
+		BundleContents bundleContents = stack.get(DataComponents.BUNDLE_CONTENTS);
+		if (bundleContents != null && !bundleContents.isEmpty()) {
+			List<ItemStack> contents = new java.util.ArrayList<>();
+			for (ItemStack content : bundleContents.itemCopyStream().toList()) {
+				if (!content.isEmpty()) {
+					contents.add(content.copy());
+				}
+			}
+			return contents;
+		}
+
+		ItemContainerContents containerContents = stack.get(DataComponents.CONTAINER);
+		if (containerContents != null) {
+			NonNullList<ItemStack> copiedContents = NonNullList.create();
+			containerContents.copyInto(copiedContents);
+			List<ItemStack> contents = new java.util.ArrayList<>();
+			for (ItemStack content : copiedContents) {
+				if (!content.isEmpty()) {
+					contents.add(content.copy());
+				}
+			}
+			return contents;
+		}
+
+		return List.of();
+	}
+
+	public static void clearStoredContents(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return;
+		}
+
+		if (stack.has(DataComponents.BUNDLE_CONTENTS)) {
+			stack.remove(DataComponents.BUNDLE_CONTENTS);
+		}
+		if (stack.has(DataComponents.CONTAINER)) {
+			stack.remove(DataComponents.CONTAINER);
+		}
+	}
+
+	public static int countPlayerGoodsByExactItemKey(Inventory inventory, String exactItemKey) {
+		if (!isExactItemKey(exactItemKey)) {
+			return 0;
+		}
+
+		int count = 0;
+		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+			ItemStack stack = inventory.getItem(slot);
+			if (matchesExactItemKey(exactItemKey, stack)) {
+				count += stack.getCount();
+			}
+		}
+
+		return count;
+	}
+
+	public static boolean removePlayerGoodsByExactItemKey(Inventory inventory, String exactItemKey, int amount) {
+		if (!isExactItemKey(exactItemKey) || amount <= 0) {
+			return false;
+		}
+
+		int remaining = amount;
+		for (int slot = 0; slot < inventory.getContainerSize() && remaining > 0; slot++) {
+			ItemStack stack = inventory.getItem(slot);
+			if (!matchesExactItemKey(exactItemKey, stack)) {
+				continue;
+			}
+
+			int remove = Math.min(stack.getCount(), remaining);
+			stack.shrink(remove);
+			remaining -= remove;
+
+			if (stack.isEmpty()) {
+				inventory.setItem(slot, ItemStack.EMPTY);
+			}
+		}
+
+		return remaining == 0;
+	}
+
 	public static String goodsKeyForStack(ItemStack stack) {
 		if (stack.isEmpty()) {
 			return null;
@@ -189,6 +329,11 @@ public final class TradeBoardTradeRules {
 	public static ItemStack createGoodsStack(String goodsKey, int amount) {
 		if (amount <= 0) {
 			return ItemStack.EMPTY;
+		}
+
+		if (isExactItemKey(goodsKey)) {
+			Item item = itemForExactKey(goodsKey);
+			return item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item, amount);
 		}
 
 		return new ItemStack(switch (goodsKey) {
@@ -235,6 +380,10 @@ public final class TradeBoardTradeRules {
 	}
 
 	public static String compactLabel(String goodsKey, String fallbackLabel) {
+		if (isExactItemKey(goodsKey)) {
+			return fallbackLabel;
+		}
+
 		return switch (goodsKey) {
 			case "cobblestone" -> "Cobble";
 			case "iron_ingot" -> "Iron";
@@ -242,7 +391,24 @@ public final class TradeBoardTradeRules {
 		};
 	}
 
+	public static String displayLabel(String goodsKey, String fallbackLabel) {
+		if (!isExactItemKey(goodsKey)) {
+			return fallbackLabel;
+		}
+
+		Item item = itemForExactKey(goodsKey);
+		if (item == Items.AIR) {
+			return fallbackLabel;
+		}
+
+		return item.getDefaultInstance().getHoverName().getString();
+	}
+
 	private static int baseBundlePriceEmeralds(String goodsKey) {
+		if (isExactItemKey(goodsKey)) {
+			return exactItemBundlePriceEmeralds(itemForExactKey(goodsKey));
+		}
+
 		return switch (goodsKey) {
 			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "sand", "torch" -> 1;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
@@ -256,6 +422,57 @@ public final class TradeBoardTradeRules {
 			case "iron_ingot" -> 2;
 			default -> 0;
 		};
+	}
+
+	private static Item itemForExactKey(String goodsKey) {
+		if (!isExactItemKey(goodsKey)) {
+			return Items.AIR;
+		}
+
+		Identifier itemId = Identifier.tryParse(goodsKey.substring(ITEM_KEY_PREFIX.length()));
+		if (itemId == null) {
+			return Items.AIR;
+		}
+
+		return BuiltInRegistries.ITEM.getOptional(itemId).orElse(Items.AIR);
+	}
+
+	private static int exactItemBundleSize(Item item) {
+		if (item == Items.AIR) {
+			return 0;
+		}
+
+		ItemStack stack = item.getDefaultInstance();
+		int maxStackSize = stack.getMaxStackSize();
+		if (maxStackSize <= 1) {
+			return 1;
+		}
+		if (maxStackSize <= 16) {
+			return Math.min(4, maxStackSize);
+		}
+		return 8;
+	}
+
+	private static int exactItemBundlePriceEmeralds(Item item) {
+		if (item == Items.AIR) {
+			return 0;
+		}
+
+		ItemStack stack = item.getDefaultInstance();
+		if (stack.isDamageableItem() || stack.getMaxStackSize() <= 1) {
+			return 2;
+		}
+
+		return 1;
+	}
+
+	private static boolean matchesExactItemKey(String exactItemKey, ItemStack stack) {
+		if (!isExactItemKey(exactItemKey) || stack.isEmpty()) {
+			return false;
+		}
+
+		String stackKey = exactItemKeyForStack(stack);
+		return exactItemKey.equals(stackKey);
 	}
 
 	private static boolean matchesGoods(String goodsKey, ItemStack stack) {
