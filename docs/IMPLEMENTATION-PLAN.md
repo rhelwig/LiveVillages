@@ -183,6 +183,7 @@ Keep these unless the spec is intentionally changed:
 - Player-placed vanilla `Cartography Table` blocks should anchor a staged `Cartographer's House`.
 - Player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`.
 - The vanilla `Fletching Table` should remain a real player-use arrow workstation with material-arrow variants rather than staying decorative.
+- Contributor onboarding docs should keep a beginner-friendly Windows path available: VS Code, GitHub, Temurin JDK, and repository clones under the user's home `Projects/` folder by default.
 
 ## Performance Guardrails
 

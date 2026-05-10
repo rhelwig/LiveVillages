@@ -74,6 +74,7 @@ Server/debug utilities:
 - [docs/SPECS.md](docs/SPECS.md): full gameplay and systems specification
 - [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
 - [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
+- [docs/WINDOWS-DEVELOPMENT-SETUP.md](docs/WINDOWS-DEVELOPMENT-SETUP.md): beginner-friendly Windows setup guide for building and running the mod in VS Code
 - [docs/STRUCTURE-BLUEPRINT-GUIDE.md](docs/STRUCTURE-BLUEPRINT-GUIDE.md): human-friendly guide for designing importable structure blueprints
 - GitHub issues: active bug and polish tracking
 
