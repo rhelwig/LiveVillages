@@ -3,6 +3,8 @@ package com.ronhelwig.livevillages.sim;
 import java.util.List;
 import java.util.Map;
 
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -150,6 +152,10 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.COBBLED_DEEPSLATE)) {
 			return "cobblestone";
+		}
+
+		if (stack.is(LiveVillagesBlocks.MILEPOST_ITEM)) {
+			return "milepost";
 		}
 
 		if (stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT)) {

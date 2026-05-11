@@ -724,6 +724,7 @@ public class LiveVillagesSavedData extends SavedData {
 			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
+			stockChanged |= SettlementMasonWork.maintainLoadedMasonry(level, workingSettlement, stock, activeBuildSites);
 			SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
 			stockChanged |= !stock.equals(workingSettlement.stock());
 			SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
@@ -805,6 +806,7 @@ public class LiveVillagesSavedData extends SavedData {
 			changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
@@ -989,6 +991,30 @@ public class LiveVillagesSavedData extends SavedData {
 				level,
 				smokerPos,
 				SettlementConstruction.fletcherHutFacingFor(settlement, smokerPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaMasonWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos stonecutterPos : SettlementConstruction.findPlacedStonecutters(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MASON_WORKSHOP, stonecutterPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartMasonWorkshopAtWorkstation(
+				level,
+				stonecutterPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, stonecutterPos),
 				settlement.id(),
 				stock,
 				existingBuildSite

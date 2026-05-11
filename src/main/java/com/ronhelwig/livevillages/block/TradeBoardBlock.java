@@ -169,7 +169,31 @@ public class TradeBoardBlock extends BaseEntityBlock {
 			return;
 		}
 
-		SettlementState settlement = tradeBoard.resolveSettlement(serverLevel);
+		SettlementConstruction.TradeBoardPlacementDecision placementDecision = SettlementConstruction.evaluateTradeBoardPlacement(serverLevel, pos);
+
+		if (placementDecision.blocked()) {
+			serverLevel.removeBlock(pos, false);
+
+			if (placer instanceof Player player && !player.getAbilities().instabuild) {
+				ItemStack refund = new ItemStack(asItem());
+				if (!player.getInventory().add(refund) && placer instanceof ServerPlayer serverPlayer) {
+					serverPlayer.drop(refund, false);
+				}
+			}
+
+			if (placer instanceof ServerPlayer serverPlayer) {
+				serverPlayer.sendSystemMessage(Component.literal(placementDecision.statusMessage()));
+			}
+
+			return;
+		}
+
+		SettlementState settlement = placementDecision.settlement()
+			.map(existingSettlement -> {
+				tradeBoard.linkSettlement(existingSettlement);
+				return existingSettlement;
+			})
+			.orElseGet(() -> tradeBoard.createAndLinkCustomSettlement(serverLevel));
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
 		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartTradingPostAtWorkstation(
@@ -193,6 +217,10 @@ public class TradeBoardBlock extends BaseEntityBlock {
 			serverPlayer.sendSystemMessage(Component.literal(
 				"Trade Board linked to " + settlement.name() + " (" + settlement.kind().getSerializedName() + ")."
 			));
+
+			if (placementDecision.foundsNewSettlement()) {
+				serverPlayer.sendSystemMessage(Component.literal("Founded a new Tier 1 settlement from this Trade Board."));
+			}
 
 			if (buildResult.isStarted()) {
 				serverPlayer.sendSystemMessage(Component.literal("Trading Post construction started around this Trade Board."));

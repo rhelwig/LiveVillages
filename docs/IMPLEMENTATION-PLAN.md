@@ -113,11 +113,19 @@ Focus:
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
+- add a later blueprint-import workflow that can take an exported blueprint file, let the player pick it through a file-selection dialog, package it into a generic named construction-anchor block, and start staged villager-assisted construction from that imported plan
 - add a later `Tier 3+` luxury-upgrade pass where a few profession structures can prefer imported foreign-biome style variants to create prestige-material trade demand
 - keep blueprint symbols explicit for contributors; reserve shorthand aliases like `C` for backward compatibility only
 - keep directional blueprint row order standardized for contributors: first row is the rear, last row is the front unless an inline comment documents an intentional exception
 - keep a contributor-friendly blueprint authoring guide so non-technical builders can supply layered structure designs without reading Java internals
-- keep `Mason` as pending follow-up for stone labor, repairs, fortification work, and higher-tier material-upgrade passes
+- the first-pass `Mason` workshop and loaded masonry-support loop now exist; `Mason` now prefers stone-heavy staged construction blocks while `Carpenter` prefers wood-heavy ones, and idle `Mason`s can top up `Tier 1` cobblestone stock at the `Stonecutter`; keep follow-up work focused on richer fortification labor, broader stone-stock processing, and later-tier material-upgrade passes
+- `Mason` now also cuts finished `milepost` goods at the `Stonecutter` from surplus stone stock, while `Roadwright` consumes that stock to place real roadside markers beside established external routes instead of conjuring markers directly
+- first-pass loaded `Milepost` placement now keeps markers outside settlement bounds, prefers settlement-edge entry corridors and obvious established-road junctions, aims for roughly `100`-block spacing along land routes, skips duplicate placements when another `Milepost` is already within about `50` blocks of the desired spot, and lets outward roadwork resume from the farthest already-established route anchor instead of restarting every external push from the village core
+- the `Surveyor's Table` road overlay now scans loaded path surfaces more faithfully instead of dropping most road columns or missing gravel / shallow-buried road blocks, and loaded `Roadwright` planning now fans out from the settlement core and best existing route anchors so local POIs, building entrances, mileposts, and nearby land-route settlements tighten into one visible network more reliably
+- the fog-off `Surveyor's Table` map now needs to behave like a full loaded-world survey rather than a sparse debug sample: road/path caps should be high enough for larger settlements, authored build footprints and obvious world-built structures such as palisades should render as building/project coverage, and natural `stone` cliffs should not be mistaken for improved road surfaces
+- survey fortification detection should stay strict enough to show adjacent log-and-slab palisades without turning ordinary tree trunks into fake building dots, and the map should also expose shoreline or harbor water so docks and coastal defenses read clearly
+- `Trade Board` founding previews now work outside existing settlements: a board inside a settlement radius joins that settlement, a board outside all settlement radii can found a new `Tier 1` settlement when clear, and placement should reject too-close founding attempts with a visible message instead of silently linking across open terrain
+- natural flowers and similar loose vegetation should stay clearable during structure placement, while bordered garden beds, potted flowers, and other obviously decorative planted structures still count as blockers
 
 ### 5. Roads, Maps, And Route Planning
 
@@ -202,6 +210,7 @@ Keep these visible, but not as active work:
 - `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, and shaft-lighting loop, including primary and secondary tunnel expansion, richer mined-resource stock handling, ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
+- a generalized blueprint-import feature that may be worth extracting into a standalone sharing/build-assist mod once the import, packaging, and staged-construction UX are mature
 - hostile outposts as self-building raiding settlements with different staffing and growth rules
 
 ## Maintenance Notes

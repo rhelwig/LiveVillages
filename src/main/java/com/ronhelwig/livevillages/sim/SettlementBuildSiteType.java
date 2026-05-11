@@ -13,6 +13,7 @@ public enum SettlementBuildSiteType implements StringRepresentable {
 	FORESTER_WORKSHOP("forester_workshop"),
 	HOUSING_SHELTER("housing_shelter"),
 	LIGHTHOUSE("lighthouse"),
+	MASON_WORKSHOP("mason_workshop"),
 	MINE_ENTRANCE("mine_entrance"),
 	ROADWRIGHT_WORKSHOP("roadwright_workshop"),
 	SIMPLE_HOUSING_SHELTER("simple_housing_shelter"),

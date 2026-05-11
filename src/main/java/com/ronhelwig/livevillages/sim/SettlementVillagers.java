@@ -129,6 +129,12 @@ public final class SettlementVillagers {
 			.toList();
 	}
 
+	public static List<Villager> nearbyMasons(ServerLevel level, SettlementState settlement) {
+		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.MASON))
+			.toList();
+	}
+
 	public static List<Villager> nearbyPortmasters(ServerLevel level, SettlementState settlement) {
 		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomPortmaster(villager))
@@ -264,6 +270,10 @@ public final class SettlementVillagers {
 
 	public static Optional<BlockPos> fletcherJobSite(ServerLevel level, Villager villager) {
 		return heldFletcherJobSite(level, villager).map(BlockPos::immutable);
+	}
+
+	public static Optional<BlockPos> masonJobSite(ServerLevel level, Villager villager) {
+		return heldMasonJobSite(level, villager).map(BlockPos::immutable);
 	}
 
 	public static boolean ensureTrademaster(ServerLevel level, SettlementState settlement) {
@@ -1269,6 +1279,14 @@ public final class SettlementVillagers {
 			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(PoiTypes.FLETCHER)));
 	}
 
+	private static Optional<BlockPos> heldMasonJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos)
+			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(PoiTypes.MASON)));
+	}
+
 	private static Optional<BlockPos> findReachableTrademasterJobSite(ServerLevel level, Villager villager) {
 		return level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
@@ -1342,6 +1360,10 @@ public final class SettlementVillagers {
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
 			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.BUTCHER_SHOP, () -> heldButcherJobSite(level, villager));
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.MASON)) {
+			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.MASON_WORKSHOP, () -> heldMasonJobSite(level, villager));
 		}
 
 		return Optional.empty();
@@ -1780,6 +1802,14 @@ public final class SettlementVillagers {
 			}
 		}
 
+		if (villager.getVillagerData().profession().is(VillagerProfession.MASON)) {
+			Optional<String> masonTask = SettlementMasonWork.loadedMasonTaskKey(level, villager);
+
+			if (masonTask.isPresent()) {
+				return masonTask.get();
+			}
+		}
+
 		if (isNearBabyVillager(level, villager)) {
 			return "raising_child";
 		}
@@ -2201,6 +2231,7 @@ public final class SettlementVillagers {
 			case "cataloging_books" -> "cataloging books";
 			case "community_care" -> "community care";
 			case "collecting_forest_drops" -> "collecting forest drops";
+			case "cutting_stone" -> "cutting stone";
 			case "cutting_trees" -> "cutting trees";
 			case "depositing_into_trading_post" -> "depositing into Trading Post";
 			case "digging_mine_shaft" -> "digging mine shaft";
@@ -2243,6 +2274,7 @@ public final class SettlementVillagers {
 			case "planting_seedlings" -> "planting seedlings";
 			case "stocking_arrows" -> "stocking arrows";
 			case "stocking_carpentry" -> "stocking carpentry";
+			case "stone_construction" -> "stone construction";
 			case "surveying_groves" -> "surveying groves";
 			case "surveying_routes" -> "surveying routes";
 			case "surveying_village" -> "surveying village";

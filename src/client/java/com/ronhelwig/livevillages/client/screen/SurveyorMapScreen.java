@@ -70,6 +70,24 @@ public class SurveyorMapScreen extends Screen {
 			return;
 		}
 
+		for (var pos : snapshot.water()) {
+			ScreenPoint point = mapPoint(mapLeft, mapTop, pos.getX(), pos.getZ());
+			int x = point.x();
+			int y = point.y();
+			if (insideMap(mapLeft, mapTop, x, y)) {
+				graphics.fill(x, y, x + 2, y + 2, 0xFF2E5EA8);
+			}
+		}
+
+		for (var structure : snapshot.structures()) {
+			ScreenPoint point = mapPoint(mapLeft, mapTop, structure.pos().getX(), structure.pos().getZ());
+			int x = point.x();
+			int y = point.y();
+			if (insideMap(mapLeft, mapTop, x, y)) {
+				graphics.fill(x, y, x + 2, y + 2, pointColor(structure.kind()));
+			}
+		}
+
 		for (var road : snapshot.roads()) {
 			ScreenPoint point = mapPoint(mapLeft, mapTop, road.pos().getX(), road.pos().getZ());
 			int x = point.x();
@@ -199,6 +217,7 @@ public class SurveyorMapScreen extends Screen {
 		graphics.text(font, "Legend", x, y, 0xFFF2CF84, false);
 		y += 12;
 		y = legendRow(graphics, font, x, y, 0xFFB99758, "Trail");
+		y = legendRow(graphics, font, x, y, 0xFF2E5EA8, "Water");
 		y = legendRow(graphics, font, x, y, 0xFF9C9C9C, "Gravel");
 		y = legendRow(graphics, font, x, y, 0xFF7C7C7C, "Cobble");
 		y = legendRow(graphics, font, x, y, 0xFFD2D2D2, "Finished");
@@ -351,6 +370,10 @@ public class SurveyorMapScreen extends Screen {
 
 		for (var road : snapshot.roads()) {
 			reveal(revealed, snapshot, road.pos().getX(), road.pos().getZ(), 5);
+		}
+
+		for (var structure : snapshot.structures()) {
+			reveal(revealed, snapshot, structure.pos().getX(), structure.pos().getZ(), 4);
 		}
 
 		return revealed;

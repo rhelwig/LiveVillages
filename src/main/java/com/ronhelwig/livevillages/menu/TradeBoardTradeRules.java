@@ -2,6 +2,8 @@ package com.ronhelwig.livevillages.menu;
 
 import java.util.List;
 
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
@@ -49,6 +51,7 @@ public final class TradeBoardTradeRules {
 		"pale_oak_sapling",
 		"mangrove_propagule",
 		"cobblestone",
+		"milepost",
 		"sand",
 		"glass",
 		"coal",
@@ -115,6 +118,7 @@ public final class TradeBoardTradeRules {
 			case "apple" -> 8;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 4;
 			case "cobblestone" -> 16;
+			case "milepost" -> 1;
 			case "sand" -> 16;
 			case "glass" -> 8;
 			case "coal" -> 8;
@@ -368,6 +372,7 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> Items.PALE_OAK_SAPLING;
 			case "mangrove_propagule" -> Items.MANGROVE_PROPAGULE;
 			case "cobblestone" -> Items.COBBLESTONE;
+			case "milepost" -> LiveVillagesBlocks.MILEPOST_ITEM;
 			case "sand" -> Items.SAND;
 			case "glass" -> Items.GLASS;
 			case "coal" -> Items.COAL;
@@ -413,7 +418,7 @@ public final class TradeBoardTradeRules {
 			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "sand", "torch" -> 1;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
 			case "chest" -> 1;
-			case "glass", "bed", "lantern" -> 2;
+			case "glass", "bed", "lantern", "milepost" -> 2;
 			case "beef" -> 2;
 			case "mutton" -> 2;
 			case "pork" -> 2;
@@ -512,6 +517,7 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> stack.is(Items.PALE_OAK_SAPLING);
 			case "mangrove_propagule" -> stack.is(Items.MANGROVE_PROPAGULE);
 			case "cobblestone" -> stack.is(Items.COBBLESTONE);
+			case "milepost" -> stack.is(LiveVillagesBlocks.MILEPOST_ITEM);
 			case "sand" -> stack.is(Items.SAND) || stack.is(Items.RED_SAND);
 			case "glass" -> stack.is(Items.GLASS);
 			case "coal" -> stack.is(Items.COAL) || stack.is(Items.CHARCOAL);

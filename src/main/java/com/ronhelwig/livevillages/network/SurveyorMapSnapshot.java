@@ -16,6 +16,8 @@ public record SurveyorMapSnapshot(
 	int radius,
 	int boundaryRadius,
 	List<SurveyorMapRoadView> roads,
+	List<BlockPos> water,
+	List<SurveyorMapStructureView> structures,
 	List<SurveyorMapPointView> points,
 	List<BlockPos> roadwrights,
 	List<BlockPos> roadwrightRoutes,
@@ -31,6 +33,8 @@ public record SurveyorMapSnapshot(
 		Codec.INT.optionalFieldOf("radius", 64).forGetter(SurveyorMapSnapshot::radius),
 		Codec.INT.optionalFieldOf("boundary_radius", 64).forGetter(SurveyorMapSnapshot::boundaryRadius),
 		SurveyorMapRoadView.CODEC.listOf().optionalFieldOf("roads", List.of()).forGetter(SurveyorMapSnapshot::roads),
+		BlockPos.CODEC.listOf().optionalFieldOf("water", List.of()).forGetter(SurveyorMapSnapshot::water),
+		SurveyorMapStructureView.CODEC.listOf().optionalFieldOf("structures", List.of()).forGetter(SurveyorMapSnapshot::structures),
 		SurveyorMapPointView.CODEC.listOf().optionalFieldOf("points", List.of()).forGetter(SurveyorMapSnapshot::points),
 		BlockPos.CODEC.listOf().optionalFieldOf("roadwrights", List.of()).forGetter(SurveyorMapSnapshot::roadwrights),
 		BlockPos.CODEC.listOf().optionalFieldOf("roadwright_routes", List.of()).forGetter(SurveyorMapSnapshot::roadwrightRoutes),
@@ -45,6 +49,8 @@ public record SurveyorMapSnapshot(
 		Objects.requireNonNull(timeLabel, "timeLabel");
 		Objects.requireNonNull(center, "center");
 		roads = List.copyOf(roads);
+		water = List.copyOf(water);
+		structures = List.copyOf(structures);
 		points = List.copyOf(points);
 		roadwrights = List.copyOf(roadwrights);
 		roadwrightRoutes = List.copyOf(roadwrightRoutes);
@@ -53,7 +59,7 @@ public record SurveyorMapSnapshot(
 	}
 
 	public static SurveyorMapSnapshot unavailable(String statusMessage, BlockPos center) {
-		return new SurveyorMapSnapshot(statusMessage, "", "", center, 64, 64, List.of(), List.of(), List.of(), List.of(), List.of(), false, List.of());
+		return new SurveyorMapSnapshot(statusMessage, "", "", center, 64, 64, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), false, List.of());
 	}
 
 	public boolean available() {

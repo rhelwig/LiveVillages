@@ -9,11 +9,13 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.pathfinder.Path;
@@ -65,7 +67,7 @@ public final class SettlementConstructionWork {
 		Map<String, Integer> stockBeforeReconcile = new LinkedHashMap<>(stock);
 
 		for (SettlementBuildSite buildSite : buildSites) {
-			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, buildSite, tick);
+			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, settlement, buildSite, tick);
 			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
 			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
 
@@ -756,6 +758,7 @@ public final class SettlementConstructionWork {
 	) {
 		ConstructionTask bestTask = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+		int bestAffinity = Integer.MAX_VALUE;
 
 		for (int siteIndex = 0; siteIndex < buildSites.size(); siteIndex++) {
 			SettlementBuildSite buildSite = buildSites.get(siteIndex);
@@ -809,6 +812,7 @@ public final class SettlementConstructionWork {
 				}
 
 				int taskLayer = taskLayerPriority(buildSite, relativePos.up());
+				int affinity = workerConstructionAffinity(worker, block.expectedMaterialKey());
 				double distanceSquared = standPos.get().distSqr(worker.blockPosition());
 				ConstructionTask candidateTask = new ConstructionTask(
 					siteIndex,
@@ -823,8 +827,10 @@ public final class SettlementConstructionWork {
 
 				if (bestTask == null
 					|| candidateTask.layer() < bestTask.layer()
-					|| (candidateTask.layer() == bestTask.layer() && distanceSquared < bestDistanceSquared)) {
+					|| (candidateTask.layer() == bestTask.layer() && affinity < bestAffinity)
+					|| (candidateTask.layer() == bestTask.layer() && affinity == bestAffinity && distanceSquared < bestDistanceSquared)) {
 					bestTask = candidateTask;
+					bestAffinity = affinity;
 					bestDistanceSquared = distanceSquared;
 				}
 			}
@@ -846,6 +852,53 @@ public final class SettlementConstructionWork {
 		}
 
 		return bestTask.withStandPos(reachableStandPos.get());
+	}
+
+	private static int workerConstructionAffinity(Villager worker, String materialKey) {
+		if (worker.getVillagerData().profession().is(VillagerProfession.MASON)) {
+			if (isMasonMaterial(materialKey)) {
+				return 0;
+			}
+
+			return isCarpenterMaterial(materialKey) ? 2 : 1;
+		}
+
+		if (worker.getVillagerData().profession().is(LiveVillagesVillagerProfessions.CARPENTER)) {
+			if (isCarpenterMaterial(materialKey)) {
+				return 0;
+			}
+
+			return isMasonMaterial(materialKey) ? 2 : 1;
+		}
+
+		return 1;
+	}
+
+	private static boolean isMasonMaterial(String materialKey) {
+		return "cobblestone".equals(materialKey) || "stonecutter".equals(materialKey);
+	}
+
+	private static boolean isCarpenterMaterial(String materialKey) {
+		return switch (materialKey) {
+			case "logs",
+				"planks",
+				"stairs",
+				"slab",
+				"door",
+				"fence",
+				"fence_gate",
+				"ladder",
+				"bed",
+				"chest",
+				"trade_board",
+				"carpenter_bench",
+				"surveyor_table",
+				"cartography_table",
+				"forester_table",
+				"fletching_table",
+				"smoker" -> true;
+			default -> false;
+		};
 	}
 
 	private static boolean isUnsupportedWallTorch(ServerLevel level, BlockPos targetPos, BlockState plannedState) {
@@ -1134,6 +1187,7 @@ public final class SettlementConstructionWork {
 					case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
 					case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
 					case LIGHTHOUSE -> null;
+					case MASON_WORKSHOP -> relativePosition(-1, -3, 1);
 					case MINE_ENTRANCE -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
@@ -1176,6 +1230,10 @@ public final class SettlementConstructionWork {
 				&& relativePos.right() == -1
 				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.MASON_WORKSHOP
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.FLETCHER_HUT
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -2
@@ -1208,6 +1266,10 @@ public final class SettlementConstructionWork {
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.ROADWRIGHT_WORKSHOP
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.MASON_WORKSHOP
 				&& relativePos.right() == -1
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)

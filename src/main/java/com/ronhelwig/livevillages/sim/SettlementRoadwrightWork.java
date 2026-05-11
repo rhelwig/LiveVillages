@@ -35,6 +35,7 @@ import net.minecraft.world.item.Items;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.MilepostBlock;
+import com.ronhelwig.livevillages.block.entity.MilepostBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
@@ -43,7 +44,7 @@ public final class SettlementRoadwrightWork {
 	private static final double ROADWORK_SPEED = 0.75D;
 	private static final int INTERNAL_TARGET_RADIUS_BLOCKS = 80;
 	private static final int EXTERNAL_TARGET_RADIUS_BLOCKS = 512;
-	private static final int MILEPOST_TARGET_RADIUS_BLOCKS = 192;
+	private static final int MILEPOST_TARGET_RADIUS_BLOCKS = 512;
 	private static final int INTERNAL_POI_SCAN_RADIUS_BLOCKS = 96;
 	private static final int INTERNAL_POI_SCAN_Y_RANGE_BLOCKS = 24;
 	private static final int INTERNAL_PATH_SEARCH_MARGIN_BLOCKS = 9; // Reduced from 18
@@ -72,6 +73,14 @@ public final class SettlementRoadwrightWork {
 	private static final long ROADWORK_VISUAL_MEMORY_TICKS = 12_000L;
 	private static final long ROADWORK_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long MILEPOST_TARGET_CACHE_TICKS = 100L;
+	private static final int MILEPOST_MIN_SETTLEMENT_DISTANCE_BLOCKS = 48;
+	private static final int MILEPOST_SETTLEMENT_EDGE_BUFFER_BLOCKS = 2;
+	private static final int MILEPOST_IDEAL_SPACING_BLOCKS = 100;
+	private static final int MILEPOST_EXISTING_SKIP_DISTANCE_BLOCKS = 50;
+	private static final int EXTERNAL_ROUTE_ANCHOR_SAMPLE_STEP_BLOCKS = 8;
+	private static final int EXTERNAL_ROUTE_ANCHOR_SAMPLE_SEARCH_RADIUS_BLOCKS = 4;
+	private static final double INTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 8.0D;
+	private static final double EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 12.0D;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final Map<String, CachedPoiTargets> INTERNAL_POI_TARGET_CACHE = new HashMap<>();
 	private static final Map<String, CachedMilepostTargets> MILEPOST_TARGET_CACHE = new HashMap<>();
@@ -138,6 +147,12 @@ public final class SettlementRoadwrightWork {
 
 			rememberVisibleRoadworkPlan(settlement, roadwrightId, plan.get(), tick);
 			PathTask task = plan.get().toPathTask();
+
+			if (!hasSuppliesForRoadwork(stock, task)) {
+				ROADWORK_TASK_CACHE.remove(roadworkTaskCacheKey(settlement, roadwrightId));
+				continue;
+			}
+
 			busyRoadwrightIds.add(roadwrightId);
 			showRoadwrightTool(roadwright);
 			steerRoadwrightTowardTask(roadwright, task.standPos());
@@ -454,10 +469,12 @@ public final class SettlementRoadwrightWork {
 			settlement,
 			currentPlan.get().routeTrace(),
 			usesInternalRouteSearch(currentPlan.get().targetKind()),
+			currentPlan.get().targetKind(),
+			currentPlan.get().targetPos(),
 			MAX_SURVEYOR_FORECAST_TASKS_PER_ROUTE
 		);
 
-		if (tasks.isEmpty()) {
+		if (tasks.isEmpty() && !allowsForecastRouteTraceWithoutImmediateTasks(currentPlan.get().targetKind(), currentPlan.get().routeTrace())) {
 			return Optional.empty();
 		}
 
@@ -472,6 +489,14 @@ public final class SettlementRoadwrightWork {
 
 	private static int addForecastCandidate(List<ForecastRoutePlan> candidates, Set<ForecastRouteKey> seen, Optional<ForecastRoutePlan> candidate) {
 		return candidate.map(plan -> addForecastCandidate(candidates, seen, plan)).orElse(0);
+	}
+
+	private static boolean allowsForecastRouteTraceWithoutImmediateTasks(String targetKind, List<BlockPos> routeTrace) {
+		if (routeTrace.size() <= 1) {
+			return false;
+		}
+
+		return "milepost".equals(targetKind) || "external".equals(targetKind);
 	}
 
 	private static int addForecastCandidate(List<ForecastRoutePlan> candidates, Set<ForecastRouteKey> seen, ForecastRoutePlan candidate) {
@@ -553,8 +578,8 @@ public final class SettlementRoadwrightWork {
 		String cacheKey = roadworkTaskCacheKey(settlement, roadwrightId);
 		Optional<RoadworkDebugPlan> plan = existingPathRepairPlan(level, settlement, workStart)
 			.or(() -> choosePathPlan(level, settlement, workStart, centerTargets(level, settlement, workStart), true, "center"))
-			.or(() -> choosePathPlan(level, settlement, workStart, milepostTargets, false, "milepost"))
 			.or(() -> choosePathPlan(level, settlement, workStart, internalTargets, true, "internal"))
+			.or(() -> choosePathPlan(level, settlement, workStart, milepostTargets, false, "milepost"))
 			.or(() -> choosePathPlan(level, settlement, workStart, externalTargets, false, "external"));
 
 		ROADWORK_TASK_CACHE.put(cacheKey, new CachedRoadworkPlan(plan, tick));
@@ -589,7 +614,7 @@ public final class SettlementRoadwrightWork {
 
 	private static Optional<RoadworkDebugPlan> advanceRoadworkPlanOnSameRoute(ServerLevel level, SettlementState settlement, RoadworkDebugPlan currentPlan) {
 		boolean internal = usesInternalRouteSearch(currentPlan.targetKind());
-		Optional<PathTask> nextTaskOnCachedTrace = firstMissingPathTaskOnPath(level, settlement, currentPlan.routeTrace(), internal);
+		Optional<PathTask> nextTaskOnCachedTrace = firstRoadworkTaskOnPath(level, settlement, currentPlan.routeTrace(), internal, currentPlan.targetKind(), currentPlan.targetPos());
 
 		if (nextTaskOnCachedTrace.isPresent()) {
 			return Optional.of(new RoadworkDebugPlan(
@@ -612,7 +637,7 @@ public final class SettlementRoadwrightWork {
 	private static Optional<RoadworkDebugPlan> recomputeRoadworkPlan(ServerLevel level, SettlementState settlement, RoadworkDebugPlan currentPlan) {
 		boolean internal = usesInternalRouteSearch(currentPlan.targetKind());
 		List<BlockPos> recomputedRouteTrace = plannedSurfacePath(level, settlement, currentPlan.startPos(), currentPlan.targetPos(), internal);
-		Optional<PathTask> nextTask = firstMissingPathTaskOnPath(level, settlement, recomputedRouteTrace, internal);
+		Optional<PathTask> nextTask = firstRoadworkTaskOnPath(level, settlement, recomputedRouteTrace, internal, currentPlan.targetKind(), currentPlan.targetPos());
 
 		if (nextTask.isPresent()) {
 			return Optional.of(new RoadworkDebugPlan(
@@ -629,7 +654,7 @@ public final class SettlementRoadwrightWork {
 			));
 		}
 
-		Optional<PathTask> fallbackTask = firstMissingPathTaskOnPath(level, settlement, currentPlan.routeTrace(), internal);
+		Optional<PathTask> fallbackTask = firstRoadworkTaskOnPath(level, settlement, currentPlan.routeTrace(), internal, currentPlan.targetKind(), currentPlan.targetPos());
 
 		if (fallbackTask.isEmpty()) {
 			return Optional.empty();
@@ -707,6 +732,14 @@ public final class SettlementRoadwrightWork {
 			case COLLECT_LEAF_LITTER -> workState.is(Blocks.LEAF_LITTER);
 			case RAISE_SURFACE -> canRaiseLowerRoadSurface(level, task.workPos());
 			case PLACE_STAIR -> needsSlopeTreatment(level, task.workPos());
+			case PLACE_MILEPOST -> canPlaceMilepostAt(level, task.workPos());
+		};
+	}
+
+	private static boolean hasSuppliesForRoadwork(Map<String, Integer> stock, PathTask task) {
+		return switch (task.action()) {
+			case PLACE_MILEPOST -> stock.getOrDefault("milepost", 0) > 0;
+			default -> true;
 		};
 	}
 
@@ -801,7 +834,9 @@ public final class SettlementRoadwrightWork {
 
 		return targets.stream()
 			.distinct()
-			.sorted(Comparator.comparingDouble((PathTarget target) -> target.pos().equals(settlement.center()) ? -1.0D : target.pos().distSqr(workStart)))
+			.sorted(Comparator
+				.comparingDouble((PathTarget target) -> target.pos().equals(settlement.center()) ? -1.0D : target.pos().distSqr(settlement.center()))
+				.thenComparingDouble(target -> target.pos().distSqr(workStart)))
 			.toList();
 	}
 
@@ -822,15 +857,19 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static List<PathTarget> milepostTargets(ServerLevel level, SettlementState settlement, BlockPos workStart) {
+		int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		int minSettlementDistance = Math.max(MILEPOST_MIN_SETTLEMENT_DISTANCE_BLOCKS, settlementRadius + MILEPOST_SETTLEMENT_EDGE_BUFFER_BLOCKS);
+		int minSettlementDistanceSquared = minSettlementDistance * minSettlementDistance;
+
 		return cachedNearbyMileposts(level, settlement).stream()
-			.filter(milepostPos -> milepostPos.distSqr(settlement.center()) >= 36.0D)
+			.filter(milepostPos -> milepostPos.distSqr(settlement.center()) >= minSettlementDistanceSquared)
 			.map(milepostPos -> standableAccessTargets(level, milepostPos).stream()
 				.min(Comparator.comparingDouble(accessPos -> accessPos.distSqr(workStart)))
 				.map(accessPos -> new PathTarget(accessPos, false)))
 			.flatMap(Optional::stream)
 			.sorted(Comparator
-				.comparingDouble((PathTarget target) -> target.pos().distSqr(workStart))
-				.thenComparingDouble(target -> target.pos().distSqr(settlement.center())))
+				.comparingDouble((PathTarget target) -> target.pos().distSqr(settlement.center()))
+				.thenComparingDouble(target -> target.pos().distSqr(workStart)))
 			.toList();
 	}
 
@@ -991,9 +1030,15 @@ public final class SettlementRoadwrightWork {
 		List<RouteState> routes
 	) {
 		List<PathTarget> targets = new ArrayList<>();
+		Set<String> landRouteSettlementIds = new HashSet<>();
 
 		for (RouteState route : routes) {
+			if (route.type() != RouteType.LAND) {
+				continue;
+			}
+
 			String targetId = route.fromSettlementId().equals(settlement.id()) ? route.toSettlementId() : route.fromSettlementId();
+			landRouteSettlementIds.add(targetId);
 			findSettlementById(allSettlements, targetId)
 				.filter(target -> target.dimension().equals(settlement.dimension()))
 				.map(SettlementState::center)
@@ -1013,8 +1058,19 @@ public final class SettlementRoadwrightWork {
 
 		return targets.stream()
 			.distinct()
-			.sorted(Comparator.comparingDouble(target -> target.pos().distSqr(settlement.center())))
+			.sorted(Comparator
+				.comparing((PathTarget target) -> !isLandRouteTarget(allSettlements, landRouteSettlementIds, target))
+				.thenComparingDouble(target -> target.pos().distSqr(settlement.center())))
 			.toList();
+	}
+
+	private static boolean isLandRouteTarget(Collection<SettlementState> settlements, Set<String> landRouteSettlementIds, PathTarget target) {
+		return settlements.stream()
+			.filter(settlement -> settlement.center().equals(target.pos()))
+			.findFirst()
+			.map(SettlementState::id)
+			.map(landRouteSettlementIds::contains)
+			.orElse(false);
 	}
 
 	private static Optional<SettlementState> findSettlementById(Collection<SettlementState> settlements, String settlementId) {
@@ -1050,8 +1106,9 @@ public final class SettlementRoadwrightWork {
 		boolean internal,
 		String targetKind
 	) {
-		List<BlockPos> path = plannedSurfacePath(level, settlement, start, target.pos(), internal);
-		Optional<PathTask> task = firstMissingPathTaskOnPath(level, settlement, path, internal);
+		BlockPos planningStart = planningStartPos(level, settlement, start, target, internal, targetKind);
+		List<BlockPos> path = plannedSurfacePath(level, settlement, planningStart, target.pos(), internal);
+		Optional<PathTask> task = firstRoadworkTaskOnPath(level, settlement, path, internal, targetKind, target.pos());
 
 		if (task.isEmpty()) {
 			return Optional.empty();
@@ -1064,16 +1121,64 @@ public final class SettlementRoadwrightWork {
 			task.get().uphillDirection(),
 			"improving_paths",
 			targetKind,
-			start.immutable(),
+			planningStart.immutable(),
 			target.pos().immutable(),
 			path.stream().map(BlockPos::immutable).toList(),
 			false
 		));
 	}
 
+	private static BlockPos planningStartPos(
+		ServerLevel level,
+		SettlementState settlement,
+		BlockPos start,
+		PathTarget target,
+		boolean internal,
+		String targetKind
+	) {
+		if ("center".equals(targetKind)) {
+			return start.immutable();
+		}
+
+		if (internal) {
+			return furthestEstablishedInternalAnchor(level, settlement, target.pos())
+				.filter(anchor -> anchor.distSqr(target.pos()) + 4.0D < start.distSqr(target.pos()))
+				.orElse(settlement.center())
+				.immutable();
+		}
+
+		if ("milepost".equals(targetKind) || "external".equals(targetKind)) {
+			return furthestEstablishedExternalAnchor(level, settlement, target.pos())
+				.filter(anchor -> anchor.distSqr(target.pos()) + 4.0D < start.distSqr(target.pos()))
+				.orElse(start)
+				.immutable();
+		}
+
+		return start.immutable();
+	}
+
 	private static Optional<PathTask> firstMissingPathBlock(ServerLevel level, SettlementState settlement, BlockPos start, BlockPos target, boolean internal) {
 		List<BlockPos> path = plannedSurfacePath(level, settlement, start, target, internal);
 		return firstMissingPathTaskOnPath(level, settlement, path, internal);
+	}
+
+	private static Optional<PathTask> firstRoadworkTaskOnPath(
+		ServerLevel level,
+		SettlementState settlement,
+		List<BlockPos> path,
+		boolean internal,
+		String targetKind,
+		BlockPos targetPos
+	) {
+		Optional<PathTask> pathTask = firstMissingPathTaskOnPath(level, settlement, path, internal);
+
+		if (pathTask.isPresent()) {
+			return pathTask;
+		}
+
+		return "external".equals(targetKind)
+			? milepostPlacementTaskOnPath(level, settlement, path, targetPos)
+			: Optional.empty();
 	}
 
 	private static Optional<PathTask> firstMissingPathTaskOnPath(ServerLevel level, SettlementState settlement, List<BlockPos> path, boolean internal) {
@@ -1106,7 +1211,15 @@ public final class SettlementRoadwrightWork {
 		return Optional.empty();
 	}
 
-	private static List<PathTask> pathTasksOnPath(ServerLevel level, SettlementState settlement, List<BlockPos> path, boolean internal, int maxTasks) {
+	private static List<PathTask> pathTasksOnPath(
+		ServerLevel level,
+		SettlementState settlement,
+		List<BlockPos> path,
+		boolean internal,
+		String targetKind,
+		BlockPos targetPos,
+		int maxTasks
+	) {
 		if (path.size() <= 1 || maxTasks <= 0) {
 			return List.of();
 		}
@@ -1128,6 +1241,11 @@ public final class SettlementRoadwrightWork {
 			}
 
 			terrainTransitionTask(level, previousSurfacePos, surfacePos)
+				.ifPresent(tasks::add);
+		}
+
+		if (tasks.size() < maxTasks && "external".equals(targetKind)) {
+			milepostPlacementTaskOnPath(level, settlement, path, targetPos)
 				.ifPresent(tasks::add);
 		}
 
@@ -1521,6 +1639,307 @@ public final class SettlementRoadwrightWork {
 				|| surfaceState.is(BlockTags.DIRT));
 	}
 
+	private static Optional<PathTask> milepostPlacementTaskOnPath(ServerLevel level, SettlementState settlement, List<BlockPos> path, BlockPos targetPos) {
+		if (path.size() <= 2) {
+			return Optional.empty();
+		}
+
+		int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		int minDistanceFromCenter = Math.max(MILEPOST_MIN_SETTLEMENT_DISTANCE_BLOCKS, settlementRadius + MILEPOST_SETTLEMENT_EDGE_BUFFER_BLOCKS);
+		int minDistanceSquared = minDistanceFromCenter * minDistanceFromCenter;
+		int existingSkipDistanceSquared = MILEPOST_EXISTING_SKIP_DISTANCE_BLOCKS * MILEPOST_EXISTING_SKIP_DISTANCE_BLOCKS;
+		List<BlockPos> existingMileposts = cachedNearbyMileposts(level, settlement);
+		MilepostPlacementCandidate bestCandidate = null;
+
+		for (int index = path.size() - 2; index >= 1; index--) {
+			BlockPos routeSurfacePos = path.get(index);
+
+			if (routeSurfacePos.distSqr(settlement.center()) < minDistanceSquared
+				|| routeSurfacePos.distSqr(targetPos) < minDistanceSquared
+				|| !isEstablishedPathSurface(level.getBlockState(routeSurfacePos))
+				|| existingMileposts.stream().anyMatch(existing -> existing.distSqr(routeSurfacePos) < existingSkipDistanceSquared)) {
+				continue;
+			}
+
+			Optional<Direction> routeDirection = routeDirectionForPath(path, index);
+
+			if (routeDirection.isEmpty()) {
+				continue;
+			}
+
+			Optional<MilepostPlacement> placement = findMilepostPlacement(level, routeSurfacePos, routeDirection.get(), existingMileposts, existingSkipDistanceSquared);
+
+			if (placement.isPresent()) {
+				MilepostPlacementCandidate candidate = new MilepostPlacementCandidate(
+					routeSurfacePos,
+					placement.get(),
+					milepostPlacementPriority(level, settlement, path, index, routeSurfacePos, targetPos, minDistanceFromCenter)
+				);
+
+				if (bestCandidate == null || candidate.priority() > bestCandidate.priority()) {
+					bestCandidate = candidate;
+				}
+			}
+		}
+
+		if (bestCandidate == null) {
+			return Optional.empty();
+		}
+
+		return Optional.of(new PathTask(
+			bestCandidate.placement().lowerPos(),
+			bestCandidate.routeSurfacePos().above(),
+			RoadworkAction.PLACE_MILEPOST,
+			bestCandidate.placement().facing()
+		));
+	}
+
+	private static int milepostPlacementPriority(
+		ServerLevel level,
+		SettlementState settlement,
+		List<BlockPos> path,
+		int pathIndex,
+		BlockPos routeSurfacePos,
+		BlockPos targetPos,
+		int minDistanceFromCenter
+	) {
+		int priority = pathIndex * 2;
+		double distanceFromCenter = Math.sqrt(routeSurfacePos.distSqr(settlement.center()));
+		double preferredPlacementDistance = nearestIdealMilepostDistance(distanceFromCenter, minDistanceFromCenter);
+		double preferredDistanceError = Math.abs(distanceFromCenter - preferredPlacementDistance);
+		priority += Math.max(0, 260 - (int) Math.round(preferredDistanceError * 8.0D));
+
+		if (Math.abs(distanceFromCenter - minDistanceFromCenter) <= 6.0D) {
+			priority += 140;
+		}
+
+		int junctionDegree = establishedRoadNeighborCount(level, routeSurfacePos);
+		if (junctionDegree >= 3) {
+			priority += 180 + (junctionDegree - 3) * 40;
+		}
+
+		double distanceToTarget = Math.sqrt(routeSurfacePos.distSqr(targetPos));
+		priority += Math.max(0, 180 - (int) Math.round(distanceToTarget));
+
+		if (pathIndex >= path.size() - 6) {
+			priority += 30;
+		}
+
+		return priority;
+	}
+
+	private static double nearestIdealMilepostDistance(double distanceFromCenter, int minDistanceFromCenter) {
+		if (distanceFromCenter <= minDistanceFromCenter) {
+			return minDistanceFromCenter;
+		}
+
+		double intervals = Math.round((distanceFromCenter - minDistanceFromCenter) / (double) MILEPOST_IDEAL_SPACING_BLOCKS);
+		return minDistanceFromCenter + intervals * MILEPOST_IDEAL_SPACING_BLOCKS;
+	}
+
+	private static int establishedRoadNeighborCount(ServerLevel level, BlockPos routeSurfacePos) {
+		int neighbors = 0;
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			Optional<BlockPos> neighborSurface = surfacePathPos(
+				level,
+				routeSurfacePos.getX() + direction.getStepX(),
+				routeSurfacePos.getZ() + direction.getStepZ()
+			);
+
+			if (neighborSurface.isPresent() && isEstablishedPathSurface(level.getBlockState(neighborSurface.get()))) {
+				neighbors++;
+			}
+		}
+
+		return neighbors;
+	}
+
+	private static Optional<Direction> routeDirectionForPath(List<BlockPos> path, int index) {
+		BlockPos current = path.get(index);
+		BlockPos previous = path.get(Math.max(0, index - 1));
+		BlockPos next = path.get(Math.min(path.size() - 1, index + 1));
+		int dx = Integer.compare(next.getX() - previous.getX(), 0);
+		int dz = Integer.compare(next.getZ() - previous.getZ(), 0);
+
+		if (Math.abs(next.getX() - previous.getX()) >= Math.abs(next.getZ() - previous.getZ())) {
+			if (dx > 0) {
+				return Optional.of(Direction.EAST);
+			}
+
+			if (dx < 0) {
+				return Optional.of(Direction.WEST);
+			}
+		}
+
+		if (dz > 0) {
+			return Optional.of(Direction.SOUTH);
+		}
+
+		if (dz < 0) {
+			return Optional.of(Direction.NORTH);
+		}
+
+		if (current.getX() != previous.getX()) {
+			return Optional.of(current.getX() > previous.getX() ? Direction.EAST : Direction.WEST);
+		}
+
+		if (current.getZ() != previous.getZ()) {
+			return Optional.of(current.getZ() > previous.getZ() ? Direction.SOUTH : Direction.NORTH);
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<MilepostPlacement> findMilepostPlacement(
+		ServerLevel level,
+		BlockPos routeSurfacePos,
+		Direction routeDirection,
+		List<BlockPos> existingMileposts,
+		int existingSkipDistanceSquared
+	) {
+		for (Direction side : List.of(routeDirection.getClockWise(), routeDirection.getCounterClockWise())) {
+			Optional<BlockPos> candidateGroundPos = topSolidGroundPos(level, routeSurfacePos.getX() + side.getStepX(), routeSurfacePos.getZ() + side.getStepZ());
+
+			if (candidateGroundPos.isEmpty()
+				|| Math.abs(candidateGroundPos.get().getY() - routeSurfacePos.getY()) > 1
+				|| isRoadSurface(level.getBlockState(candidateGroundPos.get()))) {
+				continue;
+			}
+
+			BlockPos lowerPos = candidateGroundPos.get().above();
+
+			if (!canPlaceMilepostAt(level, lowerPos)
+				|| existingMileposts.stream().anyMatch(existing -> existing.distSqr(lowerPos) < existingSkipDistanceSquared)) {
+				continue;
+			}
+
+			return Optional.of(new MilepostPlacement(lowerPos, routeDirection));
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BlockPos> furthestEstablishedInternalAnchor(ServerLevel level, SettlementState settlement, BlockPos targetPos) {
+		int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		int maxDistance = Math.max(INTERNAL_TARGET_RADIUS_BLOCKS, settlementRadius + 12);
+		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, maxDistance, INTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
+	}
+
+	private static Optional<BlockPos> furthestEstablishedExternalAnchor(ServerLevel level, SettlementState settlement, BlockPos targetPos) {
+		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, EXTERNAL_TARGET_RADIUS_BLOCKS, EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
+	}
+
+	private static Optional<BlockPos> furthestEstablishedRouteAnchor(
+		ServerLevel level,
+		BlockPos originPos,
+		BlockPos targetPos,
+		int maxAnchorDistance,
+		double baseCorridorBlocks
+	) {
+		double deltaX = targetPos.getX() - originPos.getX();
+		double deltaZ = targetPos.getZ() - originPos.getZ();
+		double routeLength = Math.hypot(deltaX, deltaZ);
+
+		if (routeLength < 1.0D) {
+			return Optional.empty();
+		}
+
+		double directionX = deltaX / routeLength;
+		double directionZ = deltaZ / routeLength;
+		int maxDistance = Math.min(maxAnchorDistance, Math.max(EXTERNAL_PATH_SEARCH_SPAN_BLOCKS, (int) Math.round(routeLength)));
+		BlockPos bestAnchor = null;
+		double bestProgress = -1.0D;
+
+		for (int distance = EXTERNAL_ROUTE_ANCHOR_SAMPLE_STEP_BLOCKS; distance <= maxDistance; distance += EXTERNAL_ROUTE_ANCHOR_SAMPLE_STEP_BLOCKS) {
+			int sampleX = (int) Math.round(originPos.getX() + directionX * distance);
+			int sampleZ = (int) Math.round(originPos.getZ() + directionZ * distance);
+			Optional<BlockPos> sampleSurface = nearestSurfacePathPos(level, new BlockPos(sampleX, originPos.getY(), sampleZ), EXTERNAL_ROUTE_ANCHOR_SAMPLE_SEARCH_RADIUS_BLOCKS);
+
+			if (sampleSurface.isEmpty() || !isEstablishedPathSurface(level.getBlockState(sampleSurface.get()))) {
+				continue;
+			}
+
+			double progress = routeProgressTowardTarget(originPos, targetPos, sampleSurface.get());
+			double lateralError = routeLateralError(originPos, targetPos, sampleSurface.get());
+			double allowedLateralError = baseCorridorBlocks + progress * 0.15D;
+
+			if (progress <= bestProgress || lateralError > allowedLateralError) {
+				continue;
+			}
+
+			bestAnchor = sampleSurface.get().immutable();
+			bestProgress = progress;
+		}
+
+		return Optional.ofNullable(bestAnchor);
+	}
+
+	private static double routeProgressTowardTarget(BlockPos originPos, BlockPos targetPos, BlockPos candidatePos) {
+		double targetX = targetPos.getX() - originPos.getX();
+		double targetZ = targetPos.getZ() - originPos.getZ();
+		double candidateX = candidatePos.getX() - originPos.getX();
+		double candidateZ = candidatePos.getZ() - originPos.getZ();
+		double routeLength = Math.hypot(targetX, targetZ);
+
+		if (routeLength < 1.0D) {
+			return 0.0D;
+		}
+
+		return (candidateX * targetX + candidateZ * targetZ) / routeLength;
+	}
+
+	private static double routeLateralError(BlockPos originPos, BlockPos targetPos, BlockPos candidatePos) {
+		double targetX = targetPos.getX() - originPos.getX();
+		double targetZ = targetPos.getZ() - originPos.getZ();
+		double candidateX = candidatePos.getX() - originPos.getX();
+		double candidateZ = candidatePos.getZ() - originPos.getZ();
+		double routeLength = Math.hypot(targetX, targetZ);
+
+		if (routeLength < 1.0D) {
+			return 0.0D;
+		}
+
+		return Math.abs(candidateX * targetZ - candidateZ * targetX) / routeLength;
+	}
+
+	private static Optional<BlockPos> topSolidGroundPos(ServerLevel level, int x, int z) {
+		BlockPos columnPos = new BlockPos(x, level.getMinY(), z);
+
+		if (!level.hasChunkAt(columnPos)) {
+			return Optional.empty();
+		}
+
+		int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+
+		if (groundY < level.getMinY() || groundY > level.getMaxY() - 2) {
+			return Optional.empty();
+		}
+
+		BlockPos groundPos = new BlockPos(x, groundY, z);
+		BlockState groundState = level.getBlockState(groundPos);
+		return !groundState.isAir() && groundState.getFluidState().isEmpty() && groundState.isSolid()
+			? Optional.of(groundPos)
+			: Optional.empty();
+	}
+
+	private static boolean canPlaceMilepostAt(ServerLevel level, BlockPos lowerPos) {
+		if (!level.hasChunkAt(lowerPos)) {
+			return false;
+		}
+
+		BlockState supportState = level.getBlockState(lowerPos.below());
+		BlockState lowerState = level.getBlockState(lowerPos);
+		BlockState middleState = level.getBlockState(lowerPos.above());
+		BlockState upperState = level.getBlockState(lowerPos.above(2));
+
+		return supportState.isSolid()
+			&& supportState.getFluidState().isEmpty()
+			&& (lowerState.isAir() || lowerState.canBeReplaced())
+			&& (middleState.isAir() || middleState.canBeReplaced())
+			&& (upperState.isAir() || upperState.canBeReplaced());
+	}
+
 	private static PathTask trailTask(BlockPos surfacePos) {
 		return new PathTask(surfacePos, surfacePos.above(), RoadworkAction.PLACE_TRAIL, Direction.NORTH);
 	}
@@ -1535,6 +1954,7 @@ public final class SettlementRoadwrightWork {
 			case COLLECT_LEAF_LITTER -> collectLeafLitter(level, stock, task.workPos());
 			case RAISE_SURFACE -> raiseLowerRoadSurface(level, task.workPos());
 			case PLACE_STAIR -> placeSlopeStair(level, task.workPos(), task.uphillDirection());
+			case PLACE_MILEPOST -> placeMilepost(level, stock, task.workPos(), task.uphillDirection());
 		};
 	}
 
@@ -1691,6 +2111,28 @@ public final class SettlementRoadwrightWork {
 		}
 
 		return Blocks.OAK_STAIRS.defaultBlockState();
+	}
+
+	private static boolean placeMilepost(ServerLevel level, Map<String, Integer> stock, BlockPos lowerPos, Direction facing) {
+		if (!canPlaceMilepostAt(level, lowerPos) || !SettlementGoods.consumeGoods(stock, "milepost", 1)) {
+			return false;
+		}
+
+		BlockState lowerState = LiveVillagesBlocks.MILEPOST.defaultBlockState()
+			.setValue(MilepostBlock.FACING, facing)
+			.setValue(MilepostBlock.PART, MilepostBlock.Part.LOWER);
+		BlockState middleState = lowerState.setValue(MilepostBlock.PART, MilepostBlock.Part.MIDDLE);
+		BlockState upperState = lowerState.setValue(MilepostBlock.PART, MilepostBlock.Part.UPPER);
+
+		level.setBlock(lowerPos, lowerState, BLOCK_UPDATE_FLAGS);
+		level.setBlock(lowerPos.above(), middleState, BLOCK_UPDATE_FLAGS);
+		level.setBlock(lowerPos.above(2), upperState, BLOCK_UPDATE_FLAGS);
+
+		if (level.getBlockEntity(lowerPos) instanceof MilepostBlockEntity milepostBlockEntity) {
+			milepostBlockEntity.refreshLabelsNow(level);
+		}
+
+		return true;
 	}
 
 	private static boolean isRoadSlope(BlockState state) {
@@ -1857,10 +2299,23 @@ public final class SettlementRoadwrightWork {
 		PLACE_TRAIL,
 		COLLECT_LEAF_LITTER,
 		RAISE_SURFACE,
-		PLACE_STAIR
+		PLACE_STAIR,
+		PLACE_MILEPOST
 	}
 
 	private record PathTask(BlockPos workPos, BlockPos standPos, RoadworkAction action, Direction uphillDirection) {
+	}
+
+	private record MilepostPlacement(BlockPos lowerPos, Direction facing) {
+		private MilepostPlacement {
+			lowerPos = lowerPos.immutable();
+		}
+	}
+
+	private record MilepostPlacementCandidate(BlockPos routeSurfacePos, MilepostPlacement placement, int priority) {
+		private MilepostPlacementCandidate {
+			routeSurfacePos = routeSurfacePos.immutable();
+		}
 	}
 
 	public record RoadworkDebugPlan(

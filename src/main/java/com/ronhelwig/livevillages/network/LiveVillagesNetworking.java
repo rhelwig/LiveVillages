@@ -147,6 +147,11 @@ public final class LiveVillagesNetworking {
 			mapRadius,
 			false
 		);
+		List<BlockPos> waterColumns = SettlementLoadedObservation.captureFullyVisibleSurveyorWater(
+			level,
+			settlement.get().center(),
+			mapRadius
+		);
 		savedData.storeRoadworkPlans(
 			settlement.get().id(),
 			SettlementRoadwrightWork.persistentPlansForSettlement(level, settlement.get(), level.getServer().getTickCount())
@@ -160,6 +165,10 @@ public final class LiveVillagesNetworking {
 			boundaryRadius,
 			observation.roads().stream()
 				.map(road -> new SurveyorMapRoadView(road.pos(), road.quality()))
+				.toList(),
+			waterColumns,
+			observation.structures().stream()
+				.map(structure -> new SurveyorMapStructureView(structure.pos(), structure.kind()))
 				.toList(),
 			observation.points().stream()
 				.map(point -> new SurveyorMapPointView(point.pos(), point.kind(), point.label()))
@@ -572,12 +581,53 @@ public final class LiveVillagesNetworking {
 			return Optional.empty();
 		}
 
+		Item item = previewStack.getItem();
 		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, placementPos);
-		if (settlement.isEmpty()) {
+
+		if (item != LiveVillagesBlocks.TRADE_BOARD_ITEM && settlement.isEmpty()) {
 			return Optional.empty();
 		}
 
-		SettlementConstruction.StructurePreview preview = structurePreviewForHeldWorkstation(level, settlement.get(), placementPos, player.getDirection(), previewStack);
+		SettlementConstruction.StructurePreview preview;
+		String settlementName;
+
+		if (item == LiveVillagesBlocks.TRADE_BOARD_ITEM) {
+			SettlementConstruction.TradeBoardPlacementDecision decision = SettlementConstruction.evaluateTradeBoardPlacement(level, placementPos);
+			Direction placementFacing = player.getDirection().getAxis() == Direction.Axis.Y ? Direction.NORTH : player.getDirection().getOpposite();
+			preview = SettlementConstruction.previewTradingPostAtWorkstation(
+				level,
+				decision.settlement().map(SettlementState::id).orElse("preview:new_settlement"),
+				placementPos,
+				placementFacing
+			);
+			settlementName = decision.settlement().map(SettlementState::name).orElse("New Settlement");
+
+			if (decision.foundsNewSettlement() && preview.placementValid() && preview.statusMessage().isBlank()) {
+				preview = new SettlementConstruction.StructurePreview(
+					preview.previewId(),
+					preview.previewType(),
+					true,
+					decision.statusMessage(),
+					preview.blockerPositions(),
+					preview.blocks()
+				);
+			}
+
+			if (decision.blocked()) {
+				preview = new SettlementConstruction.StructurePreview(
+					preview.previewId(),
+					preview.previewType(),
+					false,
+					decision.statusMessage(),
+					preview.blockerPositions(),
+					preview.blocks()
+				);
+			}
+		} else {
+			preview = structurePreviewForHeldWorkstation(level, settlement.get(), placementPos, player.getDirection(), previewStack);
+			settlementName = settlement.get().name();
+		}
+
 		if (preview == null || preview.blocks().isEmpty()) {
 			return Optional.empty();
 		}
@@ -585,7 +635,7 @@ public final class LiveVillagesNetworking {
 		int distanceBlocks = (int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition())));
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
 			preview.statusMessage(),
-			settlement.get().name(),
+			settlementName,
 			preview.previewId(),
 			preview.previewType(),
 			distanceBlocks,
@@ -746,6 +796,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
+			|| item == Items.STONECUTTER
 			|| item == Items.FLETCHING_TABLE;
 	}
 
@@ -801,6 +852,10 @@ public final class LiveVillagesNetworking {
 
 		if (item == Items.SMOKER) {
 			return SettlementConstruction.previewButcherShopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.STONECUTTER) {
+			return SettlementConstruction.previewMasonWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		if (item == Items.FLETCHING_TABLE) {
@@ -977,6 +1032,7 @@ public final class LiveVillagesNetworking {
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";
+			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";

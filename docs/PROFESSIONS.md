@@ -111,10 +111,11 @@ These roles already exist in vanilla and should be expanded before adding unnece
 ### Mason
 
 - Workstation: `Stonecutter`
-- Associated structure: `Mason's House` or `Mason's Workshop`, preferably based on the vanilla plains/stone mason house footprint or a close Live Villages equivalent with a visible stonecutter work area and stone-material storage
-- Loaded-world behavior: builds foundations, walls, chimneys, bridges, defensive works, masonry-heavy repairs, and stone `Mileposts`; upgrades existing stonework toward better materials when no higher-priority construction or repair task is waiting
+- Status: first-pass `Mason's Workshop` structure and loaded masonry-support loop are in place
+- Associated structure: `Mason's Workshop`, using a compact live-build footprint with a visible stonecutter work area, bed, and stone-material storage; a closer vanilla-house adaptation can still replace or refine this later
+- Loaded-world behavior: builds foundations, walls, chimneys, bridges, defensive works, masonry-heavy repairs, and stone `Mileposts`; first-pass task selection should prefer stone-heavy staged construction blocks over wood-heavy ones, idle `Mason`s should gravitate toward the `Stonecutter` to top up low `Tier 1` cobblestone reserves, and surplus stone can be cut there into finished `milepost` stock for `Roadwright` placement
 - Settlement behavior: acts as shared construction labor alongside the custom `Carpenter`, with a focus on stone durability, defensive value, route-marker construction, and structural upgrades
-- Notes: `Mason` should become a first-class settlement construction worker, not just a background vanilla crafter; new construction and urgent repairs should outrank prestige upgrades such as cobblestone-to-stone or rough-stone-to-polished passes
+- Notes: `Mason` should be a first-class settlement construction worker, not just a background vanilla crafter; completed staged structures should reopen as repairs when damaged, and future autonomous masonry upgrades must stay within the settlement's currently allowed tier materials until the fuller later-tier upgrade ladder is authored
 
 ### Cleric
 
@@ -279,7 +280,7 @@ Workstation names such as `Miner Workstation` are current working names carried 
 - Workstation: `Surveyor's Table`
 - Associated structure: `Roadwright's Workshop`, a stone-walled variant of the `Carpenter's Workshop` footprint with a bed, work bay, corrected roof profile, and a third-level wall torch that can later upgrade to a lantern
 - Workstation capacity: supports `1` Roadwright by default and can support a second Roadwright when village demand and housing justify it; the workshop bed or beds should prefer Roadwright residents
-- Loaded-world behavior: builds local paths to nearby settlements, upgrades route surfaces, maintains bridges, improves internal village paths with terrain-aware route choices instead of strict straight lines, repairs established path corridors without flood-filling adjacent greenspace, collects cleared `Leaf Litter` into settlement stock for later composting, discovers local path targets from staged structures, workstations, Trade Boards, composters/gardens, and exterior doors, connects workstation-associated buildings from their outside doors back to the main settlement path network, visibly uses a shovel for dirt-path work, and places `Mileposts` along established routes, especially near village edges and route junctions
+- Loaded-world behavior: builds local paths to nearby settlements, upgrades route surfaces, maintains bridges, improves internal village paths with terrain-aware route choices instead of strict straight lines, repairs established path corridors without flood-filling adjacent greenspace, collects cleared `Leaf Litter` into settlement stock for later composting, discovers local path targets from staged structures, workstations, Trade Boards, composters/gardens, and exterior doors, connects workstation-associated buildings from their outside doors back to the main settlement path network, visibly uses a shovel for dirt-path work, and places `Mileposts` along established land routes, especially near village edges and route junctions while keeping them outside settlement bounds and roughly `100` blocks apart when spacing allows
 - Path target rule: Roadwrights should connect exterior building entrances, workstations, and outdoor POIs; beds and ordinary storage are map POIs only, not automatic path destinations
 - Loaded-world priority: internal village paths first, then construction or repairs when path work is not immediately available, then paths to known nearby settlements
 - Workstation interaction: right-clicking a `Surveyor's Table` opens a village survey map with the settlement boundary, current loaded-world buildings and POIs, path quality shown in discrete color bands, Roadwright positions, and planned or in-progress path work
@@ -334,6 +335,7 @@ Not every important workstation-like block needs to represent a separate village
 
 - Role: route marker and reinforcement object, not a villager workstation
 - Primary builders: `Roadwright` selects placement and `Mason` builds or upgrades the marker through `Stonecutter` work
+- First-pass implementation note: `Mason` owns production of the finished `milepost` stock good, and loaded `Roadwright`s consume that stock to place markers beside established external land routes when spacing allows, skipping duplicate placements if an existing nearby `Milepost` already covers that interval
 - Placement rule: should appear along established roads at regular intervals, such as about every `100` blocks, and also near village entries or major route forks, especially between settlements, without blocking pathing or obvious future structures
 - Physical form: first pass should use a `3`-block-tall `1x1` obelisk marker so destination text can read vertically on the face; later material tiers can keep that silhouette or refine it
 - Materials: start with `Stone`; allow upgrades such as `Smooth Stone`, `Polished Granite`, `Polished Andesite`, and `Obsidian`

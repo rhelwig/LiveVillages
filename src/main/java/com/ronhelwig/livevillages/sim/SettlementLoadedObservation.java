@@ -5,8 +5,10 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import com.mojang.serialization.Codec;
@@ -14,9 +16,11 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -36,7 +40,11 @@ public final class SettlementLoadedObservation {
 	private static final int SURVEYOR_MILEPOST_POINTER_RADIUS_BLOCKS = 192;
 	private static final int SURVEYOR_FULL_SCAN_BELOW_SURFACE_BLOCKS = 8;
 	private static final int SURVEYOR_FULL_SCAN_ABOVE_SURFACE_BLOCKS = 12;
-	private static final int SURVEYOR_MAX_ROADS = 512;
+	private static final int SURVEYOR_ROAD_SCAN_BELOW_SURFACE_BLOCKS = 8;
+	private static final int SURVEYOR_ROAD_SCAN_ABOVE_SURFACE_BLOCKS = 2;
+	private static final int SURVEYOR_MAX_ROADS = 16_384;
+	private static final int SURVEYOR_MAX_STRUCTURES = 12_288;
+	private static final int SURVEYOR_MAX_WATER_COLUMNS = 8_192;
 	private static final int SURVEYOR_MAX_POINTS = 160;
 	private static final int SURVEYOR_MAX_OBSERVED_AREAS = 768;
 	private static final Map<String, CachedVillagers> VILLAGER_CACHE = new HashMap<>();
@@ -51,6 +59,33 @@ public final class SettlementLoadedObservation {
 
 	public static List<Villager> nearbyVillagers(ServerLevel level, BlockPos center, int radiusBlocks) {
 		return nearbyVillagers(level, center, radiusBlocks, "pos:" + center.asLong());
+	}
+
+	public static List<BlockPos> captureFullyVisibleSurveyorWater(
+		ServerLevel level,
+		BlockPos center,
+		int mapRadius
+	) {
+		int mapRadiusSquared = mapRadius * mapRadius;
+		LinkedHashSet<BlockPos> waters = new LinkedHashSet<>();
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int x = center.getX() - mapRadius; x <= center.getX() + mapRadius && waters.size() < SURVEYOR_MAX_WATER_COLUMNS; x++) {
+			for (int z = center.getZ() - mapRadius; z <= center.getZ() + mapRadius && waters.size() < SURVEYOR_MAX_WATER_COLUMNS; z++) {
+				if (center.distToCenterSqr(x + 0.5D, center.getY() + 0.5D, z + 0.5D) > mapRadiusSquared) {
+					continue;
+				}
+
+				scanPos.set(x, center.getY(), z);
+				if (!level.hasChunkAt(scanPos)) {
+					continue;
+				}
+
+				observedWaterAt(level, x, z).ifPresent(waters::add);
+			}
+		}
+
+		return List.copyOf(waters);
 	}
 
 	public static SurveyorObservation captureSurveyorMapObservation(
@@ -136,12 +171,16 @@ public final class SettlementLoadedObservation {
 
 		SurveyorMemory memory = SURVEYOR_MEMORY.computeIfAbsent(surveyorMemoryKey(settlement), ignored -> new SurveyorMemory());
 
-		if (!memory.roads.isEmpty() || !memory.points.isEmpty() || !memory.observedAreas.isEmpty()) {
+		if (!memory.roads.isEmpty() || !memory.structures.isEmpty() || !memory.points.isEmpty() || !memory.observedAreas.isEmpty()) {
 			return;
 		}
 
 		for (ObservedRoad road : observation.roads()) {
 			memory.roads.put(road.pos(), new TimedRoad(road, tick));
+		}
+
+		for (ObservedStructure structure : observation.structures()) {
+			memory.structures.put(structure.pos(), new TimedStructure(structure, tick));
 		}
 
 		for (ObservedPoint point : observation.points()) {
@@ -162,8 +201,11 @@ public final class SettlementLoadedObservation {
 		BlockPos center = settlement.center();
 		int mapRadiusSquared = mapRadius * mapRadius;
 		LinkedHashMap<BlockPos, ObservedRoad> roads = new LinkedHashMap<>();
+		LinkedHashMap<BlockPos, ObservedStructure> structures = new LinkedHashMap<>();
 		LinkedHashMap<BlockPos, ObservedPoint> points = new LinkedHashMap<>();
 		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		collectBuildSiteStructures(buildSites, structures);
 
 		for (ObservedPoint point : surveyorAnchorPoints(level, settlement, buildSites, mapRadius)) {
 			points.put(point.pos(), point);
@@ -182,6 +224,7 @@ public final class SettlementLoadedObservation {
 				}
 
 				observeRoadColumn(level, roads, x, z);
+				observeStructureColumn(level, structures, x, z);
 
 				if (points.size() < SURVEYOR_MAX_POINTS) {
 					observeSurfacePointColumn(level, points, x, z);
@@ -191,6 +234,7 @@ public final class SettlementLoadedObservation {
 
 		return new SurveyorObservation(
 			limitRoads(roads.values()),
+			limitStructures(structures.values()),
 			limitPoints(points.values()),
 			List.of()
 		);
@@ -280,6 +324,7 @@ public final class SettlementLoadedObservation {
 
 			scannedForObserver++;
 			observeRoadColumn(level, memory, x, z, tick);
+			observeStructureColumn(level, memory, x, z, tick);
 
 			for (int y = minY; y <= maxY && memory.points.size() < SURVEYOR_MAX_POINTS; y++) {
 				scanPos.set(x, y, z);
@@ -315,8 +360,25 @@ public final class SettlementLoadedObservation {
 		}
 	}
 
+	private static void observeStructureColumn(ServerLevel level, SurveyorMemory memory, int x, int z, long tick) {
+		ObservedStructure structure = observedStructureAt(level, x, z);
+
+		if (structure != null) {
+			memory.structures.put(structure.pos(), new TimedStructure(structure, tick));
+		}
+	}
+
+	private static void observeStructureColumn(ServerLevel level, Map<BlockPos, ObservedStructure> structures, int x, int z) {
+		ObservedStructure structure = observedStructureAt(level, x, z);
+
+		if (structure != null) {
+			structures.putIfAbsent(structure.pos(), structure);
+		}
+	}
+
 	private static void pruneSurveyorMemory(SurveyorMemory memory, long tick) {
 		memory.roads.entrySet().removeIf(entry -> tick - entry.getValue().tick() > SURVEYOR_MEMORY_TICKS);
+		memory.structures.entrySet().removeIf(entry -> tick - entry.getValue().tick() > SURVEYOR_MEMORY_TICKS);
 		memory.points.entrySet().removeIf(entry -> tick - entry.getValue().tick() > SURVEYOR_MEMORY_TICKS);
 		memory.observedAreas.entrySet().removeIf(entry -> tick - entry.getValue().tick() > SURVEYOR_MEMORY_TICKS);
 	}
@@ -382,15 +444,31 @@ public final class SettlementLoadedObservation {
 			return "trail";
 		}
 
-		if (state.is(Blocks.COBBLESTONE) || state.is(Blocks.COBBLESTONE_STAIRS) || state.is(Blocks.COBBLESTONE_SLAB)) {
+		if (state.is(Blocks.GRAVEL)) {
+			return "gravel";
+		}
+
+		if (state.is(Blocks.COBBLESTONE)
+			|| state.is(Blocks.MOSSY_COBBLESTONE)
+			|| state.is(Blocks.COBBLESTONE_STAIRS)
+			|| state.is(Blocks.COBBLESTONE_SLAB)) {
 			return "cobble";
 		}
 
-		if (state.is(Blocks.SMOOTH_STONE) || state.is(Blocks.SMOOTH_STONE_SLAB) || state.is(Blocks.STONE_STAIRS) || state.is(Blocks.STONE_SLAB)) {
+		if (state.is(Blocks.SMOOTH_STONE)
+			|| state.is(Blocks.SMOOTH_STONE_SLAB)
+			|| state.is(Blocks.STONE_STAIRS)
+			|| state.is(Blocks.STONE_SLAB)) {
 			return "smooth";
 		}
 
-		if (state.is(Blocks.STONE_BRICKS) || state.is(Blocks.STONE_BRICK_STAIRS) || state.is(Blocks.STONE_BRICK_SLAB) || state.is(Blocks.BRICKS) || state.is(Blocks.BRICK_STAIRS) || state.is(Blocks.BRICK_SLAB)) {
+		if (state.is(Blocks.STONE_BRICKS)
+			|| state.is(Blocks.MOSSY_STONE_BRICKS)
+			|| state.is(Blocks.STONE_BRICK_STAIRS)
+			|| state.is(Blocks.STONE_BRICK_SLAB)
+			|| state.is(Blocks.BRICKS)
+			|| state.is(Blocks.BRICK_STAIRS)
+			|| state.is(Blocks.BRICK_SLAB)) {
 			return "brick";
 		}
 
@@ -430,6 +508,7 @@ public final class SettlementLoadedObservation {
 			case BUTCHER_SHOP -> "Butcher";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";
+			case MASON_WORKSHOP -> "Mason";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case TRADING_POST -> "Trading Post";
 			case CARPENTER_WORKSHOP -> "Carpenter";
@@ -442,22 +521,72 @@ public final class SettlementLoadedObservation {
 		};
 	}
 
+	private static void collectBuildSiteStructures(Collection<SettlementBuildSite> buildSites, Map<BlockPos, ObservedStructure> structures) {
+		for (SettlementBuildSite buildSite : buildSites) {
+			String kind = buildSite.complete() ? "building" : "project";
+
+			for (SettlementBuildBlockState buildBlock : buildSite.blocks()) {
+				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, buildBlock);
+
+				if (plannedState == null || plannedState.isAir()) {
+					continue;
+				}
+
+				Optional<BlockPos> worldPos = SettlementConstruction.buildSiteBlockPos(buildSite, buildBlock);
+
+				if (worldPos.isEmpty()) {
+					continue;
+				}
+
+				structures.putIfAbsent(columnPos(worldPos.get()), new ObservedStructure(columnPos(worldPos.get()), kind));
+			}
+		}
+	}
+
 	private static ObservedRoad observedRoadAt(ServerLevel level, int x, int z) {
-		int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
-		BlockPos pos = new BlockPos(x, y, z);
-		BlockState state = level.getBlockState(pos);
-		String quality = roadQuality(state);
+		int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+		int minY = Math.max(level.getMinY(), surfaceY - SURVEYOR_ROAD_SCAN_BELOW_SURFACE_BLOCKS);
+		int maxY = Math.min(level.getMaxY() - 1, surfaceY + SURVEYOR_ROAD_SCAN_ABOVE_SURFACE_BLOCKS);
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
 
-		if (quality.isBlank() && state.is(Blocks.LEAF_LITTER)) {
-			pos = pos.below();
-			quality = roadQuality(level.getBlockState(pos));
+		for (int y = maxY; y >= minY; y--) {
+			scanPos.set(x, y, z);
+			BlockState state = level.getBlockState(scanPos);
+			String quality = roadQuality(state);
+
+			if (quality.isBlank() && state.is(Blocks.LEAF_LITTER)) {
+				quality = roadQuality(level.getBlockState(scanPos.below()));
+				if (!quality.isBlank() && qualifiesAsSurveyRoad(level, scanPos.below(), quality)) {
+					return new ObservedRoad(scanPos.below().immutable(), quality);
+				}
+
+				continue;
+			}
+
+			if (!quality.isBlank() && qualifiesAsSurveyRoad(level, scanPos, quality)) {
+				return new ObservedRoad(scanPos.immutable(), quality);
+			}
 		}
 
-		if (quality.isBlank()) {
-			return null;
+		return null;
+	}
+
+	private static ObservedStructure observedStructureAt(ServerLevel level, int x, int z) {
+		int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+		int minY = Math.max(level.getMinY(), surfaceY - SURVEYOR_FULL_SCAN_BELOW_SURFACE_BLOCKS);
+		int maxY = Math.min(level.getMaxY() - 1, surfaceY + SURVEYOR_FULL_SCAN_ABOVE_SURFACE_BLOCKS);
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int y = maxY; y >= minY; y--) {
+			scanPos.set(x, y, z);
+
+			if (looksLikeSurveyStructureBlock(level, scanPos)) {
+				BlockPos pos = columnPos(x, z);
+				return new ObservedStructure(pos, "building");
+			}
 		}
 
-		return new ObservedRoad(pos, quality);
+		return null;
 	}
 
 	private static void observeSurfacePointColumn(ServerLevel level, Map<BlockPos, ObservedPoint> points, int x, int z) {
@@ -479,9 +608,156 @@ public final class SettlementLoadedObservation {
 		}
 	}
 
+	private static boolean looksLikeSurveyStructureBlock(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+
+		if (state.isAir() || state.canBeReplaced()) {
+			return false;
+		}
+
+		if (state.getBlock() instanceof DoorBlock
+			|| state.is(Blocks.GLASS)
+			|| state.is(Blocks.GLASS_PANE)
+			|| state.is(BlockTags.PLANKS)
+			|| state.is(BlockTags.WOODEN_STAIRS)
+			|| state.is(BlockTags.WOODEN_SLABS)
+			|| state.is(BlockTags.FENCES)
+			|| state.is(BlockTags.FENCE_GATES)
+			|| state.is(BlockTags.TRAPDOORS)
+			|| state.is(Blocks.LADDER)) {
+			return true;
+		}
+
+		MapPointMarker marker = mapPointMarker(state);
+		if (marker != null && !"milepost".equals(marker.kind())) {
+			return true;
+		}
+
+		if (state.is(BlockTags.LOGS)) {
+			return looksLikeBuiltLogColumn(level, pos);
+		}
+
+		return false;
+	}
+
+	private static boolean qualifiesAsSurveyRoad(ServerLevel level, BlockPos pos, String quality) {
+		if (!"gravel".equals(quality)) {
+			return true;
+		}
+
+		for (BlockPos neighborPos : List.of(pos.north(), pos.south(), pos.east(), pos.west())) {
+			String neighborQuality = roadQuality(level.getBlockState(neighborPos));
+			if (!neighborQuality.isBlank() && !"gravel".equals(neighborQuality)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean looksLikeBuiltLogColumn(ServerLevel level, BlockPos pos) {
+		int horizontalLogNeighbors = 0;
+		boolean craftedAttachment = false;
+
+		for (BlockPos neighborPos : List.of(pos.north(), pos.south(), pos.east(), pos.west())) {
+			BlockState neighborState = level.getBlockState(neighborPos);
+
+			if (neighborState.is(BlockTags.LOGS)) {
+				horizontalLogNeighbors++;
+			}
+
+			if (isBuiltWoodAttachment(neighborState)) {
+				craftedAttachment = true;
+			}
+		}
+
+		for (BlockPos neighborPos : List.of(
+			pos.above(),
+			pos.below(),
+			pos.above().north(),
+			pos.above().south(),
+			pos.above().east(),
+			pos.above().west(),
+			pos.below().north(),
+			pos.below().south(),
+			pos.below().east(),
+			pos.below().west()
+		)) {
+			if (isBuiltWoodAttachment(level.getBlockState(neighborPos))) {
+				craftedAttachment = true;
+				break;
+			}
+		}
+
+		if (horizontalLogNeighbors == 0 && !craftedAttachment) {
+			return false;
+		}
+
+		if (horizontalLogNeighbors >= 2 || craftedAttachment) {
+			return hasNearbyLeaves(level, pos) ? horizontalLogNeighbors >= 2 && craftedAttachment : true;
+		}
+
+		return false;
+	}
+
+	private static boolean isBuiltWoodAttachment(BlockState state) {
+		return state.is(BlockTags.PLANKS)
+			|| state.is(BlockTags.WOODEN_STAIRS)
+			|| state.is(BlockTags.WOODEN_SLABS)
+			|| state.is(BlockTags.FENCES)
+			|| state.is(BlockTags.FENCE_GATES)
+			|| state.is(BlockTags.TRAPDOORS)
+			|| state.getBlock() instanceof DoorBlock;
+	}
+
+	private static boolean hasNearbyLeaves(ServerLevel level, BlockPos pos) {
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dy = 0; dy <= 2; dy++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					if (dx == 0 && dy == 0 && dz == 0) {
+						continue;
+					}
+
+					BlockState neighborState = level.getBlockState(pos.offset(dx, dy, dz));
+
+					if (neighborState.getBlock() instanceof LeavesBlock || neighborState.is(BlockTags.LEAVES)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static Optional<BlockPos> observedWaterAt(ServerLevel level, int x, int z) {
+		int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+
+		if (surfaceY < level.getMinY() || surfaceY > level.getMaxY() - 1) {
+			return Optional.empty();
+		}
+
+		BlockPos surfacePos = new BlockPos(x, surfaceY, z);
+		return level.getBlockState(surfacePos).is(Blocks.WATER) ? Optional.of(columnPos(x, z)) : Optional.empty();
+	}
+
+	private static BlockPos columnPos(BlockPos pos) {
+		return columnPos(pos.getX(), pos.getZ());
+	}
+
+	private static BlockPos columnPos(int x, int z) {
+		return new BlockPos(x, 0, z);
+	}
+
 	private static List<ObservedRoad> limitRoads(Collection<ObservedRoad> roads) {
 		return roads.stream()
 			.limit(SURVEYOR_MAX_ROADS)
+			.toList();
+	}
+
+	private static List<ObservedStructure> limitStructures(Collection<ObservedStructure> structures) {
+		return structures.stream()
+			.limit(SURVEYOR_MAX_STRUCTURES)
 			.toList();
 	}
 
@@ -499,6 +775,9 @@ public final class SettlementLoadedObservation {
 	}
 
 	private record TimedRoad(ObservedRoad road, long tick) {
+	}
+
+	private record TimedStructure(ObservedStructure structure, long tick) {
 	}
 
 	private record TimedPoint(ObservedPoint point, long tick) {
@@ -533,6 +812,7 @@ public final class SettlementLoadedObservation {
 
 	private static final class SurveyorMemory {
 		private final LinkedHashMap<BlockPos, TimedRoad> roads = new LinkedHashMap<>();
+		private final LinkedHashMap<BlockPos, TimedStructure> structures = new LinkedHashMap<>();
 		private final LinkedHashMap<BlockPos, TimedPoint> points = new LinkedHashMap<>();
 		private final LinkedHashMap<BlockPos, TimedObservedArea> observedAreas = new LinkedHashMap<>();
 
@@ -541,6 +821,11 @@ public final class SettlementLoadedObservation {
 				.sorted((first, second) -> Long.compare(second.tick(), first.tick()))
 				.map(TimedRoad::road)
 				.limit(SURVEYOR_MAX_ROADS)
+				.toList();
+			List<ObservedStructure> structureSnapshot = structures.values().stream()
+				.sorted((first, second) -> Long.compare(second.tick(), first.tick()))
+				.map(TimedStructure::structure)
+				.limit(SURVEYOR_MAX_STRUCTURES)
 				.toList();
 			List<ObservedPoint> pointSnapshot = points.values().stream()
 				.sorted((first, second) -> Long.compare(second.tick(), first.tick()))
@@ -552,25 +837,27 @@ public final class SettlementLoadedObservation {
 				.map(TimedObservedArea::pos)
 				.limit(SURVEYOR_MAX_OBSERVED_AREAS)
 				.toList();
-			return new SurveyorObservation(roadSnapshot, pointSnapshot, observedAreaSnapshot);
+			return new SurveyorObservation(roadSnapshot, structureSnapshot, pointSnapshot, observedAreaSnapshot);
 		}
 	}
 
-	public record SurveyorObservation(List<ObservedRoad> roads, List<ObservedPoint> points, List<BlockPos> observedAreas) {
+	public record SurveyorObservation(List<ObservedRoad> roads, List<ObservedStructure> structures, List<ObservedPoint> points, List<BlockPos> observedAreas) {
 		public static final Codec<SurveyorObservation> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			ObservedRoad.CODEC.listOf().optionalFieldOf("roads", List.of()).forGetter(SurveyorObservation::roads),
+			ObservedStructure.CODEC.listOf().optionalFieldOf("structures", List.of()).forGetter(SurveyorObservation::structures),
 			ObservedPoint.CODEC.listOf().optionalFieldOf("points", List.of()).forGetter(SurveyorObservation::points),
 			BlockPos.CODEC.listOf().optionalFieldOf("observed_areas", List.of()).forGetter(SurveyorObservation::observedAreas)
 		).apply(instance, SurveyorObservation::new));
 
 		public SurveyorObservation {
 			roads = List.copyOf(roads);
+			structures = List.copyOf(structures);
 			points = List.copyOf(points);
 			observedAreas = List.copyOf(observedAreas);
 		}
 
 		public boolean empty() {
-			return roads.isEmpty() && points.isEmpty() && observedAreas.isEmpty();
+			return roads.isEmpty() && structures.isEmpty() && points.isEmpty() && observedAreas.isEmpty();
 		}
 	}
 
@@ -581,6 +868,17 @@ public final class SettlementLoadedObservation {
 		).apply(instance, ObservedRoad::new));
 
 		public ObservedRoad {
+			pos = pos.immutable();
+		}
+	}
+
+	public record ObservedStructure(BlockPos pos, String kind) {
+		public static final Codec<ObservedStructure> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+			BlockPos.CODEC.fieldOf("pos").forGetter(ObservedStructure::pos),
+			Codec.STRING.optionalFieldOf("kind", "building").forGetter(ObservedStructure::kind)
+		).apply(instance, ObservedStructure::new));
+
+		public ObservedStructure {
 			pos = pos.immutable();
 		}
 	}

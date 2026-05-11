@@ -4,6 +4,8 @@ This guide is for people who want to help design buildings for Live Villages wit
 
 Right now, structure blueprints still live in code and get imported manually. This document explains the format we need from builders so a design can be turned into a real mod structure with minimal translation work.
 
+A later goal is to support importing exported blueprint files directly in-game so both developers and players can package, place, and share villager-buildable structures without a Java edit pass.
+
 ## Quick Start
 
 If you want to submit a structure design, give us:
@@ -102,6 +104,17 @@ For a non-technical builder, this is the simplest process:
 7. Add notes for intended materials, bed locations, workstation placement, or any spots where the captured structure should be interpreted rather than copied literally.
 
 If you prefer, you can still author the layers by hand. In that manual workflow, keep the front of the building at the bottom of each text diagram and add an orientation diagram only where stairs, trapdoors, walls, or wall torches need a precise direction.
+
+## Planned Import Workflow
+
+This is not implemented yet, but it is the intended follow-up to the current export flow:
+
+1. Choose an exported blueprint text file through a file-selection dialog.
+2. Import that file into the game as a generic construction-anchor item or block with a readable structure name.
+3. Place that anchor in the world to start a normal staged construction site from the imported blueprint.
+4. Let villagers and players contribute blocks through the same assisted-construction rules used by built-in Live Villages structures.
+
+If this works well, the same import-and-build flow may later be split into a standalone mod focused on blueprint sharing and villager-assisted construction rather than only Live Villages-specific structures.
 
 ## Submission Template
 

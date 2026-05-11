@@ -115,13 +115,25 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 			}
 		}
 
-		SettlementState settlement = savedData.findNearestSettlement(
-			serverLevel.dimension(),
-			worldPosition,
-			LINK_RADIUS_BLOCKS,
-			existingSettlement -> existingSettlement.kind() != SettlementKind.OUTPOST
-		).orElseGet(() -> createCustomSettlement(serverLevel, savedData));
+		SettlementState settlement = SettlementConstruction.findSettlementContainingPosition(serverLevel, worldPosition)
+			.or(() -> savedData.findNearestSettlement(
+				serverLevel.dimension(),
+				worldPosition,
+				LINK_RADIUS_BLOCKS,
+				existingSettlement -> existingSettlement.kind() != SettlementKind.OUTPOST
+			))
+			.orElseGet(() -> createCustomSettlement(serverLevel, savedData));
 
+		syncLinkedSettlement(settlement.id(), settlement.name());
+		return settlement;
+	}
+
+	public void linkSettlement(SettlementState settlement) {
+		syncLinkedSettlement(settlement.id(), settlement.name());
+	}
+
+	public SettlementState createAndLinkCustomSettlement(ServerLevel serverLevel) {
+		SettlementState settlement = createCustomSettlement(serverLevel, LiveVillagesSavedData.get(serverLevel.getServer()));
 		syncLinkedSettlement(settlement.id(), settlement.name());
 		return settlement;
 	}

@@ -43,6 +43,7 @@ public final class SettlementEconomyRules {
 		new TargetRule("pale_oak_sapling", population -> 0),
 		new TargetRule("mangrove_propagule", population -> 0),
 		new TargetRule("cobblestone", population -> 24 + population * 8),
+		new TargetRule("milepost", population -> 0),
 		new TargetRule("iron_ingot", population -> 4 + population * 2),
 		new TargetRule("emerald", population -> 4 + population)
 	);

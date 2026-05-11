@@ -43,4 +43,14 @@ public final class SettlementTiers {
 	public static int normalize(int tier) {
 		return Math.max(MIN_TIER, Math.min(MAX_TIER, tier));
 	}
+
+	public static String clampStoneMaterialForTier(int tier, String stoneMaterial) {
+		int normalizedTier = normalize(tier);
+
+		return switch (stoneMaterial) {
+			case "smooth_stone" -> normalizedTier >= 3 ? "smooth_stone" : "cobblestone";
+			case "stone_bricks" -> normalizedTier >= 4 ? "stone_bricks" : normalizedTier >= 3 ? "smooth_stone" : "cobblestone";
+			default -> stoneMaterial;
+		};
+	}
 }
