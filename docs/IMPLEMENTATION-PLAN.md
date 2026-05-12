@@ -54,6 +54,7 @@ Focus:
 - keep Trade Board player-row refreshes authoritative after donations and trades so aggregated exact-item rows update counts immediately and do not break when the first contributing stack is exhausted
 - keep non-empty carried containers such as `Bundle` separate from aggregated rows, preview their contents on hover, and donate their contents into settlement stock without trading away the still-useful empty container
 - keep Trade Board shortage/surplus output accurate when construction blockers, protected reserves, or build-site demand are involved
+- keep automatic ore / glass refining fuel-aware so the village spends real `coal` / `charcoal` / wood fuel, prefers efficient fuel sources, and preserves protected wood reserves when possible
 - keep route-transfer demand aware of active staged build-site materials so visible construction stalls can be supplied by trade
 - preserve completed harbor/trade build-site effects for route planning even while the corresponding chunks are unloaded
 - keep route growth limited by reachability and active planning state rather than a small hard cap on total connections
@@ -107,7 +108,7 @@ Focus:
 - surface prospective placement failures directly in the build preview with a short reason string and highlighted blocker positions so invalid sites can be diagnosed in-world
 - align road-quality detection and Surveyor map rendering with the intended upgrade ladder: `Dirt Path` -> `Cobblestone` -> `Smooth Stone` -> `Stone Bricks` / `Bricks`, while ignoring plain natural `Stone` and `Gravel` as autonomous road upgrades
 - let build previews distinguish exact block matches from compatible wrong-material matches, and let compatible player materials complete structures without blocking functionality
-- keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, and later broader tunnel-expansion behavior
+- keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, the new fuel-aware raw-ore refining support for `iron` / `copper`, and later broader tunnel-expansion behavior
 - keep profession-linked housing sticky where structures provide beds, while leaving Miners dependent on ordinary settlement housing rather than inventing beds in the `Mine Entrance`
 - keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing, and the site rules should require a clear front entry approach without forcing the whole hillside facade to be carved back
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
@@ -209,7 +210,7 @@ These matter enough to keep in the plan:
 
 Keep these visible, but not as active work:
 
-- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, and shaft-lighting loop, including primary and secondary tunnel expansion, richer mined-resource stock handling, ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
+- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, shaft-lighting loop, and first-pass fuel-aware `iron` / `copper` refining, including primary and secondary tunnel expansion, richer mined-resource stock handling, broader ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - a generalized blueprint-import feature that may be worth extracting into a standalone sharing/build-assist mod once the import, packaging, and staged-construction UX are mature

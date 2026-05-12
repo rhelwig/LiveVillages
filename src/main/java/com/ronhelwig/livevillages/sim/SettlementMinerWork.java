@@ -646,15 +646,38 @@ public final class SettlementMinerWork {
 				return true;
 			}
 
-			if (SettlementGoods.consumeGoods(stock, "copper_ingot", 1)
-				&& SettlementConstructionMaterials.consumeMaterial(stock, new HashMap<>(), "torch").supplied()) {
-				return true;
-			}
-
-			return false;
+			return consumeCopperTorchParts(stock);
 		}
 
 		return SettlementConstructionMaterials.consumeMaterial(stock, new HashMap<>(), "torch").supplied();
+	}
+
+	private static boolean consumeCopperTorchParts(Map<String, Integer> stock) {
+		Map<String, Integer> workingStock = new HashMap<>(stock);
+
+		if (!SettlementRefining.consumeRefinedMaterial(workingStock, "copper_ingot")) {
+			return false;
+		}
+
+		if (!SettlementConstructionMaterials.consumeMaterial(workingStock, new HashMap<>(), "torch").supplied()) {
+			return false;
+		}
+
+		stock.clear();
+		stock.putAll(workingStock);
+		return true;
+	}
+
+	private static boolean canSupplyTorch(Map<String, Integer> stock) {
+		return SettlementConstructionMaterials.consumeMaterial(new HashMap<>(stock), new HashMap<>(), "torch").supplied();
+	}
+
+	private static boolean canSupplyCopperTorch(Map<String, Integer> stock) {
+		if (stock.getOrDefault("copper_torch", 0) > 0) {
+			return true;
+		}
+
+		return consumeCopperTorchParts(new HashMap<>(stock));
 	}
 
 	private static boolean consumeSupportMaterial(Map<String, Integer> stock, BlockState state) {
@@ -755,13 +778,11 @@ public final class SettlementMinerWork {
 	private static BlockState preferredShaftLightState(Map<String, Integer> stock, MineSite mineSite) {
 		Direction torchFacing = mineSite.supportDirection();
 
-		if (stock.getOrDefault("copper_torch", 0) > 0
-			|| (stock.getOrDefault("copper_ingot", 0) > 0 && stock.getOrDefault("coal", 0) > 0 && stock.getOrDefault("stick", 0) > 0)) {
+		if (canSupplyCopperTorch(stock)) {
 			return Blocks.COPPER_WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, torchFacing);
 		}
 
-		if (stock.getOrDefault("torch", 0) > 0
-			|| (stock.getOrDefault("coal", 0) > 0 && stock.getOrDefault("stick", 0) > 0)) {
+		if (canSupplyTorch(stock)) {
 			return Blocks.WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, torchFacing);
 		}
 
@@ -769,13 +790,11 @@ public final class SettlementMinerWork {
 	}
 
 	private static BlockState preferredCaveLightState(Map<String, Integer> stock) {
-		if (stock.getOrDefault("copper_torch", 0) > 0
-			|| (stock.getOrDefault("copper_ingot", 0) > 0 && stock.getOrDefault("coal", 0) > 0 && stock.getOrDefault("stick", 0) > 0)) {
+		if (canSupplyCopperTorch(stock)) {
 			return Blocks.COPPER_TORCH.defaultBlockState();
 		}
 
-		if (stock.getOrDefault("torch", 0) > 0
-			|| (stock.getOrDefault("coal", 0) > 0 && stock.getOrDefault("stick", 0) > 0)) {
+		if (canSupplyTorch(stock)) {
 			return Blocks.TORCH.defaultBlockState();
 		}
 

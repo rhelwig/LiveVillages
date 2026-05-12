@@ -16,6 +16,7 @@ import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementProjectType;
+import com.ronhelwig.livevillages.sim.SettlementRefining;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementTiers;
 
@@ -239,14 +240,25 @@ public final class TradeBoardLogic {
 				continue;
 			}
 
-			int current = settlement.stock().getOrDefault(goodsKey, 0);
-			int target = current + demand;
 			int existingIndex = indexOfGoods(shortages, goodsKey);
+			int current = effectiveCurrentForDisplay(settlement, goodsKey);
+			int target = demand;
 
 			if (existingIndex >= 0) {
 				TradeBoardGoodsView existing = shortages.get(existingIndex);
-				target = Math.max(existing.target(), target);
 				current = existing.current();
+				target = existing.target() + demand;
+			}
+
+			if (current >= target) {
+				if (existingIndex >= 0) {
+					shortages.remove(existingIndex);
+				}
+
+				continue;
+			}
+
+			if (existingIndex >= 0) {
 				shortages.set(existingIndex, goodsView(goodsKey, current, target));
 			} else {
 				shortages.add(goodsView(goodsKey, current, target));
@@ -489,16 +501,19 @@ public final class TradeBoardLogic {
 	}
 
 	private static int effectiveCurrentForDisplay(SettlementState settlement, String goodsKey) {
-		int current = settlement.stock().getOrDefault(goodsKey, 0);
-
-		if (!goodsKey.equals("bread")) {
-			return current;
+		if (goodsKey.equals("bread")) {
+			int current = settlement.stock().getOrDefault(goodsKey, 0);
+			int storedWheat = settlement.stock().getOrDefault("wheat", 0);
+			int wheatReserve = SettlementEconomyRules.targetForGoods(settlement, "wheat");
+			int spareWheat = Math.max(0, storedWheat - wheatReserve);
+			return current + (spareWheat / 3);
 		}
 
-		int storedWheat = settlement.stock().getOrDefault("wheat", 0);
-		int wheatReserve = SettlementEconomyRules.targetForGoods(settlement, "wheat");
-		int spareWheat = Math.max(0, storedWheat - wheatReserve);
-		return current + (spareWheat / 3);
+		if (SettlementRefining.supportsRefining(goodsKey)) {
+			return SettlementRefining.effectiveGoodsCount(settlement, goodsKey);
+		}
+
+		return settlement.stock().getOrDefault(goodsKey, 0);
 	}
 
 	private static String routePartnerName(RouteState route, SettlementState settlement, Function<String, String> settlementNameResolver) {

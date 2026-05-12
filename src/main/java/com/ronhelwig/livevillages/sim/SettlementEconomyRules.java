@@ -230,6 +230,16 @@ public final class SettlementEconomyRules {
 			}
 		}
 
+		if (settlement.population().getOrDefault("miner", 0) > 0) {
+			if (goodsKey.equals("coal")) {
+				return 4;
+			}
+
+			if (goodsKey.equals("copper_ingot")) {
+				return 4;
+			}
+		}
+
 		return 0;
 	}
 

@@ -168,7 +168,9 @@ public final class SettlementEconomySimulator {
 		addGoods(stock, "apple", scaledAmount(foresters * 0.5D, elapsedDays));
 		addGoods(stock, "oak_sapling", scaledAmount(foresters * 1.0D, elapsedDays));
 		addGoods(stock, "cobblestone", scaledAmount((population * 0.45D) + miners * 6.0D + masons * 1.5D + constructionSupport * 1.5D, elapsedDays));
-		addGoods(stock, "iron_ingot", scaledAmount(miners * 1.5D, elapsedDays));
+		addGoods(stock, "coal", scaledAmount(miners * 0.45D, elapsedDays));
+		addGoods(stock, "raw_iron", scaledAmount(miners * 1.5D, elapsedDays));
+		addGoods(stock, "raw_copper", scaledAmount(miners * 0.75D, elapsedDays));
 		addGoods(
 			wealth,
 			"emerald",
@@ -194,6 +196,8 @@ public final class SettlementEconomySimulator {
 			SettlementFarmerWork.applyLoadedFarmerWork(level, settlement, stock, elapsedDays);
 			SettlementButcherWork.applyLoadedButcherWork(level, settlement, stock, elapsedDays);
 		}
+
+		SettlementRefining.refineTowardSettlementTargets(settlement, stock);
 	}
 
 	private static SupplyState consumeFood(Map<String, Integer> stock, int population, double elapsedDays) {
