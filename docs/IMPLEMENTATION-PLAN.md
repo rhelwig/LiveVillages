@@ -136,6 +136,8 @@ Focus:
 - keep `Roadwright` responsible for both internal route quality and outward settlement connections
 - keep route vocabulary explicit: routes are traversable links between POIs, while paths or roads are the visible terrain improvements laid along those routes
 - keep the `Surveyor's Table` map sourced from current loaded-world truth so visible roads and improvements do not lag behind villager survey chores
+- keep custom `Trade Board`-founded settlements on the same effective footprint as regular villages so shoreline anchors, lighthouses, and other edge infrastructure are not silently excluded by a smaller radius
+- keep shoreline harbor structures using land-side access targets only; roadwright path planning should not treat air above water as a valid standable route endpoint
 - extend route quality improvements without regressing the bounded-search and bounded-per-tick performance model
 - add bounded catch-up for visible road/path improvement so revisiting a settlement shows progress without requiring constant player babysitting
 - keep route planning biased toward existing path surfaces and nearby `Mileposts`, and keep first-pass route targets centered on bells, structure entrances, standalone workstations, civic anchors, and neighboring settlements

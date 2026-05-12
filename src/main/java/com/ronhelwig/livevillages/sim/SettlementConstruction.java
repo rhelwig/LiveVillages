@@ -6371,8 +6371,8 @@ public final class SettlementConstruction {
 
 	private static int buildRadius(SettlementState settlement) {
 		return switch (settlement.kind()) {
-			case VILLAGE, HARBOR -> VILLAGE_BUILD_RADIUS_BLOCKS;
-			case CUSTOM, OUTPOST -> STANDARD_BUILD_RADIUS_BLOCKS;
+			case VILLAGE, HARBOR, CUSTOM -> VILLAGE_BUILD_RADIUS_BLOCKS;
+			case OUTPOST -> STANDARD_BUILD_RADIUS_BLOCKS;
 		};
 	}
 

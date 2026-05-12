@@ -81,6 +81,7 @@ public final class SettlementRoadwrightWork {
 	private static final int EXTERNAL_ROUTE_ANCHOR_SAMPLE_SEARCH_RADIUS_BLOCKS = 4;
 	private static final double INTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 8.0D;
 	private static final double EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 12.0D;
+	private static final double MIN_PATH_STEP_COST = 0.3D;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final Map<String, CachedPoiTargets> INTERNAL_POI_TARGET_CACHE = new HashMap<>();
 	private static final Map<String, CachedMilepostTargets> MILEPOST_TARGET_CACHE = new HashMap<>();
@@ -827,7 +828,7 @@ public final class SettlementRoadwrightWork {
 				continue;
 			}
 
-			targets.addAll(internalTargetsForBuildSite(buildSite));
+			targets.addAll(internalTargetsForBuildSite(level, buildSite));
 		}
 
 		targets.addAll(cachedScannedInternalPoiTargets(level, settlement));
@@ -887,7 +888,7 @@ public final class SettlementRoadwrightWork {
 		return targets;
 	}
 
-	private static List<PathTarget> internalTargetsForBuildSite(SettlementBuildSite buildSite) {
+	private static List<PathTarget> internalTargetsForBuildSite(ServerLevel level, SettlementBuildSite buildSite) {
 		List<PathTarget> targets = new ArrayList<>();
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
@@ -914,7 +915,16 @@ public final class SettlementRoadwrightWork {
 			targets.add(new PathTarget(doorPos.get().relative(doorFacing), true));
 		}
 
-		targets.add(new PathTarget(buildSite.workstationPos(), true));
+		List<BlockPos> workstationAccessTargets = standableAccessTargets(level, buildSite.workstationPos());
+
+		if (!workstationAccessTargets.isEmpty()) {
+			workstationAccessTargets.stream()
+				.map(pos -> new PathTarget(pos, true))
+				.forEach(targets::add);
+		} else {
+			targets.add(new PathTarget(buildSite.workstationPos(), true));
+		}
+
 		return targets;
 	}
 
@@ -1568,7 +1578,7 @@ public final class SettlementRoadwrightWork {
 	private static double heuristic(BlockPos pos, BlockPos target) {
 		int dx = Math.abs(target.getX() - pos.getX());
 		int dz = Math.abs(target.getZ() - pos.getZ());
-		return Math.max(dx, dz);
+		return Math.max(dx, dz) * MIN_PATH_STEP_COST;
 	}
 
 	private static List<BlockPos> reconstructPath(Map<ColumnKey, PathSearchVisit> visits, ColumnKey endKey) {
@@ -2212,7 +2222,10 @@ public final class SettlementRoadwrightWork {
 		BlockState footState = level.getBlockState(pos);
 		BlockState headState = level.getBlockState(pos.above());
 		BlockState belowState = level.getBlockState(pos.below());
-		return footState.isAir() && headState.isAir() && !belowState.isAir();
+		return footState.isAir()
+			&& headState.isAir()
+			&& belowState.getFluidState().isEmpty()
+			&& belowState.isSolid();
 	}
 
 	private static void showRoadwrightTool(Villager roadwright) {

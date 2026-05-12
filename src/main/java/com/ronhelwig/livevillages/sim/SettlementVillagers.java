@@ -2199,8 +2199,8 @@ public final class SettlementVillagers {
 
 	private static int villagerRadius(SettlementState settlement) {
 		return switch (settlement.kind()) {
-			case VILLAGE, HARBOR -> VILLAGE_RADIUS_BLOCKS;
-			case CUSTOM, OUTPOST -> STANDARD_RADIUS_BLOCKS;
+			case VILLAGE, HARBOR, CUSTOM -> VILLAGE_RADIUS_BLOCKS;
+			case OUTPOST -> STANDARD_RADIUS_BLOCKS;
 		};
 	}
 
