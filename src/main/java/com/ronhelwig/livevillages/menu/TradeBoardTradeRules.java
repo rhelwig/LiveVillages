@@ -3,6 +3,7 @@ package com.ronhelwig.livevillages.menu;
 import java.util.List;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.sim.SettlementTiers;
 
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -51,13 +52,20 @@ public final class TradeBoardTradeRules {
 		"pale_oak_sapling",
 		"mangrove_propagule",
 		"cobblestone",
+		"dirt",
+		"ladder",
 		"milepost",
 		"sand",
 		"glass",
 		"coal",
 		"torch",
 		"lantern",
-		"iron_ingot"
+		"iron_ingot",
+		"copper_ingot",
+		"raw_iron",
+		"raw_copper",
+		"redstone",
+		"diamond"
 	);
 
 	private TradeBoardTradeRules() {
@@ -73,6 +81,14 @@ public final class TradeBoardTradeRules {
 
 	public static boolean isExactItemKey(String goodsKey) {
 		return goodsKey != null && goodsKey.startsWith(ITEM_KEY_PREFIX);
+	}
+
+	public static boolean isUnlockedForSettlementTier(String goodsKey, int settlementTier) {
+		int normalizedTier = SettlementTiers.normalize(settlementTier);
+		return switch (goodsKey) {
+			case "diamond", "redstone" -> normalizedTier >= 2;
+			default -> true;
+		};
 	}
 
 	public static String exactItemKeyForStack(ItemStack stack) {
@@ -118,6 +134,8 @@ public final class TradeBoardTradeRules {
 			case "apple" -> 8;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 4;
 			case "cobblestone" -> 16;
+			case "dirt" -> 16;
+			case "ladder" -> 8;
 			case "milepost" -> 1;
 			case "sand" -> 16;
 			case "glass" -> 8;
@@ -125,6 +143,11 @@ public final class TradeBoardTradeRules {
 			case "torch" -> 8;
 			case "lantern" -> 4;
 			case "iron_ingot" -> 4;
+			case "copper_ingot" -> 4;
+			case "raw_iron" -> 8;
+			case "raw_copper" -> 8;
+			case "redstone" -> 16;
+			case "diamond" -> 4;
 			default -> 0;
 		};
 	}
@@ -317,12 +340,16 @@ public final class TradeBoardTradeRules {
 	}
 
 	public static String goodsKeyForStack(ItemStack stack) {
+		return goodsKeyForStack(stack, SettlementTiers.MAX_TIER);
+	}
+
+	public static String goodsKeyForStack(ItemStack stack, int settlementTier) {
 		if (stack.isEmpty()) {
 			return null;
 		}
 
 		for (String goodsKey : TRADEABLE_GOODS_KEYS) {
-			if (matchesGoods(goodsKey, stack)) {
+			if (isUnlockedForSettlementTier(goodsKey, settlementTier) && matchesGoods(goodsKey, stack)) {
 				return goodsKey;
 			}
 		}
@@ -372,6 +399,8 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> Items.PALE_OAK_SAPLING;
 			case "mangrove_propagule" -> Items.MANGROVE_PROPAGULE;
 			case "cobblestone" -> Items.COBBLESTONE;
+			case "dirt" -> Items.DIRT;
+			case "ladder" -> Items.LADDER;
 			case "milepost" -> LiveVillagesBlocks.MILEPOST_ITEM;
 			case "sand" -> Items.SAND;
 			case "glass" -> Items.GLASS;
@@ -379,6 +408,11 @@ public final class TradeBoardTradeRules {
 			case "torch" -> Items.TORCH;
 			case "lantern" -> Items.LANTERN;
 			case "iron_ingot" -> Items.IRON_INGOT;
+			case "copper_ingot" -> Items.COPPER_INGOT;
+			case "raw_iron" -> Items.RAW_IRON;
+			case "raw_copper" -> Items.RAW_COPPER;
+			case "redstone" -> Items.REDSTONE;
+			case "diamond" -> Items.DIAMOND;
 			case "emerald" -> Items.EMERALD;
 			default -> Items.AIR;
 		}, amount);
@@ -392,6 +426,9 @@ public final class TradeBoardTradeRules {
 		return switch (goodsKey) {
 			case "cobblestone" -> "Cobble";
 			case "iron_ingot" -> "Iron";
+			case "copper_ingot" -> "Copper";
+			case "raw_iron" -> "Raw Iron";
+			case "raw_copper" -> "Raw Copper";
 			default -> fallbackLabel;
 		};
 	}
@@ -415,16 +452,17 @@ public final class TradeBoardTradeRules {
 		}
 
 		return switch (goodsKey) {
-			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "sand", "torch" -> 1;
+			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "dirt", "sand", "torch" -> 1;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
-			case "chest" -> 1;
+			case "chest", "ladder", "redstone" -> 1;
 			case "glass", "bed", "lantern", "milepost" -> 2;
 			case "beef" -> 2;
 			case "mutton" -> 2;
 			case "pork" -> 2;
 			case "leather" -> 2;
 			case "coal" -> 2;
-			case "iron_ingot" -> 2;
+			case "iron_ingot", "copper_ingot", "raw_iron", "raw_copper" -> 2;
+			case "diamond" -> 4;
 			default -> 0;
 		};
 	}
@@ -517,6 +555,8 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> stack.is(Items.PALE_OAK_SAPLING);
 			case "mangrove_propagule" -> stack.is(Items.MANGROVE_PROPAGULE);
 			case "cobblestone" -> stack.is(Items.COBBLESTONE);
+			case "dirt" -> stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT);
+			case "ladder" -> stack.is(Items.LADDER);
 			case "milepost" -> stack.is(LiveVillagesBlocks.MILEPOST_ITEM);
 			case "sand" -> stack.is(Items.SAND) || stack.is(Items.RED_SAND);
 			case "glass" -> stack.is(Items.GLASS);
@@ -524,6 +564,11 @@ public final class TradeBoardTradeRules {
 			case "torch" -> stack.is(Items.TORCH);
 			case "lantern" -> stack.is(Items.LANTERN);
 			case "iron_ingot" -> stack.is(Items.IRON_INGOT);
+			case "copper_ingot" -> stack.is(Items.COPPER_INGOT);
+			case "raw_iron" -> stack.is(Items.RAW_IRON) || stack.is(Items.IRON_ORE) || stack.is(Items.DEEPSLATE_IRON_ORE);
+			case "raw_copper" -> stack.is(Items.RAW_COPPER) || stack.is(Items.COPPER_ORE) || stack.is(Items.DEEPSLATE_COPPER_ORE);
+			case "redstone" -> stack.is(Items.REDSTONE) || stack.is(Items.REDSTONE_ORE) || stack.is(Items.DEEPSLATE_REDSTONE_ORE);
+			case "diamond" -> stack.is(Items.DIAMOND) || stack.is(Items.DIAMOND_ORE) || stack.is(Items.DEEPSLATE_DIAMOND_ORE);
 			case "emerald" -> stack.is(Items.EMERALD);
 			default -> false;
 		};

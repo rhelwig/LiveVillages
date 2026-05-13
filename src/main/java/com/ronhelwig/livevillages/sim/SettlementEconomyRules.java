@@ -43,6 +43,8 @@ public final class SettlementEconomyRules {
 		new TargetRule("pale_oak_sapling", population -> 0),
 		new TargetRule("mangrove_propagule", population -> 0),
 		new TargetRule("cobblestone", population -> 24 + population * 8),
+		new TargetRule("dirt", population -> 0),
+		new TargetRule("ladder", population -> 0),
 		new TargetRule("milepost", population -> 0),
 		new TargetRule("iron_ingot", population -> 4 + population * 2),
 		new TargetRule("emerald", population -> 4 + population)
@@ -231,6 +233,14 @@ public final class SettlementEconomyRules {
 		}
 
 		if (settlement.population().getOrDefault("miner", 0) > 0) {
+			if (goodsKey.equals("dirt")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("ladder")) {
+				return 16;
+			}
+
 			if (goodsKey.equals("coal")) {
 				return 4;
 			}

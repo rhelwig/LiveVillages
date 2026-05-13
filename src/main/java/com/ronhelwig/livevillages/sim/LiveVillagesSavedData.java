@@ -324,6 +324,30 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 	}
 
+	public SettlementState putSettlementAndRefreshBuildSiteMaterialStatus(SettlementState settlement, long currentTick) {
+		boolean changed = false;
+		SettlementState previous = settlements.put(settlement.id(), settlement);
+
+		if (!settlement.equals(previous)) {
+			changed = true;
+		}
+
+		Map<String, Integer> reservedStock = new LinkedHashMap<>(settlement.stock());
+		for (SettlementBuildSite buildSite : getBuildSitesForSettlement(settlement.id())) {
+			SettlementBuildSite updatedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(buildSite, reservedStock, currentTick);
+			if (!updatedBuildSite.equals(buildSite)) {
+				buildSites.put(updatedBuildSite.id(), updatedBuildSite);
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			setDirty();
+		}
+
+		return settlements.get(settlement.id());
+	}
+
 	public void removeSettlement(String settlementId) {
 		boolean removed = settlements.remove(settlementId) != null;
 		removed |= bootstrapVillagerSpawnTicks.remove(settlementId) != null;

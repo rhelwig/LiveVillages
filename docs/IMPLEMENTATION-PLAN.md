@@ -52,12 +52,16 @@ Focus:
 - keep Trade Board goods panes usable with longer inventories by scrolling instead of truncating rows, and keep row selection visuals aligned with the actual click targets
 - keep Trade Board inventory rows aggregated by exact item type so duplicate stacks do not crowd the list, while still letting village stock retain the abstract recognized-goods model where that supports settlement simulation
 - keep Trade Board player-row refreshes authoritative after donations and trades so aggregated exact-item rows update counts immediately and do not break when the first contributing stack is exhausted
+- keep Trade Board transaction refreshes recomputing build-site material demand immediately so `Give 1`, `Bundle`, `All`, and village-side trades always leave `Need` counts and stored stock in sync
+- keep miner-facing support and extraction goods legible in the Trade Board: `dirt`, `ladder`, `raw iron`, and `raw copper` should be known early, while `redstone` and `diamond` unlock as known board goods at settlement `Tier 2`
 - keep non-empty carried containers such as `Bundle` separate from aggregated rows, preview their contents on hover, and donate their contents into settlement stock without trading away the still-useful empty container
 - keep Trade Board shortage/surplus output accurate when construction blockers, protected reserves, or build-site demand are involved
 - keep automatic ore / glass refining fuel-aware so the village spends real `coal` / `charcoal` / wood fuel, prefers efficient fuel sources, and preserves protected wood reserves when possible
 - keep route-transfer demand aware of active staged build-site materials so visible construction stalls can be supplied by trade
 - preserve completed harbor/trade build-site effects for route planning even while the corresponding chunks are unloaded
 - keep route growth limited by reachability and active planning state rather than a small hard cap on total connections
+- keep Roadwright land-route planning dry and harbor-aware so survey/roadwork intent stops at shore access instead of extending explicit improvements over water
+- push Roadwrights toward external settlement corridors and `Mileposts` once core local path connectors are already in place, instead of overbuilding low-value internal spurs
 - let trade demand support limited brokered wants for downstream partner shortages so multi-hop trade networks can emerge
 - unblock recipe/data-driven content so new recipes are dependable before more professions are added
 - keep emerald accumulation and trade incentives compatible with future settlement-tier unlock thresholds
@@ -84,6 +88,7 @@ Focus:
 - bell influence radius should be `max(25, half settlement radius)` rather than a tiny fixed center
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
 - keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
+- extend loaded Miner work beyond the starter shaft with first-pass primary side tunnels about every `5` levels, using temporary `dirt` / `cobblestone` floor supports when needed so adjacent exposed ore is not left untouched beside the ladder run
 - keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
 
@@ -210,7 +215,7 @@ These matter enough to keep in the plan:
 
 Keep these visible, but not as active work:
 
-- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, shaft-lighting loop, and first-pass fuel-aware `iron` / `copper` refining, including primary and secondary tunnel expansion, richer mined-resource stock handling, broader ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
+- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, shaft-lighting loop, first-pass primary side tunnels, and first-pass fuel-aware `iron` / `copper` refining, including broader secondary tunnel expansion, richer mined-resource stock handling, broader ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - a generalized blueprint-import feature that may be worth extracting into a standalone sharing/build-assist mod once the import, packaging, and staged-construction UX are mature

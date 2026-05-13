@@ -123,7 +123,8 @@ public final class SettlementRoadwrightWork {
 			}
 
 			BlockPos workStart = roadworkStartPos(level, settlement, roadwright);
-			List<PathTarget> internalTargets = internalTargets(level, settlement, buildSites, workStart);
+			List<PathTarget> coreInternalTargets = coreInternalTargets(level, settlement, buildSites, workStart);
+			List<PathTarget> secondaryInternalTargets = secondaryInternalTargets(level, settlement, workStart);
 			List<PathTarget> milepostTargets = milepostTargets(level, settlement, workStart);
 			Optional<RoadworkDebugPlan> plan = cachedRoadworkPlan(level, settlement, roadwrightId, tick);
 
@@ -132,8 +133,18 @@ public final class SettlementRoadwrightWork {
 					continue;
 				}
 
-				long chooseTaskStart = System.nanoTime();
-				plan = chooseRoadworkPlan(level, settlement, roadwrightId, workStart, internalTargets, milepostTargets, externalTargets, tick);
+					long chooseTaskStart = System.nanoTime();
+					plan = chooseRoadworkPlan(
+						level,
+						settlement,
+						roadwrightId,
+						workStart,
+						coreInternalTargets,
+						secondaryInternalTargets,
+						milepostTargets,
+						externalTargets,
+						tick
+					);
 				long chooseTaskTime = System.nanoTime() - chooseTaskStart;
 				if (chooseTaskTime > 100_000_000) { // >100ms
 					LiveVillages.LOGGER.warn("Roadwork: chooseRoadworkTask took {} ms for roadwright {}", Math.round(chooseTaskTime / 1_000_000.0D), roadwrightId);
@@ -418,9 +429,10 @@ public final class SettlementRoadwrightWork {
 
 			addedForStart += addForecastCandidate(candidates, seen, forecastRoutePlan(level, settlement, existingPathRepairPlan(level, settlement, workStart)));
 			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, centerTargets(level, settlement, workStart), true, "center", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
-			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, internalTargets(level, settlement, buildSites, workStart), true, "internal", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
+			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, coreInternalTargets(level, settlement, buildSites, workStart), true, "internal", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
 			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, milepostTargets(level, settlement, workStart), false, "milepost", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
 			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, externalTargets, false, "external", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
+			addedForStart += addForecastCandidatesForTargets(candidates, seen, level, settlement, workStart, secondaryInternalTargets(level, settlement, workStart), true, "internal", MAX_SURVEYOR_FORECAST_TARGETS_PER_START - addedForStart);
 		}
 
 		return List.copyOf(candidates);
@@ -565,7 +577,8 @@ public final class SettlementRoadwrightWork {
 		SettlementState settlement,
 		String roadwrightId,
 		BlockPos workStart,
-		List<PathTarget> internalTargets,
+		List<PathTarget> coreInternalTargets,
+		List<PathTarget> secondaryInternalTargets,
 		List<PathTarget> milepostTargets,
 		List<PathTarget> externalTargets,
 		long tick
@@ -579,9 +592,10 @@ public final class SettlementRoadwrightWork {
 		String cacheKey = roadworkTaskCacheKey(settlement, roadwrightId);
 		Optional<RoadworkDebugPlan> plan = existingPathRepairPlan(level, settlement, workStart)
 			.or(() -> choosePathPlan(level, settlement, workStart, centerTargets(level, settlement, workStart), true, "center"))
-			.or(() -> choosePathPlan(level, settlement, workStart, internalTargets, true, "internal"))
+			.or(() -> choosePathPlan(level, settlement, workStart, coreInternalTargets, true, "internal"))
 			.or(() -> choosePathPlan(level, settlement, workStart, milepostTargets, false, "milepost"))
-			.or(() -> choosePathPlan(level, settlement, workStart, externalTargets, false, "external"));
+			.or(() -> choosePathPlan(level, settlement, workStart, externalTargets, false, "external"))
+			.or(() -> choosePathPlan(level, settlement, workStart, secondaryInternalTargets, true, "internal"));
 
 		ROADWORK_TASK_CACHE.put(cacheKey, new CachedRoadworkPlan(plan, tick));
 		plan.ifPresent(chosenPlan -> rememberVisibleRoadworkPlan(settlement, roadwrightId, chosenPlan, tick));
@@ -815,9 +829,8 @@ public final class SettlementRoadwrightWork {
 		return List.of(new PathTarget(settlement.center(), true));
 	}
 
-	private static List<PathTarget> internalTargets(ServerLevel level, SettlementState settlement, Collection<SettlementBuildSite> buildSites, BlockPos workStart) {
+	private static List<PathTarget> coreInternalTargets(ServerLevel level, SettlementState settlement, Collection<SettlementBuildSite> buildSites, BlockPos workStart) {
 		List<PathTarget> targets = new ArrayList<>();
-		targets.addAll(centerTargets(level, settlement, workStart));
 
 		for (SettlementBuildSite buildSite : buildSites) {
 			if (!buildSite.settlementId().equals(settlement.id())) {
@@ -831,12 +844,17 @@ public final class SettlementRoadwrightWork {
 			targets.addAll(internalTargetsForBuildSite(level, buildSite));
 		}
 
-		targets.addAll(cachedScannedInternalPoiTargets(level, settlement));
-
 		return targets.stream()
 			.distinct()
+			.sorted(Comparator.comparingDouble(target -> target.pos().distSqr(workStart)))
+			.toList();
+	}
+
+	private static List<PathTarget> secondaryInternalTargets(ServerLevel level, SettlementState settlement, BlockPos workStart) {
+		return cachedScannedInternalPoiTargets(level, settlement).stream()
+			.distinct()
 			.sorted(Comparator
-				.comparingDouble((PathTarget target) -> target.pos().equals(settlement.center()) ? -1.0D : target.pos().distSqr(settlement.center()))
+				.comparingDouble((PathTarget target) -> target.pos().distSqr(settlement.center()))
 				.thenComparingDouble(target -> target.pos().distSqr(workStart)))
 			.toList();
 	}
@@ -1301,9 +1319,9 @@ public final class SettlementRoadwrightWork {
 
 				Optional<BlockPos> surfacePos = surfacePathPos(level, x, z);
 
-				if (surfacePos.isEmpty() || !isEstablishedPathSurface(level.getBlockState(surfacePos.get()))) {
-					continue;
-				}
+					if (surfacePos.isEmpty() || !isEstablishedDryPathSurface(level, surfacePos.get())) {
+						continue;
+					}
 
 				establishedPathSurfaces.add(surfacePos.get());
 			}
@@ -1327,13 +1345,13 @@ public final class SettlementRoadwrightWork {
 
 				BlockState aboveNeighborState = level.getBlockState(neighborSurface.get().above());
 
-				if (aboveNeighborState.is(Blocks.LEAF_LITTER) && (isEstablishedPathSurface(neighborState) || canConvertToTrail(level, settlement, neighborSurface.get(), neighborState))) {
-					return Optional.of(collectLeafLitterTask(neighborSurface.get().above()));
-				}
+					if (aboveNeighborState.is(Blocks.LEAF_LITTER) && (isEstablishedDryPathSurface(level, neighborSurface.get()) || canConvertToTrail(level, settlement, neighborSurface.get(), neighborState))) {
+						return Optional.of(collectLeafLitterTask(neighborSurface.get().above()));
+					}
 
-				if (!isEstablishedPathSurface(neighborState)) {
-					continue;
-				}
+					if (!isEstablishedDryPathSurface(level, neighborSurface.get())) {
+						continue;
+					}
 			}
 		}
 
@@ -1548,6 +1566,10 @@ public final class SettlementRoadwrightWork {
 		BlockState aboveState = level.getBlockState(toSurface.above());
 		boolean roadSurface = isRoadSurface(surfaceState);
 
+		if (!isDryPathColumn(level, toSurface)) {
+			return Double.POSITIVE_INFINITY;
+		}
+
 		if (!roadSurface && !canConvertToTrail(level, settlement, toSurface, surfaceState)) {
 			return Double.POSITIVE_INFINITY;
 		}
@@ -1627,6 +1649,10 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static boolean isUsablePathSurface(ServerLevel level, BlockPos surfacePos, BlockState surfaceState) {
+		if (!isDryPathColumn(level, surfacePos)) {
+			return false;
+		}
+
 		BlockState aboveState = level.getBlockState(surfacePos.above());
 
 		if (!aboveState.isAir() && !aboveState.canBeReplaced()) {
@@ -1638,7 +1664,8 @@ public final class SettlementRoadwrightWork {
 
 	private static boolean canConvertToTrail(ServerLevel level, SettlementState settlement, BlockPos surfacePos, BlockState surfaceState) {
 		BlockState aboveState = level.getBlockState(surfacePos.above());
-		return (aboveState.isAir() || aboveState.canBeReplaced())
+		return isDryPathColumn(level, surfacePos)
+			&& (aboveState.isAir() || aboveState.canBeReplaced())
 			&& SettlementGreenspace.canConvertToPath(level, settlement, surfacePos)
 			&& (surfaceState.is(Blocks.GRASS_BLOCK)
 				|| surfaceState.is(Blocks.DIRT)
@@ -1664,12 +1691,12 @@ public final class SettlementRoadwrightWork {
 		for (int index = path.size() - 2; index >= 1; index--) {
 			BlockPos routeSurfacePos = path.get(index);
 
-			if (routeSurfacePos.distSqr(settlement.center()) < minDistanceSquared
-				|| routeSurfacePos.distSqr(targetPos) < minDistanceSquared
-				|| !isEstablishedPathSurface(level.getBlockState(routeSurfacePos))
-				|| existingMileposts.stream().anyMatch(existing -> existing.distSqr(routeSurfacePos) < existingSkipDistanceSquared)) {
-				continue;
-			}
+				if (routeSurfacePos.distSqr(settlement.center()) < minDistanceSquared
+					|| routeSurfacePos.distSqr(targetPos) < minDistanceSquared
+					|| !isEstablishedDryPathSurface(level, routeSurfacePos)
+					|| existingMileposts.stream().anyMatch(existing -> existing.distSqr(routeSurfacePos) < existingSkipDistanceSquared)) {
+					continue;
+				}
 
 			Optional<Direction> routeDirection = routeDirectionForPath(path, index);
 
@@ -1757,9 +1784,9 @@ public final class SettlementRoadwrightWork {
 				routeSurfacePos.getZ() + direction.getStepZ()
 			);
 
-			if (neighborSurface.isPresent() && isEstablishedPathSurface(level.getBlockState(neighborSurface.get()))) {
-				neighbors++;
-			}
+				if (neighborSurface.isPresent() && isEstablishedDryPathSurface(level, neighborSurface.get())) {
+					neighbors++;
+				}
 		}
 
 		return neighbors;
@@ -1866,9 +1893,9 @@ public final class SettlementRoadwrightWork {
 			int sampleZ = (int) Math.round(originPos.getZ() + directionZ * distance);
 			Optional<BlockPos> sampleSurface = nearestSurfacePathPos(level, new BlockPos(sampleX, originPos.getY(), sampleZ), EXTERNAL_ROUTE_ANCHOR_SAMPLE_SEARCH_RADIUS_BLOCKS);
 
-			if (sampleSurface.isEmpty() || !isEstablishedPathSurface(level.getBlockState(sampleSurface.get()))) {
-				continue;
-			}
+				if (sampleSurface.isEmpty() || !isEstablishedDryPathSurface(level, sampleSurface.get())) {
+					continue;
+				}
 
 			double progress = routeProgressTowardTarget(originPos, targetPos, sampleSurface.get());
 			double lateralError = routeLateralError(originPos, targetPos, sampleSurface.get());
@@ -2189,6 +2216,19 @@ public final class SettlementRoadwrightWork {
 			|| state.is(Blocks.BRICK_STAIRS)
 			|| state.is(Blocks.BRICK_SLAB)
 			|| state.is(Blocks.SMOOTH_STONE_SLAB);
+	}
+
+	private static boolean isDryPathColumn(ServerLevel level, BlockPos surfacePos) {
+		BlockState surfaceState = level.getBlockState(surfacePos);
+		BlockState aboveState = level.getBlockState(surfacePos.above());
+		BlockState headState = level.getBlockState(surfacePos.above(2));
+		return surfaceState.getFluidState().isEmpty()
+			&& aboveState.getFluidState().isEmpty()
+			&& headState.getFluidState().isEmpty();
+	}
+
+	private static boolean isEstablishedDryPathSurface(ServerLevel level, BlockPos surfacePos) {
+		return isDryPathColumn(level, surfacePos) && isEstablishedPathSurface(level.getBlockState(surfacePos));
 	}
 
 	private static Optional<Direction> horizontalDirectionBetween(BlockPos from, BlockPos to) {

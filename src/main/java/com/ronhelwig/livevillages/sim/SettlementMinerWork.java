@@ -41,6 +41,8 @@ public final class SettlementMinerWork {
 	private static final int MAX_CAVE_SCAN_AIR_CELLS = 96;
 	private static final int MAX_CAVE_STAND_POSITIONS = 24;
 	private static final int CAVE_LIGHT_SPACING_BLOCKS = 7;
+	private static final int PRIMARY_TUNNEL_INTERVAL_LEVELS = 5;
+	private static final int PRIMARY_TUNNEL_LENGTH_BLOCKS = 6;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 
 	private SettlementMinerWork() {
@@ -235,6 +237,12 @@ public final class SettlementMinerWork {
 			return Optional.of(new MinerTask(MinerAction.MINE_ORE, targetPos, replacementState, standPos.get(), "mining_ore_vein"));
 		}
 
+		Optional<MinerTask> primaryTunnelTask = choosePrimaryTunnelTask(level, stock, mineSite, bottomUp);
+
+		if (primaryTunnelTask.isPresent()) {
+			return primaryTunnelTask;
+		}
+
 		if (!canSupplyNextLadderLevel(stock)) {
 			return stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"));
 		}
@@ -343,9 +351,163 @@ public final class SettlementMinerWork {
 		return Optional.empty();
 	}
 
+	private static Optional<MinerTask> choosePrimaryTunnelTask(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		MineSite mineSite,
+		int bottomUp
+	) {
+		List<PrimaryTunnelBranch> branches = plannedPrimaryTunnelBranches(mineSite, bottomUp);
+
+		for (PrimaryTunnelBranch branch : branches) {
+			Optional<MinerTask> oreTask = choosePrimaryTunnelOreTask(level, stock, mineSite, branch, bottomUp);
+			if (oreTask.isPresent()) {
+				return oreTask;
+			}
+		}
+
+		for (PrimaryTunnelBranch branch : branches) {
+			Optional<MinerTask> excavationTask = choosePrimaryTunnelExcavationTask(level, stock, mineSite, branch);
+			if (excavationTask.isPresent()) {
+				return excavationTask;
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<MinerTask> choosePrimaryTunnelOreTask(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		MineSite mineSite,
+		PrimaryTunnelBranch branch,
+		int bottomUp
+	) {
+		for (int step = 0; step < PRIMARY_TUNNEL_LENGTH_BLOCKS; step++) {
+			BlockPos standPos = branchStandPos(mineSite, branch, step);
+
+			if (!isStandableTunnelCell(level, standPos)) {
+				break;
+			}
+
+			Optional<BlockPos> oreTarget = exposedOreFromStandPos(level, standPos, Set.of(standPos, standPos.above()));
+			if (oreTarget.isEmpty()) {
+				continue;
+			}
+
+			BlockPos targetPos = oreTarget.get();
+			BlockState replacementState = null;
+
+			if (requiresLadderSupportReplacement(targetPos, mineSite, bottomUp)) {
+				replacementState = supportReplacementMaterial(stock);
+
+				if (replacementState == null) {
+					continue;
+				}
+			}
+
+			return Optional.of(new MinerTask(MinerAction.MINE_ORE, targetPos, replacementState, standPos, "mining_primary_tunnel_ore"));
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<MinerTask> choosePrimaryTunnelExcavationTask(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		MineSite mineSite,
+		PrimaryTunnelBranch branch
+	) {
+		BlockPos workingStandPos = worldPos(mineSite.buildSite(), branch.anchorColumn(), branch.levelUp());
+
+		if (!level.getBlockState(workingStandPos).is(Blocks.LADDER)) {
+			return Optional.empty();
+		}
+
+		for (int step = 0; step < PRIMARY_TUNNEL_LENGTH_BLOCKS; step++) {
+			BlockPos targetStandPos = branchStandPos(mineSite, branch, step);
+
+			if (step > 0) {
+				BlockPos previousStandPos = branchStandPos(mineSite, branch, step - 1);
+
+				if (!isStandableTunnelCell(level, previousStandPos)) {
+					break;
+				}
+
+				workingStandPos = previousStandPos;
+			}
+
+			if (!level.getBlockState(targetStandPos.below()).isSolid()) {
+				BlockState supportState = supportReplacementMaterial(stock);
+				if (supportState == null) {
+					return Optional.empty();
+				}
+
+				return Optional.of(new MinerTask(MinerAction.PLACE_SUPPORT, targetStandPos.below(), supportState, workingStandPos, "placing_primary_tunnel_support"));
+			}
+
+			BlockState footState = level.getBlockState(targetStandPos);
+			if (!footState.isAir()) {
+				if (!canMine(footState, level, targetStandPos)) {
+					return Optional.empty();
+				}
+
+				return Optional.of(new MinerTask(MinerAction.DIG_TUNNEL, targetStandPos, null, workingStandPos, "digging_primary_tunnel"));
+			}
+
+			BlockPos headPos = targetStandPos.above();
+			BlockState headState = level.getBlockState(headPos);
+			if (!headState.isAir()) {
+				if (!canMine(headState, level, headPos)) {
+					return Optional.empty();
+				}
+
+				return Optional.of(new MinerTask(MinerAction.DIG_TUNNEL, headPos, null, workingStandPos, "digging_primary_tunnel"));
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static List<PrimaryTunnelBranch> plannedPrimaryTunnelBranches(MineSite mineSite, int bottomUp) {
+		if (mineSite.layout().ladderColumns().isEmpty()) {
+			return List.of();
+		}
+
+		ShaftColumn leftAnchor = mineSite.layout().ladderColumns().stream()
+			.min(Comparator.comparingInt(ShaftColumn::right))
+			.orElse(mineSite.layout().ladderColumns().getFirst());
+		ShaftColumn rightAnchor = mineSite.layout().ladderColumns().stream()
+			.max(Comparator.comparingInt(ShaftColumn::right))
+			.orElse(mineSite.layout().ladderColumns().getLast());
+		List<PrimaryTunnelBranch> branches = new ArrayList<>();
+		Direction leftDirection = mineSite.buildSite().facing().getCounterClockWise();
+		Direction rightDirection = mineSite.buildSite().facing().getClockWise();
+
+		for (int up = bottomUp; up <= -1; up++) {
+			if (!shouldCreatePrimaryTunnelLevel(up)) {
+				continue;
+			}
+
+			branches.add(new PrimaryTunnelBranch(up, leftAnchor, leftDirection));
+			branches.add(new PrimaryTunnelBranch(up, rightAnchor, rightDirection));
+		}
+
+		return branches;
+	}
+
+	private static boolean shouldCreatePrimaryTunnelLevel(int up) {
+		return up < 0 && Math.floorMod(Math.abs(up), PRIMARY_TUNNEL_INTERVAL_LEVELS) == 0;
+	}
+
+	private static BlockPos branchStandPos(MineSite mineSite, PrimaryTunnelBranch branch, int step) {
+		return worldPos(mineSite.buildSite(), branch.anchorColumn(), branch.levelUp()).relative(branch.direction(), step + 1);
+	}
+
 	private static boolean performTask(ServerLevel level, Map<String, Integer> stock, MineSite mineSite, MinerTask task) {
 		return switch (task.action()) {
 			case DIG_SHAFT -> mineBlockIntoStock(level, stock, task.targetPos(), null);
+			case DIG_TUNNEL -> mineBlockIntoStock(level, stock, task.targetPos(), null);
 			case MINE_ORE -> mineBlockIntoStock(level, stock, task.targetPos(), task.replacementState());
 			case MINE_STONE -> mineBlockIntoStock(level, stock, task.targetPos(), null);
 			case PLACE_SUPPORT -> placeSupport(level, stock, task.targetPos(), task.replacementState());
@@ -558,7 +720,7 @@ public final class SettlementMinerWork {
 	private static List<BlockPos> shaftFrontierCells(MineSite mineSite, int bottomUp) {
 		List<BlockPos> cells = new ArrayList<>();
 
-		for (int up = Math.max(mineSite.layout().starterMinUp(), bottomUp); up <= bottomUp; up++) {
+		for (int up = mineSite.layout().starterMinUp(); up >= bottomUp; up--) {
 			for (ShaftColumn column : mineSite.layout().ladderColumns()) {
 				cells.add(worldPos(mineSite.buildSite(), column, up));
 			}
@@ -754,6 +916,10 @@ public final class SettlementMinerWork {
 	}
 
 	private static boolean isStandableCaveCell(ServerLevel level, BlockPos pos) {
+		return isStandableTunnelCell(level, pos);
+	}
+
+	private static boolean isStandableTunnelCell(ServerLevel level, BlockPos pos) {
 		return level.getBlockState(pos).isAir()
 			&& level.getBlockState(pos.above()).isAir()
 			&& level.getBlockState(pos.below()).isSolid();
@@ -821,7 +987,11 @@ public final class SettlementMinerWork {
 	}
 
 	private static void moveMinerTowardTask(ServerLevel level, Villager miner, MineSite mineSite, MinerTask task) {
-		if (tryAdvanceMinerDownShaft(level, miner, mineSite, task.standPos())) {
+		BlockPos shaftTravelPos = level.getBlockState(task.standPos()).is(Blocks.LADDER)
+			? task.standPos()
+			: shaftTravelStandPos(level, mineSite, task.standPos()).orElse(task.standPos());
+
+		if (tryAdvanceMinerDownShaft(level, miner, mineSite, shaftTravelPos)) {
 			return;
 		}
 
@@ -831,6 +1001,32 @@ public final class SettlementMinerWork {
 			task.standPos().getZ() + 0.5D,
 			MINING_WALK_SPEED
 		);
+	}
+
+	private static Optional<BlockPos> shaftTravelStandPos(ServerLevel level, MineSite mineSite, BlockPos targetStandPos) {
+		BlockPos bestPos = null;
+		double bestScore = Double.POSITIVE_INFINITY;
+
+		for (int up = mineSite.layout().starterMinUp() - MAX_SHAFT_DEPTH_BLOCKS; up <= -1; up++) {
+			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
+				BlockPos candidatePos = worldPos(mineSite.buildSite(), ladderColumn, up);
+				if (!level.getBlockState(candidatePos).is(Blocks.LADDER)) {
+					continue;
+				}
+
+				int verticalDistance = Math.abs(candidatePos.getY() - targetStandPos.getY());
+				double horizontalDistance = Math.abs(candidatePos.getX() - targetStandPos.getX())
+					+ Math.abs(candidatePos.getZ() - targetStandPos.getZ());
+				double score = verticalDistance * 100.0D + horizontalDistance;
+
+				if (bestPos == null || score < bestScore) {
+					bestPos = candidatePos.immutable();
+					bestScore = score;
+				}
+			}
+		}
+
+		return Optional.ofNullable(bestPos);
 	}
 
 	private static void moveMinerTowardSurface(ServerLevel level, Villager miner, MineSite mineSite) {
@@ -1160,6 +1356,7 @@ public final class SettlementMinerWork {
 
 	private enum MinerAction {
 		DIG_SHAFT,
+		DIG_TUNNEL,
 		MINE_ORE,
 		MINE_STONE,
 		PLACE_SUPPORT,
@@ -1174,6 +1371,9 @@ public final class SettlementMinerWork {
 	}
 
 	private record ShaftColumn(int right, int forward) {
+	}
+
+	private record PrimaryTunnelBranch(int levelUp, ShaftColumn anchorColumn, Direction direction) {
 	}
 
 	private record ShaftLayout(List<ShaftColumn> ladderColumns, List<ShaftColumn> openColumns, int starterMinUp) {

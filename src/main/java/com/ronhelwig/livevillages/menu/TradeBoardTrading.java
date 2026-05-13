@@ -58,7 +58,7 @@ public final class TradeBoardTrading {
 	}
 
 	public static List<PlayerGoodsOption> playerGoodsOptions(Inventory inventory, TradeBoardSettlementView view) {
-		return playerGoodsOptions(playerGoodsCounts(inventory), view);
+		return playerGoodsOptions(playerGoodsCounts(inventory, view), view);
 	}
 
 	public static List<PlayerGoodsOption> playerGoodsOptions(List<TradeBoardPlayerGoodsView> playerGoods, TradeBoardSettlementView view) {
@@ -74,11 +74,16 @@ public final class TradeBoardTrading {
 	}
 
 	public static List<TradeBoardPlayerGoodsView> playerGoodsCounts(Inventory inventory) {
+		return playerGoodsCounts(inventory, null);
+	}
+
+	public static List<TradeBoardPlayerGoodsView> playerGoodsCounts(Inventory inventory, TradeBoardSettlementView view) {
 		Map<String, Integer> counts = new LinkedHashMap<>();
+		int settlementTier = view == null ? 1 : view.tier();
 
 		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
 			ItemStack stack = inventory.getItem(slot);
-			String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+			String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack, settlementTier);
 
 			if (goodsKey != null && TradeBoardTradeRules.isTradeableGoods(goodsKey)) {
 				counts.merge(goodsKey, stack.getCount(), Integer::sum);
@@ -109,7 +114,7 @@ public final class TradeBoardTrading {
 			boolean hasStoredContents = TradeBoardTradeRules.hasStoredContents(stack);
 			String exactItemKey = TradeBoardTradeRules.exactItemKeyForStack(stack);
 			String rowKey = hasStoredContents ? exactItemKey + "#slot:" + slotIndex : exactItemKey;
-			String tradeGoodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+			String tradeGoodsKey = TradeBoardTradeRules.goodsKeyForStack(stack, view.tier());
 			String stockKey = TradeBoardTradeRules.stockKeyForStack(stack);
 			if (rowKey == null || stockKey == null || exactItemKey == null) {
 				continue;
@@ -237,7 +242,7 @@ public final class TradeBoardTrading {
 		Inventory inventory,
 		TradeBoardSettlementView view
 	) {
-		return paymentOptionsForVillageGoods(villageGoods, playerGoodsCounts(inventory), view);
+		return paymentOptionsForVillageGoods(villageGoods, playerGoodsCounts(inventory, view), view);
 	}
 
 	public static List<GoodsTradeOption> paymentOptionsForVillageGoods(
@@ -331,8 +336,11 @@ public final class TradeBoardTrading {
 			return true;
 		}
 
-		savedData.putSettlement(result.updatedSettlement());
-		TradeBoardSettlementView refreshedView = createTradeView(serverLevel, savedData, result.updatedSettlement());
+		SettlementState refreshedSettlement = savedData.putSettlementAndRefreshBuildSiteMaterialStatus(
+			result.updatedSettlement(),
+			serverLevel.getServer().getTickCount()
+		);
+		TradeBoardSettlementView refreshedView = createTradeView(serverLevel, savedData, refreshedSettlement);
 		sendTradeResult(player, boardPos, refreshedView, result);
 		return true;
 	}
@@ -728,7 +736,7 @@ public final class TradeBoardTrading {
 			view,
 			result.message(),
 			result.success(),
-			playerGoodsCounts(player.getInventory()),
+			playerGoodsCounts(player.getInventory(), view),
 			playerInventoryRows(player.getInventory(), view)
 		));
 	}
