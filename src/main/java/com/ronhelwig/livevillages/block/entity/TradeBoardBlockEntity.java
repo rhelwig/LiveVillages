@@ -173,7 +173,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 	private SettlementState createCustomSettlement(ServerLevel serverLevel, LiveVillagesSavedData savedData) {
 		String dimensionKey = serverLevel.dimension().identifier().toString().replace(':', '_').replace('/', '_');
 		String settlementId = "custom:" + dimensionKey + "_" + worldPosition.getX() + "_" + worldPosition.getZ();
-		String settlementName = SettlementNamer.generateUniqueName(SettlementKind.CUSTOM, serverLevel.dimension(), worldPosition, savedData.getSettlements());
+		String settlementName = SettlementNamer.generateUniqueName(SettlementKind.CUSTOM, serverLevel, worldPosition, savedData.getSettlements());
 		SettlementState settlement = new SettlementState(
 			settlementId,
 			settlementName,

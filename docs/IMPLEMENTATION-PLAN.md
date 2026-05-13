@@ -119,6 +119,7 @@ Focus:
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
+- keep settlement naming biome-aware too, so local names fit the terrain and hostile sites read as threatening instead of pastoral
 - add a later blueprint-import workflow that can take an exported blueprint file, let the player pick it through a file-selection dialog, package it into a generic named construction-anchor block, and start staged villager-assisted construction from that imported plan
 - add a later `Tier 3+` luxury-upgrade pass where a few profession structures can prefer imported foreign-biome style variants to create prestige-material trade demand
 - keep blueprint symbols explicit for contributors; reserve shorthand aliases like `C` for backward compatibility only

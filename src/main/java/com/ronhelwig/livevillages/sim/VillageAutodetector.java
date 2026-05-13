@@ -138,7 +138,7 @@ public final class VillageAutodetector {
 		}
 
 		String id = createVillageId(level.dimension(), candidateCenter);
-		String name = SettlementNamer.generateUniqueName(SettlementKind.VILLAGE, level.dimension(), candidateCenter, savedData.getSettlements());
+		String name = SettlementNamer.generateUniqueName(SettlementKind.VILLAGE, level, candidateCenter, savedData.getSettlements());
 			SettlementState settlement = new SettlementState(
 				id,
 				name,

@@ -38,6 +38,13 @@ This should be implemented with Fabric `PersistentState` data for settlements an
 - `Outpost`: hostile pillager-controlled settlement.
 - `Custom`: player-founded settlement created through infrastructure even outside vanilla generation.
 
+## Settlement Naming
+
+- Settlement names should be unique within a dimension.
+- Founding names should respect the local biome so obviously mismatched terrain or wood-family words do not show up in the result. Desert settlements, for example, should avoid forest-heavy names such as `Oak...`.
+- Hostile settlements such as pillager outposts should use a more ominous naming pool than civilian villages, harbors, or custom settlements.
+- `Harbor` settlements may still append a harbor-specific title, but the core name should remain biome-appropriate.
+
 Example settlement state:
 
 ```json
