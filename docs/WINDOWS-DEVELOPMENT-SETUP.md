@@ -230,6 +230,11 @@ Run the dev client:
 .\gradlew.bat runClient
 ```
 
+If you are new to Git and GitHub workflow, also read:
+
+- [GIT-GITHUB-FOR-NEWBS.md](GIT-GITHUB-FOR-NEWBS.md)
+- [CONTRIBUTOR-GLOSSARY.md](CONTRIBUTOR-GLOSSARY.md)
+
 ## 13. Troubleshooting
 
 ### `java` is not recognized

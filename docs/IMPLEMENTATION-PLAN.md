@@ -201,6 +201,10 @@ Keep these unless the spec is intentionally changed:
 - Player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`.
 - The vanilla `Fletching Table` should remain a real player-use arrow workstation with material-arrow variants rather than staying decorative.
 - Contributor onboarding docs should keep a beginner-friendly Windows path available: VS Code, GitHub, Temurin JDK, and repository clones under the user's home `Projects/` folder by default.
+- Contributor docs should also keep GitHub bug reporting easy for young playtesters, visual contributors, and coders, with a short plain-language path instead of assuming heavy issue-template discipline.
+- Contributor docs should define a plain-language glossary, a generic playtest guide, and a clear asset-layout guide, and source-art files such as Blockbench projects should live outside shipped runtime resources.
+- Contributor docs should also explain, in plain language, how commits, syncing with `origin/main`, and pull requests fit together so contributors do not mistake a local commit for a project-submitted change.
+- `AGENTS.md` should reinforce those contributor Git/GitHub best practices so AI-assisted contributors get branch-state checks, stale-branch rescue guidance, logical commits, and pull-request reminders by default instead of only when they remember to ask.
 
 ## Performance Guardrails
 

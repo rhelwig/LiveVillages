@@ -76,6 +76,11 @@ Server/debug utilities:
 - [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
 - [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
 - [docs/WINDOWS-DEVELOPMENT-SETUP.md](docs/WINDOWS-DEVELOPMENT-SETUP.md): beginner-friendly Windows setup guide for building and running the mod in VS Code
+- [docs/BUG-REPORTING.md](docs/BUG-REPORTING.md): short GitHub issue guide for playtesters, artists, and coders
+- [docs/PLAYTEST-GUIDE.md](docs/PLAYTEST-GUIDE.md): simple playtesting guide for contributors who want to help without reading code
+- [docs/CONTRIBUTOR-GLOSSARY.md](docs/CONTRIBUTOR-GLOSSARY.md): plain-language glossary for project and GitHub terms
+- [docs/GIT-GITHUB-FOR-NEWBS.md](docs/GIT-GITHUB-FOR-NEWBS.md): beginner-friendly guide to commits, syncing, branches, and pull requests
+- [docs/ART-ASSET-GUIDE.md](docs/ART-ASSET-GUIDE.md): where textures, models, and Blockbench source files should live
 - [docs/STRUCTURE-BLUEPRINT-GUIDE.md](docs/STRUCTURE-BLUEPRINT-GUIDE.md): human-friendly guide for designing importable structure blueprints
 - GitHub issues: active bug and polish tracking
 
