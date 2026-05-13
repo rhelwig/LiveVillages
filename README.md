@@ -60,6 +60,7 @@ Client-side controls:
 
 - `O`: toggle the build-site preview overlay
 - `I`: cycle the settlement inventory/status overlay near a detected settlement
+- `P`: take a snapshot of a blueprint
 
 Server/debug utilities:
 
