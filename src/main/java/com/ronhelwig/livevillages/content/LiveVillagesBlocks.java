@@ -13,8 +13,10 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.BakersCounterBlock;
 import com.ronhelwig.livevillages.block.CarpenterBenchBlock;
 import com.ronhelwig.livevillages.block.ForesterTableBlock;
+import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
 import com.ronhelwig.livevillages.block.HousingShelterBlock;
 import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
@@ -65,6 +67,30 @@ public final class LiveVillagesBlocks {
 	public static final Item SURVEYOR_TABLE_ITEM = registerItem(
 		"surveyor_table",
 		new BlockItem(SURVEYOR_TABLE, new Item.Properties().setId(itemKey("surveyor_table")).useBlockDescriptionPrefix())
+	);
+	public static final Block GLASS_DISPLAY_CASE = registerBlock(
+		"glass_display_case",
+		new GlassDisplayCaseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("glass_display_case"))
+				.sound(SoundType.GLASS)
+		)
+	);
+	public static final Item GLASS_DISPLAY_CASE_ITEM = registerItem(
+		"glass_display_case",
+		new BlockItem(GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("glass_display_case")).useBlockDescriptionPrefix())
+	);
+	public static final BakersCounterBlock BAKERS_COUNTER = registerBlock(
+		"bakers_counter",
+		new BakersCounterBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("bakers_counter"))
+				.sound(SoundType.GLASS)
+		)
+	);
+	public static final Item BAKERS_COUNTER_ITEM = registerItem(
+		"bakers_counter",
+		new BlockItem(BAKERS_COUNTER, new Item.Properties().setId(itemKey("bakers_counter")).useBlockDescriptionPrefix())
 	);
 	public static final MilepostBlock MILEPOST = registerBlock(
 		"milepost",

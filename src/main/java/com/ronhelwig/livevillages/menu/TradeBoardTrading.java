@@ -17,7 +17,6 @@ import net.minecraft.world.item.ItemStack;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
-import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.network.TradeBoardRefreshPayload;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.RouteState;
@@ -191,6 +190,7 @@ public final class TradeBoardTrading {
 
 	public static List<TradeBoardGoodsView> villageGoodsOptions(TradeBoardSettlementView view) {
 		List<TradeBoardGoodsView> options = new ArrayList<>(view.surpluses().stream()
+			.filter(entry -> TradeBoardTradeRules.isUnlockedForSettlementTier(entry.goodsKey(), view.tier()))
 			.filter(entry -> entry.tradeBundleSize() > 0)
 			.filter(entry -> availableSettlementGoodsForTrade(entry) >= entry.tradeBundleSize())
 			.toList());
@@ -300,10 +300,6 @@ public final class TradeBoardTrading {
 			return false;
 		}
 
-		if (!(serverLevel.getBlockEntity(boardPos) instanceof TradeBoardBlockEntity tradeBoard)) {
-			return false;
-		}
-
 		boolean isPlayerTrade = buttonId >= PLAYER_TRADE_BUTTON_BASE
 			&& buttonId < PLAYER_TRADE_BUTTON_BASE + MAX_TRADE_ROWS * MAX_TRADE_OPTIONS;
 		boolean isVillageTrade = buttonId >= VILLAGE_TRADE_BUTTON_BASE
@@ -318,7 +314,10 @@ public final class TradeBoardTrading {
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
-		SettlementState settlement = tradeBoard.resolveSettlement(serverLevel);
+		SettlementState settlement = SettlementTradeAccess.resolveSettlement(serverLevel, boardPos).orElse(null);
+		if (settlement == null) {
+			return false;
+		}
 		TradeBoardSettlementView view = createTradeView(serverLevel, savedData, settlement);
 		TradeResult result;
 		if (isPlayerTrade) {

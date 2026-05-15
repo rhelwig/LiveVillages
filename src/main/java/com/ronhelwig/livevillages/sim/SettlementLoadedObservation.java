@@ -511,6 +511,7 @@ public final class SettlementLoadedObservation {
 
 	private static String buildSiteSurveyLabel(SettlementBuildSite buildSite) {
 		return switch (buildSite.blueprintId()) {
+			case BAKERY -> "Bakery";
 			case BUTCHER_SHOP -> "Butcher";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";

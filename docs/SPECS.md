@@ -690,7 +690,7 @@ Expanded vanilla roles with stronger settlement behavior:
 Key planned settlement-specific roles:
 
 - `Carpenter`: wood-focused construction, repairs, and upgrades, paired with `Mason`.
-- `Baker`: turns farm and livestock supplies into baked foods such as bread, cakes, pies, and cookies, and offers specialist food trades.
+- `Baker`: turns settlement food ingredients into tier-gated baked goods such as bread, baked potatoes, cookies, pies, cakes, and later premium foods like golden apples, while avoiding non-bakery meat cooking outputs.
 - `Beekeeper`: manages bee nests and bee hives, produces honey bottles and honeycomb, maintains safe smoked hives, and grows dispersed apiary capacity from a `Honey Separator`.
 - `Forester`: harvests and replants wood resources, must not cut down trees that contain bee nests or bee hives, maintains a sparse tree presence inside the village, manages denser woodland beyond the village core, and keeps a diverse seedling reserve that can create sapling trade demand.
 - `Miner`: gathers stone, ore, and underground materials, anchored by a stone-like `Miner Workstation` and later a functional mine-entrance structure rather than housing.
@@ -772,12 +772,21 @@ Additional shared or planned workstations and civic structures include:
 
 ### Baker Details
 
-- `Baker` is a planned food-processing profession with a dedicated workstation and associated `Bakery` structure.
-- The `Bakery` should use the same `5x8` overall footprint and broad layout language as the `Trading Post`, but replace the fence market openings with display cases or glass-fronted vertical shelves for baked goods.
-- Vanilla glass panes should not be relied on as horizontal display-case lids; panes are vertical connection blocks and do not create the shelf-top case shape by themselves. Prefer a later custom `Bakery Display Case` block or block-entity model with shelf geometry, transparent glass faces, and rendered baked goods. A lower-cost fallback is a vanilla-looking shelf behind normal glass blocks or panes.
+- `Baker` is a first-pass food-processing profession with a dedicated workstation and associated `Bakery` structure.
+- The `Baker` workstation is the `Baker's Counter`, a shelf-style counter that behaves like an access point for bakery trading while still reading as bakery work furniture.
+- `Glass Display Case` is a full-size clear display block intended first for bakery use. It should read visually as a glass-fronted case rather than a half-depth shelf, while still serving as the bakery's visible goods display furniture.
+- Placing a `Baker's Counter` in or near a settlement should create or resume a staged `Bakery` build site when a valid footprint is available.
+- The `Bakery` should use the same `5x8` overall footprint and broad layout language as the `Trading Post`, but replace the fence market openings with `Glass Display Case` runs or other glass-fronted baked-goods displays.
+- Vanilla glass panes should not be relied on as horizontal display-case lids; panes are vertical connection blocks and do not create a convincing full display case by themselves. The `Glass Display Case` is the first-pass answer for bakery displays, while a later block-entity or rendered-goods pass can add richer visible baked-good presentation and direct purchase interaction from the displayed stock.
 - Gates should remain in the market-facing openings so the structure still feels like an accessible shopfront.
-- Settlement behavior should convert village supplies into baked goods, including bread, cakes, pies, cookies, and similar foods when the required ingredients are available.
-- Baker profession trades should let players trade relevant inputs such as eggs, wheat, milk, sugar, or fruit for baked goods, and should integrate with the broader profession-specific trade model rather than crowding every possible food trade onto the `Trade Board`.
+- `Glass Display Case` contents should live in a block-local inventory that is separate from the broader settlement stock. Bakers may move surplus baked goods into those case slots for sale, and players may also donate their own items into empty slots.
+- Settlements should track both baked-food outputs and the obvious bakery ingredient goods needed to produce them, including at least `wheat`, `potato`, `egg`, `milk`, `sugar`, `cocoa beans`, `pumpkin`, `apple`, and the metal or fuel inputs needed by the currently unlocked bakery recipes.
+- Settlement behavior should convert village supplies into baked goods when the required ingredients are available, while limiting the baker to bakery-style foods rather than general cooked-meat outputs.
+- Bakery production should be gated by settlement tier. First-pass targets are staple foods like `Bread` and `Baked Potato` at `Tier 1`, richer sweets like `Cookies` and `Pumpkin Pie` at `Tier 2`, `Cake` at `Tier 3`, and premium outputs such as `Golden Apple` at `Tier 4+`.
+- Some portion of bakery output should return to shared settlement food reserves so it actually feeds the village population instead of existing only as player-trade stock.
+- Excess baked goods should be visibly reflected at the `Baker's Counter` and nearby `Glass Display Case` blocks so players can see bakery activity affecting the world.
+- Players should be able to use the `Glass Display Case` through a more vanilla-style sale screen that sells the specific stacks stored in the case rather than the settlement's abstract goods inventory. Empty case slots should remain available for player donations.
+- Baker profession trades should let players trade relevant inputs such as eggs, wheat, milk, sugar, fruit, or other bakery ingredients for baked goods, and should integrate with the broader profession-specific trade model rather than crowding every possible food trade onto the `Trade Board`.
 
 ### Beekeeper Details
 

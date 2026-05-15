@@ -34,6 +34,30 @@ public final class SettlementGoods {
 			return "wheat";
 		}
 
+		if (stack.is(Items.BREAD)) {
+			return "bread";
+		}
+
+		if (stack.is(Items.BAKED_POTATO)) {
+			return "baked_potato";
+		}
+
+		if (stack.is(Items.COOKIE)) {
+			return "cookie";
+		}
+
+		if (stack.is(Items.PUMPKIN_PIE)) {
+			return "pumpkin_pie";
+		}
+
+		if (stack.is(Items.CAKE)) {
+			return "cake";
+		}
+
+		if (stack.is(Items.GOLDEN_APPLE)) {
+			return "golden_apple";
+		}
+
 		if (stack.is(Items.BEEF)) {
 			return "beef";
 		}
@@ -88,6 +112,26 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.APPLE)) {
 			return "apple";
+		}
+
+		if (stack.is(Items.EGG)) {
+			return "egg";
+		}
+
+		if (stack.is(Items.MILK_BUCKET)) {
+			return "milk_bucket";
+		}
+
+		if (stack.is(Items.SUGAR)) {
+			return "sugar";
+		}
+
+		if (stack.is(Items.COCOA_BEANS)) {
+			return "cocoa_beans";
+		}
+
+		if (stack.is(Items.PUMPKIN)) {
+			return "pumpkin";
 		}
 
 		if (stack.is(Items.STICK)) {
@@ -208,6 +252,10 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.IRON_INGOT)) {
 			return "iron_ingot";
+		}
+
+		if (stack.is(Items.GOLD_INGOT)) {
+			return "gold_ingot";
 		}
 
 		if (stack.is(Items.RAW_IRON)) {

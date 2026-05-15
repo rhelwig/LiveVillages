@@ -45,6 +45,10 @@ public final class CarpenterBenchRecipes {
 			Items.OAK_SIGN,
 			Items.OAK_SHELF,
 			Items.OAK_BOAT,
+			Map.of(
+				Items.OAK_LOG, Items.STRIPPED_OAK_LOG,
+				Items.OAK_WOOD, Items.STRIPPED_OAK_WOOD
+			),
 			Items.OAK_LOG,
 			Items.OAK_WOOD,
 			Items.STRIPPED_OAK_LOG,
@@ -64,6 +68,10 @@ public final class CarpenterBenchRecipes {
 			Items.SPRUCE_SIGN,
 			Items.SPRUCE_SHELF,
 			Items.SPRUCE_BOAT,
+			Map.of(
+				Items.SPRUCE_LOG, Items.STRIPPED_SPRUCE_LOG,
+				Items.SPRUCE_WOOD, Items.STRIPPED_SPRUCE_WOOD
+			),
 			Items.SPRUCE_LOG,
 			Items.SPRUCE_WOOD,
 			Items.STRIPPED_SPRUCE_LOG,
@@ -83,6 +91,10 @@ public final class CarpenterBenchRecipes {
 			Items.BIRCH_SIGN,
 			Items.BIRCH_SHELF,
 			Items.BIRCH_BOAT,
+			Map.of(
+				Items.BIRCH_LOG, Items.STRIPPED_BIRCH_LOG,
+				Items.BIRCH_WOOD, Items.STRIPPED_BIRCH_WOOD
+			),
 			Items.BIRCH_LOG,
 			Items.BIRCH_WOOD,
 			Items.STRIPPED_BIRCH_LOG,
@@ -102,6 +114,10 @@ public final class CarpenterBenchRecipes {
 			Items.JUNGLE_SIGN,
 			Items.JUNGLE_SHELF,
 			Items.JUNGLE_BOAT,
+			Map.of(
+				Items.JUNGLE_LOG, Items.STRIPPED_JUNGLE_LOG,
+				Items.JUNGLE_WOOD, Items.STRIPPED_JUNGLE_WOOD
+			),
 			Items.JUNGLE_LOG,
 			Items.JUNGLE_WOOD,
 			Items.STRIPPED_JUNGLE_LOG,
@@ -121,6 +137,10 @@ public final class CarpenterBenchRecipes {
 			Items.ACACIA_SIGN,
 			Items.ACACIA_SHELF,
 			Items.ACACIA_BOAT,
+			Map.of(
+				Items.ACACIA_LOG, Items.STRIPPED_ACACIA_LOG,
+				Items.ACACIA_WOOD, Items.STRIPPED_ACACIA_WOOD
+			),
 			Items.ACACIA_LOG,
 			Items.ACACIA_WOOD,
 			Items.STRIPPED_ACACIA_LOG,
@@ -140,6 +160,10 @@ public final class CarpenterBenchRecipes {
 			Items.CHERRY_SIGN,
 			Items.CHERRY_SHELF,
 			Items.CHERRY_BOAT,
+			Map.of(
+				Items.CHERRY_LOG, Items.STRIPPED_CHERRY_LOG,
+				Items.CHERRY_WOOD, Items.STRIPPED_CHERRY_WOOD
+			),
 			Items.CHERRY_LOG,
 			Items.CHERRY_WOOD,
 			Items.STRIPPED_CHERRY_LOG,
@@ -159,6 +183,10 @@ public final class CarpenterBenchRecipes {
 			Items.DARK_OAK_SIGN,
 			Items.DARK_OAK_SHELF,
 			Items.DARK_OAK_BOAT,
+			Map.of(
+				Items.DARK_OAK_LOG, Items.STRIPPED_DARK_OAK_LOG,
+				Items.DARK_OAK_WOOD, Items.STRIPPED_DARK_OAK_WOOD
+			),
 			Items.DARK_OAK_LOG,
 			Items.DARK_OAK_WOOD,
 			Items.STRIPPED_DARK_OAK_LOG,
@@ -178,6 +206,10 @@ public final class CarpenterBenchRecipes {
 			Items.PALE_OAK_SIGN,
 			Items.PALE_OAK_SHELF,
 			Items.PALE_OAK_BOAT,
+			Map.of(
+				Items.PALE_OAK_LOG, Items.STRIPPED_PALE_OAK_LOG,
+				Items.PALE_OAK_WOOD, Items.STRIPPED_PALE_OAK_WOOD
+			),
 			Items.PALE_OAK_LOG,
 			Items.PALE_OAK_WOOD,
 			Items.STRIPPED_PALE_OAK_LOG,
@@ -197,6 +229,10 @@ public final class CarpenterBenchRecipes {
 			Items.MANGROVE_SIGN,
 			Items.MANGROVE_SHELF,
 			Items.MANGROVE_BOAT,
+			Map.of(
+				Items.MANGROVE_LOG, Items.STRIPPED_MANGROVE_LOG,
+				Items.MANGROVE_WOOD, Items.STRIPPED_MANGROVE_WOOD
+			),
 			Items.MANGROVE_LOG,
 			Items.MANGROVE_WOOD,
 			Items.STRIPPED_MANGROVE_LOG,
@@ -216,6 +252,9 @@ public final class CarpenterBenchRecipes {
 			Items.BAMBOO_SIGN,
 			Items.BAMBOO_SHELF,
 			Items.BAMBOO_RAFT,
+			Map.of(
+				Items.BAMBOO_BLOCK, Items.STRIPPED_BAMBOO_BLOCK
+			),
 			Items.BAMBOO_BLOCK,
 			Items.STRIPPED_BAMBOO_BLOCK
 		));
@@ -233,6 +272,10 @@ public final class CarpenterBenchRecipes {
 			Items.CRIMSON_SIGN,
 			Items.CRIMSON_SHELF,
 			null,
+			Map.of(
+				Items.CRIMSON_STEM, Items.STRIPPED_CRIMSON_STEM,
+				Items.CRIMSON_HYPHAE, Items.STRIPPED_CRIMSON_HYPHAE
+			),
 			Items.CRIMSON_STEM,
 			Items.CRIMSON_HYPHAE,
 			Items.STRIPPED_CRIMSON_STEM,
@@ -252,6 +295,10 @@ public final class CarpenterBenchRecipes {
 			Items.WARPED_SIGN,
 			Items.WARPED_SHELF,
 			null,
+			Map.of(
+				Items.WARPED_STEM, Items.STRIPPED_WARPED_STEM,
+				Items.WARPED_HYPHAE, Items.STRIPPED_WARPED_HYPHAE
+			),
 			Items.WARPED_STEM,
 			Items.WARPED_HYPHAE,
 			Items.STRIPPED_WARPED_STEM,
@@ -275,6 +322,7 @@ public final class CarpenterBenchRecipes {
 
 	private static void addLogLikeOutputs(Map<Item, List<CarpenterBenchRecipe>> recipes, Item input, WoodFamily family) {
 		int plankCount = family.plankOutputCount();
+		addOptional(recipes, input, family.strippedOutputs().get(input), 1);
 		add(recipes, input, family.stairs(), plankCount);
 		add(recipes, input, family.slab(), plankCount * 2);
 		add(recipes, input, family.fence(), 3);
@@ -333,6 +381,7 @@ public final class CarpenterBenchRecipes {
 		Item sign,
 		Item shelf,
 		Item boat,
+		Map<Item, Item> strippedOutputs,
 		Item... logInputs
 	) {
 	}

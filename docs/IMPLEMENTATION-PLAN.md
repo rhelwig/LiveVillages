@@ -19,8 +19,8 @@ Repository documentation lives under `docs/`, except for the root [README.md](..
 
 - Finish the harbor trade pass: verify that docks, lighthouses, and cartography support affect real trade cadence and route quality the way the design intends.
 - Formalize settlement tiers so wealth and population gates drive visible structure, path, and fortification upgrades.
-- Fix the custom recipe/data path issue before adding more recipe-driven content.
 - Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation, with dock and lighthouse bonuses preserved and docked-boat trips returning before gathering.
+- Keep `Baker` output consistent between loaded behavior and abstract settlement simulation, with settlement stock, tier-gated recipes, visible bakery displays, and bakery-side trading all drawing from the same goods state.
 - Split bell-triggered loaded defense cleanly between civilian panic behavior and combat-capable villager rally behavior.
 - Finish migrating active issue tracking to GitHub issues and keep the placed `Trade Board` cosmetic display issue there as the source of truth.
 - Temporarily run worker productivity at `2x` during feature development so construction, roadwork, and other visible villager loops are faster to evaluate in playtests; retune later for normal play balance.
@@ -33,9 +33,13 @@ Already solid enough to plan from:
 - staged construction with persistent build sites, assisted player placement, and preview overlays
 - an in-game structure capture hotkey that exports the looked-at structure as a text blueprint draft for later curation
 - custom anchors and workstations for `Trade Board`, `Carpenter's Bench`, `Forester's Table`, `Surveyor's Table`, `Portmaster's Anchor`, `Lighthouse`, `Milepost`, `Simple Housing Shelter`, and `Housing Shelter`
-- custom professions for `Trademaster`, `Carpenter`, `Forester`, `Portmaster`, and `Roadwright`
+- a first-pass `Glass Display Case` block exists as a full-size clear bakery display block, ready for later bakery stock presentation and direct purchase interaction
+- `Glass Display Case` now has a separate block-local sale inventory and its own custom case menu, so bakery sale stock can diverge from the settlement's abstract food reserves
+- a first-pass `Baker's Counter` workstation exists as a wood-framed shelf-style bakery counter; it starts or resumes `Bakery` build sites, opens settlement trading directly, and anchors the first-pass `Baker` profession
+- the first-pass `Bakery` blueprint now exists as a `Trading Post`-derived copy with `Glass Display Case` runs in place of the original fence-only market openings
+- custom professions for `Trademaster`, `Carpenter`, `Baker`, `Forester`, `Portmaster`, and `Roadwright`
 - harbor map, terrain-memory cache, lighthouse support, and water-trade infrastructure bonuses
-- loaded-world work loops already exist in first-pass form for construction, butchery, harbor work, routes, and farming support
+- loaded-world work loops already exist in first-pass form for construction, butchery, baking, harbor work, routes, and farming support
 - debug and inspection support exists through overlays, build previews, and `/livevillages settlements ...` commands
 
 ## Active Workstreams
@@ -222,7 +226,7 @@ These matter enough to keep in the plan:
 
 Keep these visible, but not as active work:
 
-- `Baker`, `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, shaft-lighting loop, first-pass primary side tunnels, and first-pass fuel-aware `iron` / `copper` refining, including broader secondary tunnel expansion, richer mined-resource stock handling, broader ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
+- `Beekeeper`, later Miner behavior beyond the new first-pass shaft-deepening, ladder descent, exposed-vein, shaft-lighting loop, first-pass primary side tunnels, and first-pass fuel-aware `iron` / `copper` refining, including broader secondary tunnel expansion, richer mined-resource stock handling, broader ore refining, and tunnel-lighting preferences, `Gardener`, `Guard`, `Leatherworker`, `Shepherd`, `Cleric`, `Armorer`, `Weaponsmith`, `Scribe`, and fuller warehouse behavior
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - a generalized blueprint-import feature that may be worth extracting into a standalone sharing/build-assist mod once the import, packaging, and staged-construction UX are mature

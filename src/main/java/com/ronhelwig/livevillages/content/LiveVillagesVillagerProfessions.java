@@ -27,6 +27,8 @@ public final class LiveVillagesVillagerProfessions {
 	public static final ResourceKey<VillagerProfession> TRADEMASTER = professionKey("trademaster");
 	public static final ResourceKey<PoiType> CARPENTER_POI = poiKey("carpenter");
 	public static final ResourceKey<VillagerProfession> CARPENTER = professionKey("carpenter");
+	public static final ResourceKey<PoiType> BAKER_POI = poiKey("baker");
+	public static final ResourceKey<VillagerProfession> BAKER = professionKey("baker");
 	public static final ResourceKey<PoiType> ROADWRIGHT_POI = poiKey("roadwright");
 	public static final ResourceKey<VillagerProfession> ROADWRIGHT = professionKey("roadwright");
 	public static final ResourceKey<PoiType> MILEPOST_POI = poiKey("milepost");
@@ -43,6 +45,7 @@ public final class LiveVillagesVillagerProfessions {
 	public static void register() {
 		PoiHelper.register(TRADEMASTER_POI.identifier(), 1, 1, LiveVillagesBlocks.TRADE_BOARD);
 		PoiHelper.register(CARPENTER_POI.identifier(), 1, 1, LiveVillagesBlocks.CARPENTER_BENCH);
+		PoiHelper.register(BAKER_POI.identifier(), 1, 1, LiveVillagesBlocks.BAKERS_COUNTER);
 		PoiHelper.register(ROADWRIGHT_POI.identifier(), 1, 1, LiveVillagesBlocks.SURVEYOR_TABLE);
 		PoiHelper.register(MILEPOST_POI.identifier(), 1, 1, LiveVillagesBlocks.MILEPOST);
 		PoiHelper.register(FORESTER_POI.identifier(), 1, 1, LiveVillagesBlocks.FORESTER_TABLE);
@@ -50,6 +53,7 @@ public final class LiveVillagesVillagerProfessions {
 		PoiHelper.register(PORTMASTER_POI.identifier(), 1, 1, LiveVillagesBlocks.PORTMASTER_ANCHOR);
 		registerProfession(TRADEMASTER, TRADEMASTER_POI, SoundEvents.VILLAGER_WORK_CARTOGRAPHER);
 		registerProfession(CARPENTER, CARPENTER_POI, SoundEvents.VILLAGER_WORK_MASON);
+		registerProfession(BAKER, BAKER_POI, SoundEvents.VILLAGER_WORK_BUTCHER);
 		registerProfession(ROADWRIGHT, ROADWRIGHT_POI, SoundEvents.VILLAGER_WORK_TOOLSMITH);
 		registerProfession(FORESTER, FORESTER_POI, SoundEvents.VILLAGER_WORK_FLETCHER);
 		registerProfession(MINER, MINER_POI, SoundEvents.VILLAGER_WORK_TOOLSMITH);

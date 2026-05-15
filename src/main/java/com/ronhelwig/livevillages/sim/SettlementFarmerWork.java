@@ -81,16 +81,18 @@ public final class SettlementFarmerWork {
 
 		tendGardens(level, settlement, stock, gardens, activeFarmers, elapsedDays);
 
-		int breadBakeCapacity = scaledAmount(Math.min(
-			activeFarmers * 3.0D,
-			(gardens.size() * 1.5D) + (survey.hayBales() * 0.35D) + (survey.wheatCrops() * 0.05D) + 1.0D
-		), elapsedDays);
-		int availableWheat = stock.getOrDefault("wheat", 0);
-		int breadBaked = Math.min(breadBakeCapacity, availableWheat / 3);
+		if (settlement.population().getOrDefault(SettlementRoleKeys.BAKER, 0) <= 0) {
+			int breadBakeCapacity = scaledAmount(Math.min(
+				activeFarmers * 3.0D,
+				(gardens.size() * 1.5D) + (survey.hayBales() * 0.35D) + (survey.wheatCrops() * 0.05D) + 1.0D
+			), elapsedDays);
+			int availableWheat = stock.getOrDefault("wheat", 0);
+			int breadBaked = Math.min(breadBakeCapacity, availableWheat / 3);
 
-		if (breadBaked > 0) {
-			stock.put("wheat", availableWheat - (breadBaked * 3));
-			addGoods(stock, "bread", breadBaked);
+			if (breadBaked > 0) {
+				stock.put("wheat", availableWheat - (breadBaked * 3));
+				addGoods(stock, "bread", breadBaked);
+			}
 		}
 	}
 

@@ -15,6 +15,7 @@ public final class SettlementRefining {
 		refineTowardTarget(settlement, stock, "coal", SettlementEconomyRules.targetForGoods(settlement, "coal"));
 		refineTowardTarget(settlement, stock, "iron_ingot", SettlementEconomyRules.targetForGoods(settlement, "iron_ingot"));
 		refineTowardTarget(settlement, stock, "copper_ingot", SettlementEconomyRules.targetForGoods(settlement, "copper_ingot"));
+		refineTowardTarget(settlement, stock, "gold_ingot", SettlementEconomyRules.targetForGoods(settlement, "gold_ingot"));
 	}
 
 	public static int effectiveGoodsCount(SettlementState settlement, String goodsKey) {
@@ -43,6 +44,7 @@ public final class SettlementRefining {
 			case "glass" -> smeltForImmediateUse(workingStock, "sand", Map.of(), fuelLedger);
 			case "iron_ingot" -> smeltForImmediateUse(workingStock, "raw_iron", Map.of(), fuelLedger);
 			case "copper_ingot" -> smeltForImmediateUse(workingStock, "raw_copper", Map.of(), fuelLedger);
+			case "gold_ingot" -> smeltForImmediateUse(workingStock, "raw_gold", Map.of(), fuelLedger);
 			default -> false;
 		};
 
@@ -64,7 +66,8 @@ public final class SettlementRefining {
 		return goodsKey.equals("coal")
 			|| goodsKey.equals("glass")
 			|| goodsKey.equals("iron_ingot")
-			|| goodsKey.equals("copper_ingot");
+			|| goodsKey.equals("copper_ingot")
+			|| goodsKey.equals("gold_ingot");
 	}
 
 	private static void refineTowardTarget(SettlementState settlement, Map<String, Integer> stock, String goodsKey, int target) {
@@ -81,6 +84,7 @@ public final class SettlementRefining {
 				case "glass" -> smeltToStock(stock, "sand", "glass", reservedGoods, fuelLedger);
 				case "iron_ingot" -> smeltToStock(stock, "raw_iron", "iron_ingot", reservedGoods, fuelLedger);
 				case "copper_ingot" -> smeltToStock(stock, "raw_copper", "copper_ingot", reservedGoods, fuelLedger);
+				case "gold_ingot" -> smeltToStock(stock, "raw_gold", "gold_ingot", reservedGoods, fuelLedger);
 				default -> false;
 			};
 

@@ -785,7 +785,8 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static boolean isPreviewWorkstationItem(Item item) {
-		return item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
+		return item == LiveVillagesBlocks.BAKERS_COUNTER_ITEM
+			|| item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
 			|| item == LiveVillagesBlocks.LIGHTHOUSE_ITEM
 			|| item == LiveVillagesBlocks.MINER_WORKSTATION_ITEM
 			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
@@ -809,6 +810,10 @@ public final class LiveVillagesNetworking {
 	) {
 		Direction placementFacing = playerFacing.getAxis() == Direction.Axis.Y ? Direction.NORTH : playerFacing.getOpposite();
 		Item item = stack.getItem();
+
+		if (item == LiveVillagesBlocks.BAKERS_COUNTER_ITEM) {
+			return SettlementConstruction.previewBakeryAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
 
 		if (item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM) {
 			return SettlementConstruction.previewCarpenterWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
@@ -1027,6 +1032,7 @@ public final class LiveVillagesNetworking {
 
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
 		return switch (type) {
+			case BAKERY -> "Bakery";
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";

@@ -1179,6 +1179,7 @@ public final class SettlementConstructionWork {
 			pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
 		} else if (isBedFoot(buildSite, relativePos)) {
 				pairedPosition = switch (buildSite.blueprintId()) {
+					case BAKERY -> relativePosition(-1, -3, 1);
 					case BUTCHER_SHOP -> relativePosition(relativePos.right(), -3, 1);
 					case CARTOGRAPHER_HOUSE -> null;
 					case CARPENTER_WORKSHOP -> relativePosition(-1, -3, 1);
@@ -1254,6 +1255,10 @@ public final class SettlementConstructionWork {
 				&& relativePos.right() == -1
 				&& relativePos.forward() == 1
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.BAKERY
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
 				&& relativePos.right() == -1
 				&& relativePos.forward() == -2
@@ -1292,6 +1297,10 @@ public final class SettlementConstructionWork {
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER
 				&& relativePos.right() == -1
 				&& relativePos.forward() == 0
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.BAKERY
+				&& relativePos.right() == -1
+				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
 				&& relativePos.right() == -1

@@ -1,21 +1,21 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
-    "has_planks": {
+    "has_glass": {
       "conditions": {
         "items": [
           {
-            "items": "#minecraft:planks"
+            "items": "minecraft:glass"
           }
         ]
       },
       "trigger": "minecraft:inventory_changed"
     },
-    "has_white_bed": {
+    "has_stripped_logs": {
       "conditions": {
         "items": [
           {
-            "items": "minecraft:white_bed"
+            "items": "#live-villages:glass_display_case_logs"
           }
         ]
       },
@@ -24,13 +24,13 @@
   },
   "requirements": [
     [
-      "has_planks",
-      "has_white_bed"
+      "has_glass",
+      "has_stripped_logs"
     ]
   ],
   "rewards": {
     "recipes": [
-      "live-villages:simple_housing_shelter"
+      "live-villages:glass_display_case"
     ]
   }
 }

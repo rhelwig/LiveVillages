@@ -11,9 +11,29 @@ public final class SettlementEconomyRules {
 	public static final double MAX_CATCH_UP_DAYS = 5.0D;
 	// Temporary playtest tuning: keep visible worker loops moving faster until major systems settle down.
 	public static final double WORKER_PRODUCTIVITY_MULTIPLIER = 2.0D;
-	private static final List<String> FOOD_GOODS = List.of("bread", "beef", "mutton", "pork", "cod", "carrot", "potato", "beetroot", "wheat");
+	private static final List<String> FOOD_GOODS = List.of(
+		"bread",
+		"baked_potato",
+		"cookie",
+		"pumpkin_pie",
+		"cake",
+		"golden_apple",
+		"beef",
+		"mutton",
+		"pork",
+		"cod",
+		"carrot",
+		"potato",
+		"beetroot",
+		"wheat"
+	);
 	private static final List<TargetRule> TARGET_RULES = List.of(
 		new TargetRule("bread", population -> 8 + population * 4),
+		new TargetRule("baked_potato", population -> 4 + population),
+		new TargetRule("cookie", population -> 3 + population / 3),
+		new TargetRule("pumpkin_pie", population -> 2 + population / 4),
+		new TargetRule("cake", population -> 1 + population / 12),
+		new TargetRule("golden_apple", population -> 1 + population / 24),
 		new TargetRule("beef", population -> 4 + population * 2),
 		new TargetRule("mutton", population -> 3 + population),
 		new TargetRule("pork", population -> 3 + population),
@@ -33,6 +53,11 @@ public final class SettlementEconomyRules {
 		new TargetRule("feather", population -> 0),
 		new TargetRule("arrow", population -> 0),
 		new TargetRule("apple", population -> 0),
+		new TargetRule("egg", population -> 0),
+		new TargetRule("milk_bucket", population -> 0),
+		new TargetRule("sugar", population -> 0),
+		new TargetRule("cocoa_beans", population -> 0),
+		new TargetRule("pumpkin", population -> 0),
 		new TargetRule("oak_sapling", population -> 0),
 		new TargetRule("spruce_sapling", population -> 0),
 		new TargetRule("birch_sapling", population -> 0),
@@ -47,6 +72,7 @@ public final class SettlementEconomyRules {
 		new TargetRule("ladder", population -> 0),
 		new TargetRule("milepost", population -> 0),
 		new TargetRule("iron_ingot", population -> 4 + population * 2),
+		new TargetRule("gold_ingot", population -> 0),
 		new TargetRule("emerald", population -> 4 + population)
 	);
 
@@ -92,7 +118,10 @@ public final class SettlementEconomyRules {
 	}
 
 	public static int targetForGoods(SettlementState settlement, Collection<SettlementBuildSite> buildSites, String goodsKey) {
-		return targetForGoods(goodsKey, Math.max(1, settlement.totalPopulation()))
+		int baseTarget = isUnlockedForSettlementTier(goodsKey, SettlementTiers.unlockedTier(settlement))
+			? targetForGoods(goodsKey, Math.max(1, settlement.totalPopulation()))
+			: 0;
+		return baseTarget
 			+ professionalReserveForGoods(settlement, goodsKey)
 			+ plannedDemandForGoods(settlement, goodsKey)
 			+ activeBuildSiteDemandForGoods(buildSites, goodsKey);
@@ -134,6 +163,19 @@ public final class SettlementEconomyRules {
 
 	public static boolean isFoodGoods(String goodsKey) {
 		return FOOD_GOODS.contains(goodsKey);
+	}
+
+	public static int requiredTierForGoods(String goodsKey) {
+		return switch (goodsKey) {
+			case "diamond", "redstone", "cookie", "pumpkin_pie" -> 2;
+			case "cake" -> 3;
+			case "golden_apple" -> 4;
+			default -> 1;
+		};
+	}
+
+	public static boolean isUnlockedForSettlementTier(String goodsKey, int settlementTier) {
+		return SettlementTiers.normalize(settlementTier) >= requiredTierForGoods(goodsKey);
 	}
 
 	public static boolean shouldPrioritizeFoodGrowth(SettlementState settlement) {
@@ -247,6 +289,50 @@ public final class SettlementEconomyRules {
 
 			if (goodsKey.equals("copper_ingot")) {
 				return 4;
+			}
+		}
+
+		if (settlement.population().getOrDefault(SettlementRoleKeys.BAKER, 0) > 0) {
+			int tier = SettlementTiers.unlockedTier(settlement);
+
+			if (goodsKey.equals("wheat")) {
+				return 24;
+			}
+
+			if (goodsKey.equals("potato")) {
+				return 12;
+			}
+
+			if (tier >= 2) {
+				if (goodsKey.equals("sugar")) {
+					return 8;
+				}
+
+				if (goodsKey.equals("cocoa_beans")) {
+					return 6;
+				}
+
+				if (goodsKey.equals("pumpkin")) {
+					return 4;
+				}
+
+				if (goodsKey.equals("egg")) {
+					return 6;
+				}
+			}
+
+			if (tier >= 3 && goodsKey.equals("milk_bucket")) {
+				return 3;
+			}
+
+			if (tier >= 4) {
+				if (goodsKey.equals("apple")) {
+					return 4;
+				}
+
+				if (goodsKey.equals("gold_ingot")) {
+					return 8;
+				}
 			}
 		}
 

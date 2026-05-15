@@ -103,6 +103,10 @@ public final class TradeBoardLogic {
 				continue;
 			}
 
+			if (!SettlementEconomyRules.isUnlockedForSettlementTier(targetRule.goodsKey(), SettlementTiers.unlockedTier(settlement))) {
+				continue;
+			}
+
 			int target = SettlementEconomyRules.targetForGoods(settlement, targetRule.goodsKey());
 			int current = effectiveCurrentForDisplay(settlement, targetRule.goodsKey());
 			int tradePricePercent = SettlementEconomyRules.tradePricePercent(current, target);
@@ -322,6 +326,11 @@ public final class TradeBoardLogic {
 
 		int freeHousing = settlement.housingCapacity() - population;
 		int storedFood = settlement.stock().getOrDefault("bread", 0)
+			+ settlement.stock().getOrDefault("baked_potato", 0)
+			+ settlement.stock().getOrDefault("cookie", 0)
+			+ settlement.stock().getOrDefault("pumpkin_pie", 0)
+			+ settlement.stock().getOrDefault("cake", 0)
+			+ settlement.stock().getOrDefault("golden_apple", 0)
 			+ settlement.stock().getOrDefault("beef", 0)
 			+ settlement.stock().getOrDefault("mutton", 0)
 			+ settlement.stock().getOrDefault("pork", 0)
@@ -330,15 +339,20 @@ public final class TradeBoardLogic {
 			+ settlement.stock().getOrDefault("potato", 0)
 			+ settlement.stock().getOrDefault("beetroot", 0)
 			+ settlement.stock().getOrDefault("wheat", 0);
-		int targetFood = SettlementEconomyRules.targetForGoods("bread", population)
-			+ SettlementEconomyRules.targetForGoods("beef", population)
-			+ SettlementEconomyRules.targetForGoods("mutton", population)
-			+ SettlementEconomyRules.targetForGoods("pork", population)
-			+ SettlementEconomyRules.targetForGoods("cod", population)
-			+ SettlementEconomyRules.targetForGoods("carrot", population)
-			+ SettlementEconomyRules.targetForGoods("potato", population)
-			+ SettlementEconomyRules.targetForGoods("beetroot", population)
-			+ SettlementEconomyRules.targetForGoods("wheat", population);
+		int targetFood = SettlementEconomyRules.targetForGoods(settlement, "bread")
+			+ SettlementEconomyRules.targetForGoods(settlement, "baked_potato")
+			+ SettlementEconomyRules.targetForGoods(settlement, "cookie")
+			+ SettlementEconomyRules.targetForGoods(settlement, "pumpkin_pie")
+			+ SettlementEconomyRules.targetForGoods(settlement, "cake")
+			+ SettlementEconomyRules.targetForGoods(settlement, "golden_apple")
+			+ SettlementEconomyRules.targetForGoods(settlement, "beef")
+			+ SettlementEconomyRules.targetForGoods(settlement, "mutton")
+			+ SettlementEconomyRules.targetForGoods(settlement, "pork")
+			+ SettlementEconomyRules.targetForGoods(settlement, "cod")
+			+ SettlementEconomyRules.targetForGoods(settlement, "carrot")
+			+ SettlementEconomyRules.targetForGoods(settlement, "potato")
+			+ SettlementEconomyRules.targetForGoods(settlement, "beetroot")
+			+ SettlementEconomyRules.targetForGoods(settlement, "wheat");
 
 		if (storedFood < Math.max(8, targetFood / 2)) {
 			return "Hungry";
@@ -413,6 +427,7 @@ public final class TradeBoardLogic {
 	private static int buildSitePriority(SettlementBuildSite buildSite) {
 		return switch (buildSite.blueprintId()) {
 			case TRADING_POST -> 0;
+			case BAKERY -> 2;
 			case DOCK, LIGHTHOUSE -> 1;
 			case ROADWRIGHT_WORKSHOP, CARTOGRAPHER_HOUSE -> 2;
 			default -> 3;
@@ -484,6 +499,7 @@ public final class TradeBoardLogic {
 
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
 		return switch (type) {
+			case BAKERY -> "Bakery";
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";

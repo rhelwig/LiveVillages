@@ -11,21 +11,21 @@
       },
       "trigger": "minecraft:inventory_changed"
     },
-    "has_planks": {
+    "has_furnace": {
       "conditions": {
         "items": [
           {
-            "items": "#minecraft:planks"
+            "items": "minecraft:furnace"
           }
         ]
       },
       "trigger": "minecraft:inventory_changed"
     },
-    "has_stone_shovel": {
+    "has_glass_display_case": {
       "conditions": {
         "items": [
           {
-            "items": "minecraft:stone_shovel"
+            "items": "live-villages:glass_display_case"
           }
         ]
       },
@@ -35,13 +35,13 @@
   "requirements": [
     [
       "has_crafting_table",
-      "has_planks",
-      "has_stone_shovel"
+      "has_furnace",
+      "has_glass_display_case"
     ]
   ],
   "rewards": {
     "recipes": [
-      "live-villages:surveyor_table"
+      "live-villages:bakers_counter"
     ]
   }
 }

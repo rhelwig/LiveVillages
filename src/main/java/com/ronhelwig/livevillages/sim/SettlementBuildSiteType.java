@@ -5,6 +5,7 @@ import com.mojang.serialization.Codec;
 import net.minecraft.util.StringRepresentable;
 
 public enum SettlementBuildSiteType implements StringRepresentable {
+	BAKERY("bakery"),
 	BUTCHER_SHOP("butcher_shop"),
 	CARTOGRAPHER_HOUSE("cartographer_house"),
 	CARPENTER_WORKSHOP("carpenter_workshop"),

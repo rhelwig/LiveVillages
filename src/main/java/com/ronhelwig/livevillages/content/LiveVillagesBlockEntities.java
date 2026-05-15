@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.entity.GlassDisplayCaseBlockEntity;
 import com.ronhelwig.livevillages.block.entity.MilepostBlockEntity;
 import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 
@@ -20,6 +21,11 @@ public final class LiveVillagesBlockEntities {
 		BuiltInRegistries.BLOCK_ENTITY_TYPE,
 		LiveVillages.id("milepost"),
 		FabricBlockEntityTypeBuilder.create(MilepostBlockEntity::new, LiveVillagesBlocks.MILEPOST).build()
+	);
+	public static final BlockEntityType<GlassDisplayCaseBlockEntity> GLASS_DISPLAY_CASE = Registry.register(
+		BuiltInRegistries.BLOCK_ENTITY_TYPE,
+		LiveVillages.id("glass_display_case"),
+		FabricBlockEntityTypeBuilder.create(GlassDisplayCaseBlockEntity::new, LiveVillagesBlocks.GLASS_DISPLAY_CASE).build()
 	);
 
 	private LiveVillagesBlockEntities() {

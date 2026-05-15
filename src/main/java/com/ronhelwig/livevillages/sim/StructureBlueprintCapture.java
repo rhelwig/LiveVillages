@@ -598,7 +598,8 @@ public final class StructureBlueprintCapture {
 	}
 
 	private static boolean isKnownWorkstation(BlockState state) {
-		return state.is(LiveVillagesBlocks.CARPENTER_BENCH)
+		return state.is(LiveVillagesBlocks.BAKERS_COUNTER)
+			|| state.is(LiveVillagesBlocks.CARPENTER_BENCH)
 			|| state.is(LiveVillagesBlocks.FORESTER_TABLE)
 			|| state.is(LiveVillagesBlocks.MINER_WORKSTATION)
 			|| state.is(LiveVillagesBlocks.SURVEYOR_TABLE)

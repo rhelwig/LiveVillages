@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.menu.v1.ExtendedMenuType;
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.menu.CarpenterBenchMenu;
 import com.ronhelwig.livevillages.menu.FletchingTableMenu;
+import com.ronhelwig.livevillages.menu.GlassDisplayCaseMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardOpenData;
 
@@ -24,6 +25,11 @@ public final class LiveVillagesMenus {
 		BuiltInRegistries.MENU,
 		LiveVillages.id("fletching_table"),
 		new MenuType<>(FletchingTableMenu::new, FeatureFlags.VANILLA_SET)
+	);
+	public static final MenuType<GlassDisplayCaseMenu> GLASS_DISPLAY_CASE = Registry.register(
+		BuiltInRegistries.MENU,
+		LiveVillages.id("glass_display_case"),
+		new MenuType<>(GlassDisplayCaseMenu::new, FeatureFlags.VANILLA_SET)
 	);
 
 	public static final MenuType<TradeBoardMenu> TRADE_BOARD = Registry.register(

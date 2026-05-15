@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "#live-villages:glass_display_case_logs",
+    "G": "minecraft:glass"
+  },
+  "pattern": [
+    "###",
+    "GGG",
+    "###"
+  ],
+  "result": {
+    "count": 6,
+    "id": "live-villages:glass_display_case"
+  }
+}

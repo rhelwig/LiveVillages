@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": "live-villages:glass_display_case",
+    "F": "minecraft:furnace",
+    "T": "minecraft:crafting_table"
+  },
+  "pattern": [
+    "C",
+    "T",
+    "F"
+  ],
+  "result": {
+    "id": "live-villages:bakers_counter"
+  }
+}

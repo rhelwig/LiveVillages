@@ -11,6 +11,7 @@ import com.ronhelwig.livevillages.client.render.StructureCaptureHotkey;
 import com.ronhelwig.livevillages.client.render.TradeBoardBlockEntityRenderer;
 import com.ronhelwig.livevillages.client.screen.CarpenterBenchScreen;
 import com.ronhelwig.livevillages.client.screen.FletchingTableScreen;
+import com.ronhelwig.livevillages.client.screen.GlassDisplayCaseScreen;
 import com.ronhelwig.livevillages.client.screen.PortmasterMapScreen;
 import com.ronhelwig.livevillages.client.screen.SurveyorMapScreen;
 import com.ronhelwig.livevillages.client.screen.TradeBoardScreen;
@@ -22,6 +23,7 @@ public class LiveVillagesClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		MenuScreens.register(LiveVillagesMenus.CARPENTER_BENCH, CarpenterBenchScreen::new);
 		MenuScreens.register(LiveVillagesMenus.FLETCHING_TABLE, FletchingTableScreen::new);
+		MenuScreens.register(LiveVillagesMenus.GLASS_DISPLAY_CASE, GlassDisplayCaseScreen::new);
 		MenuScreens.register(LiveVillagesMenus.TRADE_BOARD, TradeBoardScreen::new);
 		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.MILEPOST, MilepostBlockEntityRenderer::new);
 		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.TRADE_BOARD, TradeBoardBlockEntityRenderer::new);

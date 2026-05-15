@@ -540,6 +540,7 @@ public class LiveVillagesSavedData extends SavedData {
 			Long previousSpawnTick = bootstrapVillagerSpawnTicks.put(settlement.id(), currentTick);
 			SettlementVillagers.ensureTrademaster(level, settlement);
 			SettlementVillagers.ensureCarpenter(level, settlement);
+			SettlementVillagers.ensureBaker(level, settlement);
 			SettlementVillagers.ensureMiner(level, settlement);
 			SettlementVillagers.ensureFletcher(level, settlement);
 			SettlementVillagers.ensureVillagerHomes(level, settlement);
@@ -748,6 +749,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
 			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
+			stockChanged |= SettlementBakerWork.maintainLoadedBaking(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementMasonWork.maintainLoadedMasonry(level, workingSettlement, stock, activeBuildSites);
 			SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
@@ -826,6 +828,7 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
@@ -969,6 +972,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= SettlementVillagers.ensureBaker(level, settlement);
 			}
 		}
 
@@ -1152,6 +1156,33 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
+	private boolean tryStartPlacedBakeryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos workstationPos : SettlementConstruction.findPlacedBakersCounters(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BAKERY, workstationPos);
+			if (existingBuildSite.isEmpty()) {
+				continue;
+			}
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartBakeryAtWorkstation(
+				level,
+				workstationPos,
+				existingBuildSite.get().facing(),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+			}
+		}
+
+		return changed;
+	}
+
 	private boolean tryStartPlacedMineEntranceBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		boolean changed = false;
 
@@ -1254,6 +1285,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (loadedSettlement && SettlementVillagers.usesActualVillagers(settlement)) {
 				SettlementVillagers.ensureTrademaster(level, settlement);
 				SettlementVillagers.ensureCarpenter(level, settlement);
+				SettlementVillagers.ensureBaker(level, settlement);
 				SettlementVillagers.ensureRoadwright(level, settlement);
 				SettlementVillagers.ensureForester(level, settlement);
 				SettlementVillagers.ensureMiner(level, settlement);
@@ -1284,6 +1316,7 @@ public class LiveVillagesSavedData extends SavedData {
 				if (spawnedVillagers > 0) {
 					SettlementVillagers.ensureTrademaster(level, updatedSettlement);
 					SettlementVillagers.ensureCarpenter(level, updatedSettlement);
+					SettlementVillagers.ensureBaker(level, updatedSettlement);
 					SettlementVillagers.ensureRoadwright(level, updatedSettlement);
 					SettlementVillagers.ensureForester(level, updatedSettlement);
 					SettlementVillagers.ensureMiner(level, updatedSettlement);

@@ -3,6 +3,7 @@ package com.ronhelwig.livevillages.menu;
 import java.util.List;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
 import com.ronhelwig.livevillages.sim.SettlementTiers;
 
 import net.minecraft.core.NonNullList;
@@ -22,6 +23,11 @@ public final class TradeBoardTradeRules {
 	private static final String ITEM_KEY_PREFIX = "item:";
 	private static final List<String> TRADEABLE_GOODS_KEYS = List.of(
 		"bread",
+		"baked_potato",
+		"cookie",
+		"pumpkin_pie",
+		"cake",
+		"golden_apple",
 		"beef",
 		"mutton",
 		"pork",
@@ -42,6 +48,11 @@ public final class TradeBoardTradeRules {
 		"feather",
 		"arrow",
 		"apple",
+		"egg",
+		"milk_bucket",
+		"sugar",
+		"cocoa_beans",
+		"pumpkin",
 		"oak_sapling",
 		"spruce_sapling",
 		"birch_sapling",
@@ -61,6 +72,7 @@ public final class TradeBoardTradeRules {
 		"torch",
 		"lantern",
 		"iron_ingot",
+		"gold_ingot",
 		"copper_ingot",
 		"raw_iron",
 		"raw_copper",
@@ -84,11 +96,7 @@ public final class TradeBoardTradeRules {
 	}
 
 	public static boolean isUnlockedForSettlementTier(String goodsKey, int settlementTier) {
-		int normalizedTier = SettlementTiers.normalize(settlementTier);
-		return switch (goodsKey) {
-			case "diamond", "redstone" -> normalizedTier >= 2;
-			default -> true;
-		};
+		return SettlementEconomyRules.isUnlockedForSettlementTier(goodsKey, settlementTier);
 	}
 
 	public static String exactItemKeyForStack(ItemStack stack) {
@@ -115,6 +123,11 @@ public final class TradeBoardTradeRules {
 
 		return switch (goodsKey) {
 			case "bread" -> 6;
+			case "baked_potato" -> 8;
+			case "cookie" -> 12;
+			case "pumpkin_pie" -> 4;
+			case "cake" -> 1;
+			case "golden_apple" -> 1;
 			case "beef" -> 4;
 			case "mutton" -> 4;
 			case "pork" -> 4;
@@ -132,6 +145,10 @@ public final class TradeBoardTradeRules {
 			case "flint", "feather" -> 8;
 			case "arrow" -> 16;
 			case "apple" -> 8;
+			case "egg" -> 8;
+			case "milk_bucket" -> 1;
+			case "sugar", "cocoa_beans" -> 8;
+			case "pumpkin" -> 4;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 4;
 			case "cobblestone" -> 16;
 			case "dirt" -> 16;
@@ -143,6 +160,7 @@ public final class TradeBoardTradeRules {
 			case "torch" -> 8;
 			case "lantern" -> 4;
 			case "iron_ingot" -> 4;
+			case "gold_ingot" -> 4;
 			case "copper_ingot" -> 4;
 			case "raw_iron" -> 8;
 			case "raw_copper" -> 8;
@@ -369,6 +387,11 @@ public final class TradeBoardTradeRules {
 
 		return new ItemStack(switch (goodsKey) {
 			case "bread" -> Items.BREAD;
+			case "baked_potato" -> Items.BAKED_POTATO;
+			case "cookie" -> Items.COOKIE;
+			case "pumpkin_pie" -> Items.PUMPKIN_PIE;
+			case "cake" -> Items.CAKE;
+			case "golden_apple" -> Items.GOLDEN_APPLE;
 			case "beef" -> Items.BEEF;
 			case "cod" -> Items.COD;
 			case "mutton" -> Items.MUTTON;
@@ -390,6 +413,11 @@ public final class TradeBoardTradeRules {
 			case "feather" -> Items.FEATHER;
 			case "arrow" -> Items.ARROW;
 			case "apple" -> Items.APPLE;
+			case "egg" -> Items.EGG;
+			case "milk_bucket" -> Items.MILK_BUCKET;
+			case "sugar" -> Items.SUGAR;
+			case "cocoa_beans" -> Items.COCOA_BEANS;
+			case "pumpkin" -> Items.PUMPKIN;
 			case "oak_sapling" -> Items.OAK_SAPLING;
 			case "spruce_sapling" -> Items.SPRUCE_SAPLING;
 			case "birch_sapling" -> Items.BIRCH_SAPLING;
@@ -409,6 +437,7 @@ public final class TradeBoardTradeRules {
 			case "torch" -> Items.TORCH;
 			case "lantern" -> Items.LANTERN;
 			case "iron_ingot" -> Items.IRON_INGOT;
+			case "gold_ingot" -> Items.GOLD_INGOT;
 			case "copper_ingot" -> Items.COPPER_INGOT;
 			case "raw_iron" -> Items.RAW_IRON;
 			case "raw_copper" -> Items.RAW_COPPER;
@@ -453,17 +482,19 @@ public final class TradeBoardTradeRules {
 		}
 
 		return switch (goodsKey) {
-			case "bread", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "cobblestone", "dirt", "sand", "torch" -> 1;
+			case "bread", "baked_potato", "cookie", "wheat", "carrot", "potato", "beetroot", "wool", "logs", "planks", "stairs", "slab", "stick", "flint", "feather", "arrow", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "cobblestone", "dirt", "sand", "torch" -> 1;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
 			case "chest", "ladder", "redstone" -> 1;
-			case "glass", "bed", "lantern", "milepost" -> 2;
+			case "glass", "bed", "lantern", "milepost", "pumpkin_pie", "milk_bucket" -> 2;
 			case "beef" -> 2;
 			case "mutton" -> 2;
 			case "pork" -> 2;
 			case "leather" -> 2;
 			case "coal" -> 2;
-			case "iron_ingot", "copper_ingot", "raw_iron", "raw_copper" -> 2;
+			case "iron_ingot", "gold_ingot", "copper_ingot", "raw_iron", "raw_copper" -> 2;
+			case "cake" -> 3;
 			case "diamond" -> 4;
+			case "golden_apple" -> 6;
 			default -> 0;
 		};
 	}
@@ -526,6 +557,11 @@ public final class TradeBoardTradeRules {
 
 		return switch (goodsKey) {
 			case "bread" -> stack.is(Items.BREAD);
+			case "baked_potato" -> stack.is(Items.BAKED_POTATO);
+			case "cookie" -> stack.is(Items.COOKIE);
+			case "pumpkin_pie" -> stack.is(Items.PUMPKIN_PIE);
+			case "cake" -> stack.is(Items.CAKE);
+			case "golden_apple" -> stack.is(Items.GOLDEN_APPLE);
 			case "beef" -> stack.is(Items.BEEF);
 			case "mutton" -> stack.is(Items.MUTTON);
 			case "pork" -> stack.is(Items.PORKCHOP);
@@ -546,6 +582,11 @@ public final class TradeBoardTradeRules {
 			case "feather" -> stack.is(Items.FEATHER);
 			case "arrow" -> stack.is(Items.ARROW);
 			case "apple" -> stack.is(Items.APPLE);
+			case "egg" -> stack.is(Items.EGG);
+			case "milk_bucket" -> stack.is(Items.MILK_BUCKET);
+			case "sugar" -> stack.is(Items.SUGAR);
+			case "cocoa_beans" -> stack.is(Items.COCOA_BEANS);
+			case "pumpkin" -> stack.is(Items.PUMPKIN);
 			case "oak_sapling" -> stack.is(Items.OAK_SAPLING);
 			case "spruce_sapling" -> stack.is(Items.SPRUCE_SAPLING);
 			case "birch_sapling" -> stack.is(Items.BIRCH_SAPLING);
@@ -565,6 +606,7 @@ public final class TradeBoardTradeRules {
 			case "torch" -> stack.is(Items.TORCH);
 			case "lantern" -> stack.is(Items.LANTERN);
 			case "iron_ingot" -> stack.is(Items.IRON_INGOT);
+			case "gold_ingot" -> stack.is(Items.GOLD_INGOT);
 			case "copper_ingot" -> stack.is(Items.COPPER_INGOT);
 			case "raw_iron" -> stack.is(Items.RAW_IRON) || stack.is(Items.IRON_ORE) || stack.is(Items.DEEPSLATE_IRON_ORE);
 			case "raw_copper" -> stack.is(Items.RAW_COPPER) || stack.is(Items.COPPER_ORE) || stack.is(Items.DEEPSLATE_COPPER_ORE);

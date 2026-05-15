@@ -10,7 +10,22 @@ import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 
 public final class SettlementEconomySimulator {
-	private static final List<String> FOOD_PRIORITY = List.of("bread", "cod", "carrot", "potato", "beetroot", "wheat", "beef", "mutton", "pork");
+	private static final List<String> FOOD_PRIORITY = List.of(
+		"bread",
+		"baked_potato",
+		"pumpkin_pie",
+		"cookie",
+		"cake",
+		"golden_apple",
+		"cod",
+		"carrot",
+		"potato",
+		"beetroot",
+		"wheat",
+		"beef",
+		"mutton",
+		"pork"
+	);
 	private static final double FOOD_ITEMS_PER_PERSON_PER_DAY = 2.0D;
 
 	private SettlementEconomySimulator() {
@@ -138,6 +153,7 @@ public final class SettlementEconomySimulator {
 	) {
 		int population = settlement.totalPopulation();
 		int farmers = roleCount(settlement, SettlementRoleKeys.FARMER);
+		int bakers = roleCount(settlement, SettlementRoleKeys.BAKER);
 		int butchers = roleCount(settlement, SettlementRoleKeys.BUTCHER);
 		int carpenters = roleCount(settlement, SettlementRoleKeys.CARPENTER);
 		int masons = roleCount(settlement, SettlementRoleKeys.MASON);
@@ -154,7 +170,7 @@ public final class SettlementEconomySimulator {
 		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(settlement, infrastructure);
 
 		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
-		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
+		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedVillagerFoodWork || bakers > 0 ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
 		addGoods(stock, "carrot", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
 		addGoods(stock, "potato", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
 		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 0.9D) + gardeners * 1.5D, elapsedDays));
@@ -191,6 +207,11 @@ public final class SettlementEconomySimulator {
 				elapsedDays
 			)
 		);
+
+		int effectiveBakers = useLoadedVillagerFoodWork
+			? nearbyProfessions.getOrDefault(SettlementRoleKeys.BAKER, 0)
+			: bakers;
+		SettlementBakerWork.applyBakingProduction(settlement, stock, elapsedDays, effectiveBakers);
 
 		if (useLoadedVillagerFoodWork) {
 			SettlementFarmerWork.applyLoadedFarmerWork(level, settlement, stock, elapsedDays);
