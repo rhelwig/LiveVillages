@@ -267,11 +267,17 @@ public final class SettlementLoadedObservation {
 		double maxDistanceSquared = (double) radiusBlocks * radiusBlocks;
 		List<Villager> villagers = new ArrayList<>(level.getEntities(
 			EntityTypeTest.forClass(Villager.class),
-			villager -> villager.distanceToSqr(center.getX() + 0.5D, center.getY() + 0.5D, center.getZ() + 0.5D) <= maxDistanceSquared
+			villager -> horizontalDistanceToCenterSqr(villager.getX(), villager.getZ(), center) <= maxDistanceSquared
 		));
 		List<Villager> snapshot = List.copyOf(villagers);
 		VILLAGER_CACHE.put(cacheKey, new CachedVillagers(snapshot, tick));
 		return snapshot;
+	}
+
+	private static double horizontalDistanceToCenterSqr(double x, double z, BlockPos center) {
+		double dx = x - (center.getX() + 0.5D);
+		double dz = z - (center.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
 	}
 
 	private static void scanSurveyorObservationAround(

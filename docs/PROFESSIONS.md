@@ -127,7 +127,7 @@ These roles already exist in vanilla and should be expanded before adding unnece
 ### Fisherman
 
 - Workstation: `Barrel`
-- Loaded-world behavior: works shorelines, rivers, docks, and harbor edges; gathers fish; and carries a spear or trident
+- Loaded-world behavior: works shorelines, rivers, docks, and harbor edges; gathers fish; uses a docked boat for a visible fishing trip when one is available; returns from that boat in time for the village gathering; and carries a fishing rod or spear/trident
 - Settlement behavior: adds fish and shoreline food output, especially in water-linked settlements; `Docks` and `Lighthouses` should both improve catch volume
 - Structure note: keep `Fisherman` close to vanilla for now. The `Barrel` remains the workstation, and no special Fisherman housing or bespoke staged workstation structure is required in this pass
 

@@ -38,6 +38,10 @@ public final class SettlementGoods {
 			return "beef";
 		}
 
+		if (stack.is(Items.COD) || stack.is(Items.SALMON) || stack.is(Items.COOKED_COD) || stack.is(Items.COOKED_SALMON)) {
+			return "cod";
+		}
+
 		if (stack.is(Items.MUTTON)) {
 			return "mutton";
 		}

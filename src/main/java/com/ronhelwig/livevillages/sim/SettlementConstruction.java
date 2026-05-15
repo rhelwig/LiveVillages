@@ -2210,6 +2210,16 @@ public final class SettlementConstruction {
 		return dockOrigins;
 	}
 
+	public static Optional<Direction> dockFacing(ServerLevel level, BlockPos dockOrigin) {
+		for (Direction facing : Direction.Plane.HORIZONTAL) {
+			if (isMinimalDock(level, dockOrigin, facing)) {
+				return Optional.of(facing);
+			}
+		}
+
+		return Optional.empty();
+	}
+
 	public static List<BlockPos> findLighthouseTops(ServerLevel level, SettlementState settlement) {
 		List<BlockPos> lighthouseTops = new ArrayList<>();
 		Set<BlockPos> countedLighthouseTops = new HashSet<>();

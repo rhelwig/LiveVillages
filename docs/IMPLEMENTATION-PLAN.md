@@ -20,7 +20,7 @@ Repository documentation lives under `docs/`, except for the root [README.md](..
 - Finish the harbor trade pass: verify that docks, lighthouses, and cartography support affect real trade cadence and route quality the way the design intends.
 - Formalize settlement tiers so wealth and population gates drive visible structure, path, and fortification upgrades.
 - Fix the custom recipe/data path issue before adding more recipe-driven content.
-- Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation, with dock and lighthouse bonuses preserved.
+- Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation, with dock and lighthouse bonuses preserved and docked-boat trips returning before gathering.
 - Split bell-triggered loaded defense cleanly between civilian panic behavior and combat-capable villager rally behavior.
 - Finish migrating active issue tracking to GitHub issues and keep the placed `Trade Board` cosmetic display issue there as the source of truth.
 - Temporarily run worker productivity at `2x` during feature development so construction, roadwork, and other visible villager loops are faster to evaluate in playtests; retune later for normal play balance.
@@ -47,6 +47,7 @@ Status: In progress
 Focus:
 
 - keep abstract and loaded settlement outputs aligned, especially for harbor-adjacent production such as `Fisherman`
+- keep loaded `Fisherman` boat trips bounded to dock-adjacent water and back so they stay visible without stranding villagers past the evening gathering
 - make infrastructure bonuses visible in actual trade cadence, quality, and route usefulness, not only in hidden scoring
 - surface active `Trading Post` and other build-site progress directly in the board/overlay project views so route/build/trade state is legible before retuning deeper priorities
 - keep Trade Board goods panes usable with longer inventories by scrolling instead of truncating rows, and keep row selection visuals aligned with the actual click targets
@@ -88,6 +89,7 @@ Focus:
 - bell influence radius should be `max(25, half settlement radius)` rather than a tiny fixed center
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
 - keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
+- treat underground worker settlement membership as a horizontal-radius cylinder for census and home-assignment purposes so deep miners still count and keep their village behavior
 - extend loaded Miner work beyond the starter shaft with first-pass primary side tunnels about every `5` levels, using temporary `dirt` / `cobblestone` floor supports when needed so adjacent exposed ore is not left untouched beside the ladder run
 - keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
@@ -158,7 +160,7 @@ Status: Planned
 Next in line:
 
 - finish broader loaded-world `Butcher` polish where current first-pass behavior is still coarse
-- preserve the current harbor-focused `Portmaster` and `Fisherman` pass before adding new maritime scope
+- preserve the current harbor-focused `Portmaster` and boat-assisted `Fisherman` pass before adding new maritime scope
 - continue `Fletcher` and `Carpenter's Bench` efficiency follow-ups where workstation gameplay still needs tuning
 - add remaining missing role loops only after their settlement/economy hooks are clear
 

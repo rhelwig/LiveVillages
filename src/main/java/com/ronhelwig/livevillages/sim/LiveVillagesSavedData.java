@@ -744,6 +744,7 @@ public class LiveVillagesSavedData extends SavedData {
 				stock,
 				getRoutesForSettlement(workingSettlement.id()).size()
 			);
+			SettlementFishermanWork.maintainLoadedFishing(level, workingSettlement);
 			SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
 			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);

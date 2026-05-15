@@ -508,6 +508,7 @@ A dock consists of planks extending from land into the water until the water is 
 - In the water there must be logs supporting the planks at least every `4` blocks. An `8`-block dock therefore needs two pairs of support logs.
 - Villages with a large enough body of water inside their footprint should want at least one dock.
 - Docks should improve `Fisherman` catch and add a modest water-trade bonus.
+- When a usable boat is sitting at a dock in a loaded settlement, a `Fisherman` may take that boat out for a visible daily trip and should receive an extra catch bonus from doing so, while still returning and dismounting before the evening village gathering.
 - Dock, `Cartographer`, `Scribe`, and `Lighthouse` trade-range improvements should also improve actual trade cadence and trade quality, not only the maximum reachable distance.
 
 #### Lighthouse

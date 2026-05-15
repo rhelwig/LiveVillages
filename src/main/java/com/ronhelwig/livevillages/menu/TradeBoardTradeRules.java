@@ -370,6 +370,7 @@ public final class TradeBoardTradeRules {
 		return new ItemStack(switch (goodsKey) {
 			case "bread" -> Items.BREAD;
 			case "beef" -> Items.BEEF;
+			case "cod" -> Items.COD;
 			case "mutton" -> Items.MUTTON;
 			case "pork" -> Items.PORKCHOP;
 			case "leather" -> Items.LEATHER;

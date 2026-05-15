@@ -10,7 +10,7 @@ import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 
 public final class SettlementEconomySimulator {
-	private static final List<String> FOOD_PRIORITY = List.of("bread", "carrot", "potato", "beetroot", "wheat", "beef", "mutton", "pork");
+	private static final List<String> FOOD_PRIORITY = List.of("bread", "cod", "carrot", "potato", "beetroot", "wheat", "beef", "mutton", "pork");
 	private static final double FOOD_ITEMS_PER_PERSON_PER_DAY = 2.0D;
 
 	private SettlementEconomySimulator() {
@@ -150,18 +150,18 @@ public final class SettlementEconomySimulator {
 		int portmasters = roleCount(settlement, SettlementRoleKeys.PORTMASTER);
 		double civilianScale = settlement.kind() == SettlementKind.OUTPOST ? 0.65D : 1.0D;
 		double tradeScale = settlement.kind() == SettlementKind.HARBOR ? 1.2D : 1.0D;
-		boolean useLoadedFarmerWork = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement);
+		boolean useLoadedVillagerFoodWork = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement);
 		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(settlement, infrastructure);
 
-		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
-		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
-		addGoods(stock, "carrot", scaledAmount((population * 0.35D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
-		addGoods(stock, "potato", scaledAmount((population * 0.35D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
-		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedFarmerWork ? 0.0D : farmers * 0.9D) + gardeners * 1.5D, elapsedDays));
-		addGoods(stock, "beef", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.5D * civilianScale, elapsedDays));
-		addGoods(stock, "mutton", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
-		addGoods(stock, "pork", scaledAmount(useLoadedFarmerWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
-		addGoods(stock, "cod", scaledAmount(fishermanCatchRate(fishermen, infrastructure), elapsedDays));
+		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
+		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
+		addGoods(stock, "carrot", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
+		addGoods(stock, "potato", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
+		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 0.9D) + gardeners * 1.5D, elapsedDays));
+		addGoods(stock, "beef", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.5D * civilianScale, elapsedDays));
+		addGoods(stock, "mutton", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
+		addGoods(stock, "pork", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
+		addGoods(stock, "cod", scaledAmount(SettlementFishermanWork.dailyCatchRate(fishermen, infrastructure, 0), elapsedDays));
 		addGoods(stock, "logs", scaledAmount((population * 0.5D) + foresters * 5.0D + carpenters * 1.0D + constructionSupport * 1.0D, elapsedDays));
 		addGoods(stock, "planks", scaledAmount((population * 0.35D) + foresters * 2.0D + carpenters * 4.0D + constructionSupport * 4.0D, elapsedDays));
 		addGoods(stock, "stick", scaledAmount(foresters * 2.0D, elapsedDays));
@@ -192,9 +192,10 @@ public final class SettlementEconomySimulator {
 			)
 		);
 
-		if (useLoadedFarmerWork) {
+		if (useLoadedVillagerFoodWork) {
 			SettlementFarmerWork.applyLoadedFarmerWork(level, settlement, stock, elapsedDays);
 			SettlementButcherWork.applyLoadedButcherWork(level, settlement, stock, elapsedDays);
+			SettlementFishermanWork.applyLoadedFishingWork(level, settlement, stock, elapsedDays, infrastructure);
 		}
 
 		SettlementRefining.refineTowardSettlementTargets(settlement, stock);
@@ -779,28 +780,6 @@ public final class SettlementEconomySimulator {
 
 	private static int roleCount(Map<String, Integer> population, String role) {
 		return Math.max(0, population.getOrDefault(role, 0));
-	}
-
-	private static double fishermanCatchRate(int fishermen, SettlementConstruction.InfrastructureSurvey infrastructure) {
-		if (fishermen <= 0) {
-			return 0.0D;
-		}
-
-		double catchRate = fishermen * 1.5D;
-
-		if (infrastructure.available() && infrastructure.hasLargeWaterBody()) {
-			catchRate += fishermen * 0.75D;
-
-			if (infrastructure.docks() > 0) {
-				catchRate *= 1.0D + Math.min(0.8D, infrastructure.docks() * 0.6D);
-			}
-
-			if (infrastructure.lighthouses() > 0) {
-				catchRate += fishermen * scaledLighthouseCount(infrastructure.lighthouses()) * 0.65D;
-			}
-		}
-
-		return catchRate;
 	}
 
 	private static double average(double first, double second) {

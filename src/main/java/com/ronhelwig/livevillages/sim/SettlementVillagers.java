@@ -95,6 +95,12 @@ public final class SettlementVillagers {
 			.toList();
 	}
 
+	public static List<Villager> nearbyFishermen(ServerLevel level, SettlementState settlement) {
+		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN))
+			.toList();
+	}
+
 	public static List<Villager> nearbyAdultVillagers(ServerLevel level, SettlementState settlement) {
 		return nearbyAdultVillagers(level, settlement, villagerRadius(settlement));
 	}
@@ -274,6 +280,10 @@ public final class SettlementVillagers {
 
 	public static Optional<BlockPos> masonJobSite(ServerLevel level, Villager villager) {
 		return heldMasonJobSite(level, villager).map(BlockPos::immutable);
+	}
+
+	public static Optional<BlockPos> fishermanJobSite(ServerLevel level, Villager villager) {
+		return heldFishermanJobSite(level, villager).map(BlockPos::immutable);
 	}
 
 	public static boolean ensureTrademaster(ServerLevel level, SettlementState settlement) {
@@ -1271,6 +1281,14 @@ public final class SettlementVillagers {
 			.filter(pos -> level.hasChunkAt(pos) && level.getBlockState(pos).is(Blocks.COMPOSTER));
 	}
 
+	private static Optional<BlockPos> heldFishermanJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos)
+			.filter(pos -> level.getPoiManager().exists(pos, poiType -> poiType.is(PoiTypes.FISHERMAN)));
+	}
+
 	private static Optional<BlockPos> heldFletcherJobSite(ServerLevel level, Villager villager) {
 		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
 			.or(() -> villager.getBrain().getMemory(MemoryModuleType.POTENTIAL_JOB_SITE))
@@ -1618,7 +1636,7 @@ public final class SettlementVillagers {
 	}
 
 	private static boolean isValidHome(ServerLevel level, SettlementState settlement, BlockPos homePos) {
-		return homePos.distSqr(settlement.center()) <= HOME_SEARCH_RADIUS_BLOCKS * HOME_SEARCH_RADIUS_BLOCKS
+		return horizontalDistanceSqr(homePos, settlement.center()) <= HOME_SEARCH_RADIUS_BLOCKS * HOME_SEARCH_RADIUS_BLOCKS
 			&& level.hasChunkAt(homePos)
 			&& level.getPoiManager().exists(homePos, poiType -> poiType.is(PoiTypes.HOME));
 	}
@@ -1775,6 +1793,14 @@ public final class SettlementVillagers {
 
 			if (butcherTask.isPresent()) {
 				return butcherTask.get();
+			}
+		}
+
+		if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
+			Optional<String> fishermanTask = SettlementFishermanWork.loadedFishermanTaskKey(level, villager);
+
+			if (fishermanTask.isPresent()) {
+				return fishermanTask.get();
 			}
 		}
 
@@ -2174,7 +2200,15 @@ public final class SettlementVillagers {
 	}
 
 	private static double distanceToCenterSqr(Villager villager, BlockPos center) {
-		return villager.distanceToSqr(center.getX() + 0.5D, center.getY() + 0.5D, center.getZ() + 0.5D);
+		double dx = villager.getX() - (center.getX() + 0.5D);
+		double dz = villager.getZ() - (center.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
+	}
+
+	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
+		double dx = (first.getX() + 0.5D) - (second.getX() + 0.5D);
+		double dz = (first.getZ() + 0.5D) - (second.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
 	}
 
 	private static boolean isFoodWorker(Holder<VillagerProfession> profession) {
@@ -2236,7 +2270,11 @@ public final class SettlementVillagers {
 			case "depositing_into_trading_post" -> "depositing into Trading Post";
 			case "digging_mine_shaft" -> "digging mine shaft";
 			case "fishing" -> "fishing";
+			case "fishing_from_boat" -> "fishing from boat";
+			case "fishing_from_dock" -> "fishing from dock";
+			case "fishing_from_shore" -> "fishing from shore";
 			case "growing_up" -> "growing up";
+			case "heading_to_boat" -> "heading to boat";
 			case "heading_to_gathering" -> "heading to gathering";
 			case "helping_roadwright" -> "helping Roadwright";
 			case "idle" -> "idle";
@@ -2259,7 +2297,9 @@ public final class SettlementVillagers {
 			case "profession_work" -> "profession work";
 			case "raising_child" -> "raising child";
 			case "reinforcing_shaft_support" -> "reinforcing shaft support";
+			case "returning_fishing_boat" -> "returning fishing boat";
 			case "returning_home" -> "returning home";
+			case "rowing_out" -> "rowing out";
 			case "seeking_bed" -> "seeking bed";
 			case "sleeping" -> "sleeping";
 			case "sleeping_in_bed" -> "sleeping in bed";
