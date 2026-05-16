@@ -145,6 +145,7 @@ public final class VillageAutodetector {
 				level.dimension(),
 				candidateCenter,
 				SettlementKind.VILLAGE,
+				1,
 				SettlementVillagers.createOperationalPopulation(estimatedPopulation),
 				java.util.Map.of(),
 				java.util.Map.of(),

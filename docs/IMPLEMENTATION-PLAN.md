@@ -37,8 +37,12 @@ Already solid enough to plan from:
 - `Glass Display Case` and `Baker's Counter` now share the same block-local case-style sale inventory/menu model, so bakery sale stock can diverge from the settlement's abstract food reserves and bakery goods can expose ingredient-themed barter alongside emerald buys
 - bakery sale screens should support both capped-bulk barter and a worse-rate single-item convenience barter, while keeping the emerald purchase as the clearer default full-width action
 - bakery sale screens should allow top-offs into matching occupied display stacks, cap the bulk purchase action at `12` items, and let settlement-defense freebie claims convert the single-item bakery action into a `Free` baked-good pickup when owed
+- bakery sale screens should now expose a bakery-specific `Bounties` view beside the `Shop`, with a compact two-column missing-ingredient list driven by currently unlocked bakery recipes; if that interaction feels strong in playtests, reuse the same pattern for Trade Board wants later instead of keeping that idea bakery-only
+- bakery sale screens should keep tab labels, explanatory copy, and hover details readable within the tighter bakery layout: `Shop` should explicitly teach left-click / right-click donation behavior, and `Bounties` should spend its hover detail space on `Could bake now: ...` style output guidance rather than repeating ingredient names
+- bakery `Bounties` should behave as a read-only info tab and can reclaim the old slot/inventory screen area instead of preserving the `Shop` inventory layout underneath; hidden `Shop` slots and player inventory items should not keep rendering through the tab
 - bakery display restocking should treat the structure's `Baker's Counter` and `Glass Display Case` blocks as one shared display pool: top off matching stacks first, then prefer the least-filled display so goods spread visibly across the storefront instead of piling into the first case
-- donated bakery ingredients stored in bakery sale displays should count as usable first-pass pantry inputs, so players can seed recipes by dropping `wheat`, `egg`, `sugar`, and similar goods into display slots
+- donated bakery ingredients should be recognized from bakery display slots and workstation sale slots, then swept into the bakery's internal chest so they stay bakery-available without leaking into the settlement's general stock; equivalent ingredient variants such as modded egg items should still satisfy the matching bakery ingredient key when appropriate, and the sweep should apply to any bakery recipe ingredient rather than only ingredients for the currently unlocked tier
+- bakery ingredient donations should reconcile promptly on player interaction instead of waiting for a later bakery work tick to clear out of visible display stock
 - workstation staffing should use a shared settlement-wide hiring pass instead of fixed `ensure...` call order, so scarce unemployed adults are steered toward the highest-priority reachable open jobs and profession pickup happens on the short loaded-maintenance cadence rather than only on long economy cycles
 - a first-pass `Baker's Counter` workstation exists as a wood-framed shelf-style bakery counter; it starts or resumes `Bakery` build sites, carries its own sale inventory even as a standalone block, and anchors the first-pass `Baker` profession
 - the first-pass `Bakery` blueprint now exists as a `Trading Post`-derived copy with `Glass Display Case` runs in place of the original fence-only market openings
@@ -84,7 +88,7 @@ Status: Planned
 
 Focus:
 
-- add persistent settlement-tier state with sticky unlock behavior instead of a volatile wealth-only check
+- add persistent settlement-tier state instead of a volatile wealth-only check, with `Scribe` support preventing regression after a tier has already been reached
 - use combined emerald-wealth and population gates for early tiers; first-pass targets are `500` / `16` for tier `2`, `5,000` / `32` for tier `3`, and a provisional `20,000` / `48` for tier `4`
 - make tier changes visible in the `Trade Board`, overlays, and debug output
 - gate structure selection, upgrade eligibility, path materials, and fortification projects on settlement tier
@@ -101,9 +105,12 @@ Focus:
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
 - keep villager defense contributions legible in loaded combat with lightweight attack sounds or particles, rather than invisible help that players cannot verify
 - keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
+- keep bed-linked profession staffing driven by real built beds in the linked structure, so structures such as the `Bakery`, `Trading Post`, `Carpenter's Workshop`, `Roadwright's Workshop`, `Forester Workshop`, and `Fletcher Hut` open worker slots only as their own beds are actually built
+- keep villager home ownership distinct from the actual nightly bed target, so a villager can keep a preferred assigned home bed yet temporarily sleep in another reachable bed when pathing to the preferred one fails
+- keep forester planting conservative near settlement structures and existing trees: new saplings should stay at least a few blocks clear of structure footprints, nearby saplings, and mature tree bases so forestry reads as managed spacing rather than crowding
 - treat underground worker settlement membership as a horizontal-radius cylinder for census and home-assignment purposes so deep miners still count and keep their village behavior
 - extend loaded Miner work beyond the starter shaft with first-pass primary side tunnels about every `5` levels, using temporary `dirt` / `cobblestone` floor supports when needed so adjacent exposed ore is not left untouched beside the ladder run
-- keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point
+- keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point, and prefer a standable nearby access tile over the raw POI block when choosing the loaded gathering target
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
 
 ### 4. Construction And Profession Structures
@@ -129,6 +136,7 @@ Focus:
 - let build previews distinguish exact block matches from compatible wrong-material matches, and let compatible player materials complete structures without blocking functionality
 - keep the Miner rollout split between the now-staged `Mine Entrance` build, the new first-pass loaded shaft-deepen / exposed-vein / shaft-lighting / cave-breach / stone-fallback loop with visible shaft descent and end-of-day ascent, the new fuel-aware raw-ore refining support for `iron` / `copper`, and later broader tunnel-expansion behavior
 - keep profession-linked housing sticky where structures provide beds, while leaving Miners dependent on ordinary settlement housing rather than inventing beds in the `Mine Entrance`
+- treat bed-bearing profession structures as the first home-bed source for villagers assigned to that workstation, so workforce capacity and home assignment stay coupled instead of competing with general settlement beds
 - keep Mine Entrance preview readable for excavation-heavy footprints; planned shaft voids should be visible in the wireframe instead of disappearing, and the site rules should require a clear front entry approach without forcing the whole hillside facade to be carved back
 - improve physical stock pickup and deposit behavior so visible worker logistics match settlement accounting more closely
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
@@ -201,7 +209,7 @@ Keep these unless the spec is intentionally changed:
 - `Milepost` is route infrastructure, not a workstation.
 - `Cartographer` should gate efficient long-range route planning and trade beyond about `32` chunks / `512` blocks.
 - The `Trade Board` anchors a staged `Trading Post`, with a future `Shopping Mall` upgrade on the same site.
-- Settlement advancement uses four civic tiers. Unlocks are sticky progression rather than instant downgrade-on-spend behavior.
+- Settlement advancement uses four civic tiers. Settlements should rise immediately when they meet a new tier gate, but regression protection should come from `Scribe` support rather than from a universally sticky never-downgrade rule.
 - `Tier 3+` may unlock selective imported style preferences for a few structures, but those should behave like luxury upgrades rather than forced global palette swaps.
 - Recognized workstations and structure anchors should start staged builds when possible; do not fall back to instant full structure placement.
 - Craftable structure-anchor blocks are the preferred trigger for non-workstation civic structures unless a vanilla workstation is the better anchor.

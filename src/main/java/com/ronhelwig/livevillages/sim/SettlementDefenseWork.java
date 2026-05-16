@@ -223,7 +223,7 @@ public final class SettlementDefenseWork {
 
 		defender.getNavigation().stop();
 
-		if (tick - LAST_ATTACK_TICKS.getOrDefault(defender.getUUID().toString(), Long.MIN_VALUE) < MELEE_ATTACK_COOLDOWN_TICKS) {
+		if (!attackCooldownReady(defender, tick)) {
 			return;
 		}
 
@@ -255,6 +255,11 @@ public final class SettlementDefenseWork {
 			DEFENSE_CUE_PARTICLE_SPREAD,
 			0.01D
 		);
+	}
+
+	private static boolean attackCooldownReady(Villager defender, long tick) {
+		Long lastAttackTick = LAST_ATTACK_TICKS.get(defender.getUUID().toString());
+		return lastAttackTick == null || tick - lastAttackTick >= MELEE_ATTACK_COOLDOWN_TICKS;
 	}
 
 	private static void signalDefenderMeleeImpact(ServerLevel level, Monster target) {

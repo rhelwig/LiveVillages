@@ -16,10 +16,14 @@ public final class SettlementTiers {
 	}
 
 	public static int unlockedTier(SettlementState settlement) {
-		return unlockedTier(settlement.wealth(), settlement.population());
+		return resolvedTier(settlement.tier(), settlement.wealth(), settlement.population());
 	}
 
 	public static int unlockedTier(Map<String, Integer> wealth, Map<String, Integer> population) {
+		return eligibleTier(wealth, population);
+	}
+
+	public static int eligibleTier(Map<String, Integer> wealth, Map<String, Integer> population) {
 		int emeraldWealth = wealth.getOrDefault("emerald", 0);
 		int totalPopulation = population.values().stream()
 			.mapToInt(Integer::intValue)
@@ -40,8 +44,27 @@ public final class SettlementTiers {
 		return 1;
 	}
 
+	public static int resolvedTier(int recordedTier, Map<String, Integer> wealth, Map<String, Integer> population) {
+		int normalizedRecordedTier = normalize(recordedTier);
+		int eligibleTier = eligibleTier(wealth, population);
+
+		if (eligibleTier > normalizedRecordedTier) {
+			return eligibleTier;
+		}
+
+		if (eligibleTier < normalizedRecordedTier && !hasScribeSupport(population)) {
+			return eligibleTier;
+		}
+
+		return normalizedRecordedTier;
+	}
+
 	public static int normalize(int tier) {
 		return Math.max(MIN_TIER, Math.min(MAX_TIER, tier));
+	}
+
+	private static boolean hasScribeSupport(Map<String, Integer> population) {
+		return population.getOrDefault(SettlementRoleKeys.SCRIBE, 0) > 0;
 	}
 
 	public static String clampStoneMaterialForTier(int tier, String stoneMaterial) {

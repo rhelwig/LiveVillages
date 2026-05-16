@@ -371,7 +371,7 @@ public final class SettlementVillagers {
 
 		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
 		boolean changed = false;
-		int desiredBakers = desiredBakerCount(level, settlement);
+		int desiredBakers = desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BAKER);
 		long currentBakers = villagers.stream()
 			.filter(villager -> !villager.isBaby() && isCustomBaker(villager))
 			.count();
@@ -545,7 +545,7 @@ public final class SettlementVillagers {
 
 		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
 		boolean changed = false;
-		int desiredFletchers = desiredFletcherCount(level, settlement);
+		int desiredFletchers = desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FLETCHER);
 		long currentFletchers = villagers.stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FLETCHER))
 			.count();
@@ -628,51 +628,52 @@ public final class SettlementVillagers {
 			.sorted(Comparator.comparingInt((Villager villager) -> homeAssignmentPriority(level, villager, buildSites))
 				.thenComparing(villager -> villager.getUUID().toString()))
 			.toList();
-		Set<BlockPos> claimedHomes = new LinkedHashSet<>();
+		Set<BlockPos> claimedOwnedHomes = new LinkedHashSet<>();
+		Set<BlockPos> claimedSleepTargets = new LinkedHashSet<>();
+		Map<String, BlockPos> ownedHomeByVillager = new LinkedHashMap<>();
+		boolean restTime = isVillageRestTime(level);
 		boolean changed = false;
 
 		for (Villager villager : villagers) {
-			Optional<BlockPos> originalHome = heldHome(level, villager);
-			Optional<BlockPos> currentHome = originalHome
-				.filter(home -> isValidHome(level, settlement, home))
-				.filter(home -> !claimedHomes.contains(home));
+			Optional<BlockPos> currentHome = heldHome(level, villager)
+				.filter(home -> isValidHome(level, settlement, home));
+			Optional<BlockPos> preferredHome = preferredAssignedHome(level, villager)
+				.filter(home -> isValidHome(level, settlement, home));
 			List<BlockPos> preferredHomes = preferredWorkstationHomes(level, villager, buildSites);
+			Optional<BlockPos> ownedHome = chooseOwnedHome(level, villager, currentHome, preferredHome, preferredHomes, claimedOwnedHomes);
 
-			if (currentHome.isPresent() && (preferredHomes.isEmpty() || preferredHomes.contains(currentHome.get()))) {
-				claimedHomes.add(currentHome.get());
+			if (ownedHome.isPresent()) {
+				changed |= setPreferredAssignedHome(level, villager, ownedHome.get());
+				claimedOwnedHomes.add(ownedHome.get());
+				ownedHomeByVillager.put(villager.getUUID().toString(), ownedHome.get());
 				continue;
 			}
 
-			Optional<BlockPos> preferredHome = preferredHomes.stream()
-				.filter(home -> !claimedHomes.contains(home))
-				.findFirst();
+			changed |= clearPreferredAssignedHome(level, villager);
+		}
 
-			if (preferredHome.isPresent()) {
-				changed |= assignHome(level, villager, preferredHome.get(), originalHome);
-				claimedHomes.add(preferredHome.get());
+		for (Villager villager : villagers) {
+			Optional<BlockPos> currentHome = heldHome(level, villager)
+				.filter(home -> isValidHome(level, settlement, home));
+			Optional<BlockPos> ownedHome = Optional.ofNullable(ownedHomeByVillager.get(villager.getUUID().toString()));
+			Optional<BlockPos> targetHome = restTime
+				? ownedHome
+					.filter(home -> canReachHome(villager, home))
+					.or(() -> findReachableAlternateHome(level, villager, claimedSleepTargets, claimedOwnedHomes))
+					.or(() -> ownedHome)
+				: ownedHome;
+
+			if (targetHome.isPresent()) {
+				changed |= assignHome(level, villager, targetHome.get(), currentHome);
+				claimedSleepTargets.add(targetHome.get());
 				continue;
 			}
 
 			if (currentHome.isPresent()) {
-				claimedHomes.add(currentHome.get());
-				continue;
-			}
-
-			if (originalHome.isPresent()) {
 				villager.releasePoi(MemoryModuleType.HOME);
 				villager.getBrain().eraseMemory(MemoryModuleType.HOME);
 				changed = true;
 			}
-
-			Optional<BlockPos> home = findReachableHome(level, villager, claimedHomes);
-
-			if (home.isEmpty()) {
-				continue;
-			}
-
-			assignHome(level, villager, home.get(), Optional.empty());
-			claimedHomes.add(home.get());
-			changed = true;
 		}
 
 		return changed;
@@ -1027,7 +1028,6 @@ public final class SettlementVillagers {
 		Optional<BlockPos> heldJobSite = heldTrademasterJobSite(level, villager);
 
 		if (heldJobSite.isPresent()) {
-			villager.releasePoi(MemoryModuleType.JOB_SITE);
 			assignTrademasterJobSite(level, villager, heldJobSite.get());
 			return true;
 		}
@@ -1038,21 +1038,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignTrademasterJobSite(level, villager, jobSite.get());
+		assignTrademasterJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1060,7 +1046,6 @@ public final class SettlementVillagers {
 		Optional<BlockPos> heldJobSite = heldCarpenterJobSite(level, villager);
 
 		if (heldJobSite.isPresent()) {
-			villager.releasePoi(MemoryModuleType.JOB_SITE);
 			assignCarpenterJobSite(level, villager, heldJobSite.get());
 			return true;
 		}
@@ -1072,7 +1057,6 @@ public final class SettlementVillagers {
 		Optional<BlockPos> heldJobSite = heldBakerJobSite(level, villager);
 
 		if (heldJobSite.isPresent()) {
-			villager.releasePoi(MemoryModuleType.JOB_SITE);
 			assignBakerJobSite(level, villager, heldJobSite.get());
 			return true;
 		}
@@ -1084,7 +1068,6 @@ public final class SettlementVillagers {
 		Optional<BlockPos> heldJobSite = heldRoadwrightJobSite(level, villager);
 
 		if (heldJobSite.isPresent()) {
-			villager.releasePoi(MemoryModuleType.JOB_SITE);
 			assignRoadwrightJobSite(level, villager, heldJobSite.get());
 			return true;
 		}
@@ -1095,21 +1078,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignRoadwrightJobSite(level, villager, jobSite.get());
+		assignRoadwrightJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1117,7 +1086,6 @@ public final class SettlementVillagers {
 		Optional<BlockPos> heldJobSite = heldForesterJobSite(level, villager);
 
 		if (heldJobSite.isPresent()) {
-			villager.releasePoi(MemoryModuleType.JOB_SITE);
 			assignForesterJobSite(level, villager, heldJobSite.get());
 			return true;
 		}
@@ -1128,21 +1096,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignForesterJobSite(level, villager, jobSite.get());
+		assignForesterJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1220,7 +1174,7 @@ public final class SettlementVillagers {
 			return true;
 		}
 
-		Optional<BlockPos> reachableJobSite = findReachableFletcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY);
+		Optional<BlockPos> reachableJobSite = findReachableFletcherJobSite(level, villager);
 
 		if (reachableJobSite.isEmpty()) {
 			return false;
@@ -1259,21 +1213,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignCarpenterJobSite(level, villager, jobSite.get());
+		assignCarpenterJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1288,21 +1228,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignTrademasterJobSite(level, villager, jobSite.get());
+		assignTrademasterJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1317,21 +1243,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignBakerJobSite(level, villager, jobSite.get());
+		assignBakerJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1346,21 +1258,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignRoadwrightJobSite(level, villager, jobSite.get());
+		assignRoadwrightJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1375,21 +1273,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignForesterJobSite(level, villager, jobSite.get());
+		assignForesterJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1456,27 +1340,13 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		Optional<BlockPos> reachableJobSite = findReachableFletcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY);
+		Optional<BlockPos> reachableJobSite = findReachableFletcherJobSite(level, villager);
 
 		if (reachableJobSite.isEmpty()) {
 			return false;
 		}
 
-		villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
-
-		Optional<BlockPos> jobSite = level.getPoiManager().take(
-			poiType -> poiType.is(PoiTypes.FLETCHER),
-			(poiType, pos) -> pos.equals(reachableJobSite.get()),
-			reachableJobSite.get(),
-			1
-		);
-
-		if (jobSite.isEmpty()) {
-			return false;
-		}
-
-		villager.releasePoi(MemoryModuleType.JOB_SITE);
-		assignFletcherJobSite(level, villager, jobSite.get());
+		assignFletcherJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1600,16 +1470,14 @@ public final class SettlementVillagers {
 	}
 
 	private static Optional<BlockPos> findReachableTrademasterJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.TRADEMASTER,
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI)
+			));
 	}
 
 	private static Optional<BlockPos> findReachableHome(ServerLevel level, Villager villager, Set<BlockPos> claimedHomes) {
@@ -1625,67 +1493,110 @@ public final class SettlementVillagers {
 			.findFirst();
 	}
 
+	private static Optional<BlockPos> findReachableAlternateHome(
+		ServerLevel level,
+		Villager villager,
+		Set<BlockPos> claimedSleepTargets,
+		Set<BlockPos> claimedOwnedHomes
+	) {
+		Set<BlockPos> reservedHomes = new LinkedHashSet<>(claimedSleepTargets);
+		reservedHomes.addAll(claimedOwnedHomes);
+		Optional<BlockPos> unownedAlternate = findReachableHome(level, villager, reservedHomes);
+		return unownedAlternate.isPresent() ? unownedAlternate : findReachableHome(level, villager, claimedSleepTargets);
+	}
+
 	private static int homeAssignmentPriority(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
 		return preferredWorkstationHomes(level, villager, buildSites).isEmpty() ? 1 : 0;
 	}
 
 	private static List<BlockPos> preferredWorkstationHomes(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
-		Optional<BlockPos> preferredJobSite = preferredWorkstationHomeJobSite(level, villager, buildSites);
+		Optional<SettlementBuildSite> preferredBuildSite = preferredWorkstationHomeBuildSite(level, villager, buildSites);
 
-		if (preferredJobSite.isEmpty()) {
+		if (preferredBuildSite.isEmpty()) {
 			return List.of();
 		}
 
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(PoiTypes.HOME),
-			pos -> true,
-			preferredJobSite.get(),
-			WORKSTATION_HOME_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.map(BlockPos::immutable)
-			.toList();
+		return builtWorkstationHomeBeds(level, preferredBuildSite.get());
 	}
 
-	private static Optional<BlockPos> preferredWorkstationHomeJobSite(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
+	private static Optional<BlockPos> chooseOwnedHome(
+		ServerLevel level,
+		Villager villager,
+		Optional<BlockPos> currentHome,
+		Optional<BlockPos> preferredHome,
+		List<BlockPos> workstationHomes,
+		Set<BlockPos> claimedOwnedHomes
+	) {
+		if (!workstationHomes.isEmpty()) {
+			Optional<BlockPos> workstationOwnedHome = preferredHome
+				.filter(workstationHomes::contains)
+				.filter(home -> !claimedOwnedHomes.contains(home));
+			if (workstationOwnedHome.isPresent()) {
+				return workstationOwnedHome;
+			}
+
+			workstationOwnedHome = currentHome
+				.filter(workstationHomes::contains)
+				.filter(home -> !claimedOwnedHomes.contains(home));
+			if (workstationOwnedHome.isPresent()) {
+				return workstationOwnedHome;
+			}
+
+			return workstationHomes.stream()
+				.filter(home -> !claimedOwnedHomes.contains(home))
+				.findFirst();
+		}
+
+		Optional<BlockPos> generalOwnedHome = preferredHome.filter(home -> !claimedOwnedHomes.contains(home));
+		if (generalOwnedHome.isPresent()) {
+			return generalOwnedHome;
+		}
+
+		generalOwnedHome = currentHome.filter(home -> !claimedOwnedHomes.contains(home));
+		if (generalOwnedHome.isPresent()) {
+			return generalOwnedHome;
+		}
+
+		return findReachableHome(level, villager, claimedOwnedHomes);
+	}
+
+	private static Optional<SettlementBuildSite> preferredWorkstationHomeBuildSite(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
 		if (isCustomCarpenter(villager)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.CARPENTER_WORKSHOP, () -> heldCarpenterJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.CARPENTER_WORKSHOP, () -> heldCarpenterJobSite(level, villager));
 		}
 
 		if (isCustomBaker(villager)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.BAKERY, () -> heldBakerJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.BAKERY, () -> heldBakerJobSite(level, villager));
 		}
 
 		if (isCustomRoadwright(villager)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.ROADWRIGHT_WORKSHOP, () -> heldRoadwrightJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.ROADWRIGHT_WORKSHOP, () -> heldRoadwrightJobSite(level, villager));
 		}
 
 		if (isCustomForester(villager)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.FORESTER_WORKSHOP, () -> heldForesterJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.FORESTER_WORKSHOP, () -> heldForesterJobSite(level, villager));
 		}
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.FLETCHER)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.FLETCHER_HUT, () -> heldFletcherJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.FLETCHER_HUT, () -> heldFletcherJobSite(level, villager));
 		}
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.CARTOGRAPHER)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.CARTOGRAPHER_HOUSE, () -> heldCartographerJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.CARTOGRAPHER_HOUSE, () -> heldCartographerJobSite(level, villager));
 		}
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.BUTCHER_SHOP, () -> heldButcherJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.BUTCHER_SHOP, () -> heldButcherJobSite(level, villager));
 		}
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.MASON)) {
-			return preferredWorkstationHomeJobSite(level, villager, buildSites, SettlementBuildSiteType.MASON_WORKSHOP, () -> heldMasonJobSite(level, villager));
+			return preferredWorkstationHomeBuildSite(level, villager, buildSites, SettlementBuildSiteType.MASON_WORKSHOP, () -> heldMasonJobSite(level, villager));
 		}
 
 		return Optional.empty();
 	}
 
-	private static Optional<BlockPos> preferredWorkstationHomeJobSite(
+	private static Optional<SettlementBuildSite> preferredWorkstationHomeBuildSite(
 		ServerLevel level,
 		Villager villager,
 		List<SettlementBuildSite> buildSites,
@@ -1693,60 +1604,54 @@ public final class SettlementVillagers {
 		java.util.function.Supplier<Optional<BlockPos>> heldJobSite
 	) {
 		return heldJobSite.get()
-			.filter(jobSite -> buildSites.stream()
-				.anyMatch(buildSite -> buildSite.blueprintId() == expectedBuildSiteType && buildSite.workstationPos().equals(jobSite)));
+			.flatMap(jobSite -> buildSites.stream()
+				.filter(buildSite -> buildSite.blueprintId() == expectedBuildSiteType)
+				.filter(buildSite -> buildSite.referencesWorkstation(jobSite))
+				.findFirst());
 	}
 
 	private static Optional<BlockPos> findReachableCarpenterJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.CARPENTER,
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI)
+			));
 	}
 
 	private static Optional<BlockPos> findReachableBakerJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.BAKER,
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI)
+			));
 	}
 
 	private static Optional<BlockPos> findReachableRoadwrightJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.ROADWRIGHT,
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI)
+			));
 	}
 
 	private static Optional<BlockPos> findReachableForesterJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.FORESTER,
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI)
+			));
 	}
 
 	private static Optional<BlockPos> findReachableMinerJobSite(ServerLevel level, Villager villager) {
@@ -1775,18 +1680,32 @@ public final class SettlementVillagers {
 			.findFirst();
 	}
 
-	private static Optional<BlockPos> findReachableFletcherJobSite(
+	private static Optional<BlockPos> findReachableFletcherJobSite(ServerLevel level, Villager villager) {
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> findReachableBedLinkedJobSite(
+				level,
+				villager,
+				settlement,
+				ProfessionDemandType.FLETCHER,
+				poiType -> poiType.is(PoiTypes.FLETCHER)
+			));
+	}
+
+	private static Optional<BlockPos> findReachableBedLinkedJobSite(
 		ServerLevel level,
 		Villager villager,
-		net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy occupancy
+		SettlementState settlement,
+		ProfessionDemandType type,
+		java.util.function.Predicate<Holder<PoiType>> poiPredicate
 	) {
 		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(PoiTypes.FLETCHER),
+			poiPredicate,
 			pos -> true,
 			villager.blockPosition(),
 			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			occupancy
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
+			.filter(pair -> workstationHasRemainingCapacity(level, settlement, type, pair.getSecond()))
 			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
 			.map(com.mojang.datafixers.util.Pair::getSecond)
 			.findFirst();
@@ -1955,10 +1874,20 @@ public final class SettlementVillagers {
 
 		carpenter.releasePoi(MemoryModuleType.HOME);
 		carpenter.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), reservedHome.get()));
+		setPreferredAssignedHome(level, carpenter, reservedHome.get());
 		return true;
 	}
 
 	private static Optional<BlockPos> findCarpenterWorkshopHome(ServerLevel level, BlockPos jobSite) {
+		Optional<SettlementBuildSite> workshopBuildSite = LiveVillagesSavedData.get(level.getServer())
+			.findSettlementForPosition(level.dimension(), jobSite, SettlementVillagers::usesActualVillagers)
+			.flatMap(settlement -> LiveVillagesSavedData.get(level.getServer())
+				.findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP, jobSite));
+
+		if (workshopBuildSite.isPresent()) {
+			return builtWorkstationHomeBeds(level, workshopBuildSite.get()).stream().findFirst();
+		}
+
 		return level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(PoiTypes.HOME),
 			pos -> true,
@@ -1975,9 +1904,33 @@ public final class SettlementVillagers {
 			return false;
 		}
 
+		Optional<BlockPos> reservedHome = level.getPoiManager().take(
+			poiType -> poiType.is(PoiTypes.HOME),
+			(poiType, pos) -> pos.equals(homePos),
+			homePos,
+			1
+		);
+
+		if (reservedHome.isEmpty()) {
+			return false;
+		}
+
 		villager.releasePoi(MemoryModuleType.HOME);
-		villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), homePos));
+		villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), reservedHome.get()));
 		return true;
+	}
+
+	private static Optional<BlockPos> preferredAssignedHome(ServerLevel level, Villager villager) {
+		return LiveVillagesSavedData.get(level.getServer()).preferredVillagerHome(villager.getUUID())
+			.filter(homePos -> level.hasChunkAt(homePos));
+	}
+
+	private static boolean setPreferredAssignedHome(ServerLevel level, Villager villager, BlockPos homePos) {
+		return LiveVillagesSavedData.get(level.getServer()).setPreferredVillagerHome(villager.getUUID(), homePos.immutable());
+	}
+
+	private static boolean clearPreferredAssignedHome(ServerLevel level, Villager villager) {
+		return LiveVillagesSavedData.get(level.getServer()).clearPreferredVillagerHome(villager.getUUID());
 	}
 
 	private static Optional<BlockPos> heldHome(ServerLevel level, Villager villager) {
@@ -2017,6 +1970,11 @@ public final class SettlementVillagers {
 			.filter(villager -> !villager.getUUID().equals(carpenter.getUUID()) && isCustomCarpenter(villager))
 			.map(villager -> heldHome(level, villager))
 			.anyMatch(home -> home.filter(homePos::equals).isPresent());
+	}
+
+	private static boolean canReachHome(Villager villager, BlockPos homePos) {
+		var path = villager.getNavigation().createPath(homePos, 1);
+		return path != null && path.canReach();
 	}
 
 	private static boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
@@ -2329,6 +2287,7 @@ public final class SettlementVillagers {
 				villagerRadius(settlement),
 				net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 			)
+			.flatMap(pos -> SettlementStockAccess.stockAccessStandPos(level, pos).or(() -> Optional.of(pos)))
 			.or(() -> level.getPoiManager()
 				.findClosest(
 					holder -> holder.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI),
@@ -2562,14 +2521,14 @@ public final class SettlementVillagers {
 
 	private static int desiredProfessionCount(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
 		return switch (type) {
-			case TRADEMASTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI));
-			case CARPENTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI));
-			case BAKER -> desiredBakerCount(level, settlement);
-			case ROADWRIGHT -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI));
-			case FORESTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI));
+			case TRADEMASTER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.TRADEMASTER);
+			case CARPENTER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.CARPENTER);
+			case BAKER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BAKER);
+			case ROADWRIGHT -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.ROADWRIGHT);
+			case FORESTER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FORESTER);
 			case MINER -> desiredMinerCount(level, settlement);
 			case PORTMASTER -> desiredPortmasterCount(level, settlement);
-			case FLETCHER -> desiredFletcherCount(level, settlement);
+			case FLETCHER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FLETCHER);
 			case FISHERMAN -> desiredFishermanCount(level, settlement);
 		};
 	}
@@ -2583,7 +2542,7 @@ public final class SettlementVillagers {
 			case FORESTER -> heldForesterJobSite(level, villager).isPresent() || findReachableForesterJobSite(level, villager).isPresent();
 			case MINER -> heldMinerJobSite(level, villager).isPresent() || findReachableMinerJobSite(level, villager).isPresent();
 			case PORTMASTER -> heldPortmasterJobSite(level, villager).isPresent() || findReachablePortmasterJobSite(level, villager).isPresent();
-			case FLETCHER -> heldFletcherJobSite(level, villager).isPresent() || findReachableFletcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
+			case FLETCHER -> heldFletcherJobSite(level, villager).isPresent() || findReachableFletcherJobSite(level, villager).isPresent();
 			case FISHERMAN -> heldFishermanJobSite(level, villager).isPresent() || findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
 		};
 	}
@@ -2602,21 +2561,6 @@ public final class SettlementVillagers {
 		};
 	}
 
-	private static int desiredFletcherCount(ServerLevel level, SettlementState settlement) {
-		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(PoiTypes.FLETCHER),
-			pos -> true,
-			settlement.center(),
-			villagerRadius(settlement),
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
-		)
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.map(BlockPos::immutable)
-			.distinct()
-			.count();
-		return (int) Math.min(Integer.MAX_VALUE, workstationCount * 2L);
-	}
-
 	private static int desiredFishermanCount(ServerLevel level, SettlementState settlement) {
 		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(PoiTypes.FISHERMAN),
@@ -2632,9 +2576,16 @@ public final class SettlementVillagers {
 		return workstationCount > 0 ? 1 : 0;
 	}
 
-	private static int desiredBakerCount(ServerLevel level, SettlementState settlement) {
-		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI),
+	private static int desiredBedLinkedProfessionCount(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
+		long desiredCount = jobSitePositionsForProfession(level, settlement, type).stream()
+			.mapToLong(jobSite -> workstationCapacityForProfession(level, settlement, type, jobSite))
+			.sum();
+		return (int) Math.min(Integer.MAX_VALUE, desiredCount);
+	}
+
+	private static List<BlockPos> jobSitePositionsForProfession(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
+		return level.getPoiManager().findAllClosestFirstWithType(
+			jobSitePoiPredicate(type),
 			pos -> true,
 			settlement.center(),
 			villagerRadius(settlement),
@@ -2643,25 +2594,153 @@ public final class SettlementVillagers {
 			.map(com.mojang.datafixers.util.Pair::getSecond)
 			.map(BlockPos::immutable)
 			.distinct()
-			.count();
-		return (int) Math.min(Integer.MAX_VALUE, workstationCount);
+			.toList();
 	}
 
-	private static int desiredSinglePoiProfessionCount(
+	private static java.util.function.Predicate<Holder<PoiType>> jobSitePoiPredicate(ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI);
+			case CARPENTER -> poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI);
+			case BAKER -> poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI);
+			case ROADWRIGHT -> poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI);
+			case FORESTER -> poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI);
+			case FLETCHER -> poiType -> poiType.is(PoiTypes.FLETCHER);
+			default -> throw new IllegalArgumentException("No bed-linked job-site predicate for " + type);
+		};
+	}
+
+	private static boolean workstationHasRemainingCapacity(
 		ServerLevel level,
 		SettlementState settlement,
-		java.util.function.Predicate<Holder<PoiType>> poiPredicate
+		ProfessionDemandType type,
+		BlockPos workstationPos
 	) {
-		boolean hasWorkstation = level.getPoiManager().findAllClosestFirstWithType(
-			poiPredicate,
-			pos -> true,
-			settlement.center(),
-			villagerRadius(settlement),
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
-		)
-			.findAny()
-			.isPresent();
-		return hasWorkstation ? 1 : 0;
+		int capacity = workstationCapacityForProfession(level, settlement, type, workstationPos);
+
+		if (capacity <= 0) {
+			return false;
+		}
+
+		return assignedWorkstationCount(level, settlement, type, workstationPos) < capacity;
+	}
+
+	private static int workstationCapacityForProfession(
+		ServerLevel level,
+		SettlementState settlement,
+		ProfessionDemandType type,
+		BlockPos workstationPos
+	) {
+		SettlementBuildSiteType buildSiteType = bedLinkedStructureForProfession(type);
+
+		if (buildSiteType == null) {
+			return 1;
+		}
+
+		return LiveVillagesSavedData.get(level.getServer())
+			.findBuildSite(settlement.id(), buildSiteType, workstationPos)
+			.map(buildSite -> builtWorkstationHomeBeds(level, buildSite).size())
+			.orElse(0);
+	}
+
+	private static int assignedWorkstationCount(
+		ServerLevel level,
+		SettlementState settlement,
+		ProfessionDemandType type,
+		BlockPos workstationPos
+	) {
+		int count = 0;
+
+		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+			if (currentProfessionType(villager) != type) {
+				continue;
+			}
+
+			if (heldJobSiteForProfession(level, villager, type)
+				.filter(workstationPos::equals)
+				.isPresent()) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	private static Optional<BlockPos> heldJobSiteForProfession(ServerLevel level, Villager villager, ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> heldTrademasterJobSite(level, villager);
+			case CARPENTER -> heldCarpenterJobSite(level, villager);
+			case BAKER -> heldBakerJobSite(level, villager);
+			case ROADWRIGHT -> heldRoadwrightJobSite(level, villager);
+			case FORESTER -> heldForesterJobSite(level, villager);
+			case FLETCHER -> heldFletcherJobSite(level, villager);
+			default -> Optional.empty();
+		};
+	}
+
+	private static SettlementBuildSiteType bedLinkedStructureForProfession(ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> SettlementBuildSiteType.TRADING_POST;
+			case CARPENTER -> SettlementBuildSiteType.CARPENTER_WORKSHOP;
+			case BAKER -> SettlementBuildSiteType.BAKERY;
+			case ROADWRIGHT -> SettlementBuildSiteType.ROADWRIGHT_WORKSHOP;
+			case FORESTER -> SettlementBuildSiteType.FORESTER_WORKSHOP;
+			case FLETCHER -> SettlementBuildSiteType.FLETCHER_HUT;
+			default -> null;
+		};
+	}
+
+	private static Optional<SettlementState> owningSettlementFor(ServerLevel level, Villager villager) {
+		return LiveVillagesSavedData.get(level.getServer())
+			.findSettlementForPosition(level.dimension(), villager.blockPosition(), SettlementVillagers::usesActualVillagers);
+	}
+
+	private static List<BlockPos> builtWorkstationHomeBeds(ServerLevel level, SettlementBuildSite buildSite) {
+		return buildSite.blocks().stream()
+			.filter(SettlementVillagers::isBuiltBedFoot)
+			.map(block -> buildSiteWorldPos(buildSite, block.position()))
+			.flatMap(Optional::stream)
+			.filter(homePos -> level.getPoiManager().exists(homePos, poiType -> poiType.is(PoiTypes.HOME)))
+			.map(BlockPos::immutable)
+			.toList();
+	}
+
+	private static boolean isBuiltBedFoot(SettlementBuildBlockState block) {
+		return "bed".equals(block.expectedMaterialKey())
+			&& (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED);
+	}
+
+	private static Optional<BlockPos> buildSiteWorldPos(SettlementBuildSite buildSite, String relativePosition) {
+		BuildSiteRelativePos relativePos = parseBuildSiteRelativePos(relativePosition);
+
+		if (relativePos == null) {
+			return Optional.empty();
+		}
+
+		return Optional.of(
+			buildSite.origin()
+				.relative(buildSite.facing().getClockWise(), relativePos.right())
+				.relative(buildSite.facing(), relativePos.forward())
+				.above(relativePos.up())
+				.immutable()
+		);
+	}
+
+	private static BuildSiteRelativePos parseBuildSiteRelativePos(String position) {
+		String[] parts = position.split(",");
+
+		if (parts.length != 3) {
+			return null;
+		}
+
+		try {
+			return new BuildSiteRelativePos(
+				Integer.parseInt(parts[0]),
+				Integer.parseInt(parts[1]),
+				Integer.parseInt(parts[2])
+			);
+		} catch (NumberFormatException ignored) {
+			return null;
+		}
 	}
 
 	private static int desiredPortmasterCount(ServerLevel level, SettlementState settlement) {
@@ -2943,6 +3022,9 @@ public final class SettlementVillagers {
 
 	public record ProfessionDebugInfo(String targetLabel, String detailLabel) {
 		public static final ProfessionDebugInfo EMPTY = new ProfessionDebugInfo("", "");
+	}
+
+	private record BuildSiteRelativePos(int right, int forward, int up) {
 	}
 
 	private enum ProfessionDemandType {

@@ -116,6 +116,24 @@ public final class TradeBoardTradeRules {
 		return exactItemKeyForStack(stack);
 	}
 
+	public static boolean isEggItem(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return false;
+		}
+
+		if (stack.is(Items.EGG)) {
+			return true;
+		}
+
+		Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+		if (itemId == null) {
+			return false;
+		}
+
+		String path = itemId.getPath();
+		return (path.equals("egg") || path.endsWith("_egg")) && !path.endsWith("_spawn_egg");
+	}
+
 	public static int bundleSize(String goodsKey) {
 		if (isExactItemKey(goodsKey)) {
 			return exactItemBundleSize(itemForExactKey(goodsKey));
@@ -582,7 +600,7 @@ public final class TradeBoardTradeRules {
 			case "feather" -> stack.is(Items.FEATHER);
 			case "arrow" -> stack.is(Items.ARROW);
 			case "apple" -> stack.is(Items.APPLE);
-			case "egg" -> stack.is(Items.EGG);
+			case "egg" -> isEggItem(stack);
 			case "milk_bucket" -> stack.is(Items.MILK_BUCKET);
 			case "sugar" -> stack.is(Items.SUGAR);
 			case "cocoa_beans" -> stack.is(Items.COCOA_BEANS);

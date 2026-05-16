@@ -10,7 +10,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
-import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -22,9 +21,15 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
-import com.ronhelwig.livevillages.menu.GlassDisplayCaseMenu;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 
-public abstract class SaleDisplayBlockEntity extends BlockEntity implements Container, MenuProvider {
+import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
+
+import com.ronhelwig.livevillages.menu.GlassDisplayCaseMenu;
+import com.ronhelwig.livevillages.menu.GlassDisplayCaseOpenData;
+
+public abstract class SaleDisplayBlockEntity extends BlockEntity implements Container, ExtendedMenuProvider<GlassDisplayCaseOpenData> {
 	public static final int SLOT_COUNT = 6;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 
@@ -67,8 +72,29 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 	}
 
 	@Override
+	public GlassDisplayCaseOpenData getScreenOpeningData(ServerPlayer player) {
+		ServerLevel serverLevel = (ServerLevel) player.level();
+		return new GlassDisplayCaseOpenData(
+			worldPosition.immutable(),
+			SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
+			SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition)
+		);
+	}
+
+	@Override
 	public AbstractContainerMenu createMenu(int syncId, Inventory inventory, Player player) {
-		return new GlassDisplayCaseMenu(syncId, inventory, this, ContainerLevelAccess.create(level, worldPosition));
+		ServerLevel serverLevel = (ServerLevel) player.level();
+		return new GlassDisplayCaseMenu(
+			syncId,
+			inventory,
+			this,
+			ContainerLevelAccess.create(level, worldPosition),
+			new GlassDisplayCaseOpenData(
+				worldPosition.immutable(),
+				SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
+				SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition)
+			)
+		);
 	}
 
 	@Override

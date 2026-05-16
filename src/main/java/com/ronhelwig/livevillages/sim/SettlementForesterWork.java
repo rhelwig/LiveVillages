@@ -38,6 +38,9 @@ public final class SettlementForesterWork {
 	private static final int PLANT_SCAN_STEP_BLOCKS = 4;
 	private static final int TREE_SURFACE_SEARCH_DEPTH_BLOCKS = 14;
 	private static final int TREE_PRESERVE_RADIUS_BLOCKS = 14;
+	private static final int SAPLING_STRUCTURE_CLEARANCE_BLOCKS = 3;
+	private static final int SAPLING_TO_SAPLING_CLEARANCE_BLOCKS = 3;
+	private static final int SAPLING_TO_TREE_CLEARANCE_BLOCKS = 4;
 	private static final int MAX_LOGS_PER_TREE = 48;
 	private static final long FORESTRY_TASK_CACHE_TICKS = 200L;
 	private static final long FORESTRY_DECIDE_INTERVAL_TICKS = 320L;
@@ -214,12 +217,19 @@ public final class SettlementForesterWork {
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 		int radius = Math.min(112, workRadius(settlement));
 		int offset = Math.floorMod((int) (tick / 20L), PLANT_SCAN_STEP_BLOCKS);
+		List<PlantingStructureBounds> protectedStructureBounds = plantingStructureBounds(level, settlement);
 
 		for (int x = origin.getX() - radius + offset; x <= origin.getX() + radius; x += PLANT_SCAN_STEP_BLOCKS) {
 			for (int z = origin.getZ() - radius + offset; z <= origin.getZ() + radius; z += PLANT_SCAN_STEP_BLOCKS) {
 				Optional<BlockPos> plantPos = surfacePlantPos(level, x, z, seedlingState);
 
 				if (plantPos.isEmpty() || !isPreferredPlantingArea(settlement, plantPos.get())) {
+					continue;
+				}
+
+				if (isTooCloseToStructure(plantPos.get(), protectedStructureBounds)
+					|| hasNearbySapling(level, plantPos.get(), SAPLING_TO_SAPLING_CLEARANCE_BLOCKS)
+					|| hasNearbyTreeBase(level, plantPos.get(), SAPLING_TO_TREE_CLEARANCE_BLOCKS)) {
 					continue;
 				}
 
@@ -650,6 +660,72 @@ public final class SettlementForesterWork {
 		return distanceSquared >= innerRadius * innerRadius && distanceSquared <= workRadius(settlement) * workRadius(settlement);
 	}
 
+	private static List<PlantingStructureBounds> plantingStructureBounds(ServerLevel level, SettlementState settlement) {
+		List<PlantingStructureBounds> bounds = new java.util.ArrayList<>();
+
+		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
+			Integer minX = null;
+			Integer maxX = null;
+			Integer minZ = null;
+			Integer maxZ = null;
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				if (blockPos.isEmpty()) {
+					continue;
+				}
+
+				BlockPos pos = blockPos.get();
+				minX = minX == null ? pos.getX() : Math.min(minX, pos.getX());
+				maxX = maxX == null ? pos.getX() : Math.max(maxX, pos.getX());
+				minZ = minZ == null ? pos.getZ() : Math.min(minZ, pos.getZ());
+				maxZ = maxZ == null ? pos.getZ() : Math.max(maxZ, pos.getZ());
+			}
+
+			if (minX != null && maxX != null && minZ != null && maxZ != null) {
+				bounds.add(new PlantingStructureBounds(minX, maxX, minZ, maxZ));
+			}
+		}
+
+		return bounds;
+	}
+
+	private static boolean isTooCloseToStructure(BlockPos plantPos, List<PlantingStructureBounds> structureBounds) {
+		return structureBounds.stream()
+			.anyMatch(bounds -> bounds.containsWithMargin(plantPos, SAPLING_STRUCTURE_CLEARANCE_BLOCKS));
+	}
+
+	private static boolean hasNearbySapling(ServerLevel level, BlockPos center, int radius) {
+		for (BlockPos scanPos : BlockPos.betweenClosed(center.offset(-radius, -1, -radius), center.offset(radius, 2, radius))) {
+			if (scanPos.equals(center)) {
+				continue;
+			}
+
+			if (level.getBlockState(scanPos).getBlock() instanceof SaplingBlock) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean hasNearbyTreeBase(ServerLevel level, BlockPos center, int radius) {
+		for (int x = center.getX() - radius; x <= center.getX() + radius; x++) {
+			for (int z = center.getZ() - radius; z <= center.getZ() + radius; z++) {
+				Optional<BlockPos> treeBase = surfaceTreeBase(level, x, z);
+				if (treeBase.isEmpty() || treeBase.get().equals(center)) {
+					continue;
+				}
+
+				if (treeBase.get().distSqr(center) <= radius * radius && hasNearbyLeaves(level, treeBase.get())) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	private static int preserveTreeCount(SettlementState settlement, BlockPos pos) {
 		int villageRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
 		return pos.distSqr(settlement.center()) <= villageRadius * villageRadius ? 5 : 2;
@@ -801,5 +877,14 @@ public final class SettlementForesterWork {
 	}
 
 	private record CachedForestryTask(Optional<ForestryTask> task, long tick) {
+	}
+
+	private record PlantingStructureBounds(int minX, int maxX, int minZ, int maxZ) {
+		private boolean containsWithMargin(BlockPos pos, int margin) {
+			return pos.getX() >= minX - margin
+				&& pos.getX() <= maxX + margin
+				&& pos.getZ() >= minZ - margin
+				&& pos.getZ() <= maxZ + margin;
+		}
 	}
 }

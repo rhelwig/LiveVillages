@@ -1,5 +1,7 @@
 package com.ronhelwig.livevillages.menu;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
@@ -43,6 +45,10 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	private final ContainerLevelAccess access;
 	private final BlockPos casePos;
 	private final UUID viewerId;
+	private final boolean bakeryContext;
+	private final List<BakeryBountyView> bakeryBounties;
+	private final List<ToggleableSlot> caseSlots = new ArrayList<>();
+	private final List<ToggleableSlot> playerSlots = new ArrayList<>();
 	private final DataSlot freeClaimCount = new DataSlot() {
 		private int value;
 
@@ -65,15 +71,27 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	};
 
 	public GlassDisplayCaseMenu(int syncId, Inventory inventory) {
-		this(syncId, inventory, new SimpleContainer(CASE_SLOT_COUNT), ContainerLevelAccess.NULL);
+		this(syncId, inventory, new GlassDisplayCaseOpenData(BlockPos.ZERO, false, List.of()));
 	}
 
-	public GlassDisplayCaseMenu(int syncId, Inventory inventory, Container caseInventory, ContainerLevelAccess access) {
+	public GlassDisplayCaseMenu(int syncId, Inventory inventory, GlassDisplayCaseOpenData openData) {
+		this(syncId, inventory, new SimpleContainer(CASE_SLOT_COUNT), ContainerLevelAccess.NULL, openData);
+	}
+
+	public GlassDisplayCaseMenu(
+		int syncId,
+		Inventory inventory,
+		Container caseInventory,
+		ContainerLevelAccess access,
+		GlassDisplayCaseOpenData openData
+	) {
 		super(LiveVillagesMenus.GLASS_DISPLAY_CASE, syncId);
 		this.caseInventory = caseInventory;
 		this.access = access;
-		this.casePos = access.evaluate((level, pos) -> pos.immutable(), BlockPos.ZERO);
+		this.casePos = openData.casePos().immutable();
 		this.viewerId = inventory.player.getUUID();
+		this.bakeryContext = openData.bakeryContext();
+		this.bakeryBounties = List.copyOf(openData.bakeryBounties());
 		checkContainerSize(caseInventory, CASE_SLOT_COUNT);
 		caseInventory.startOpen(inventory.player);
 
@@ -82,7 +100,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 				int slot = column + row * CASE_COLUMNS;
 				int x = CASE_START_X + column * SLOT_SPACING;
 				int y = CASE_START_Y + row * SLOT_SPACING;
-				addSlot(new Slot(caseInventory, slot, x, y) {
+				ToggleableSlot displaySlot = new ToggleableSlot(caseInventory, slot, x, y) {
 					@Override
 					public boolean mayPickup(Player player) {
 						return false;
@@ -92,21 +110,40 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 					public boolean mayPlace(ItemStack stack) {
 						return SaleDisplayBlockEntity.canAddToDisplaySlot(getItem(), stack, getMaxStackSize(stack));
 					}
-				});
+				};
+				caseSlots.add(displaySlot);
+				addSlot(displaySlot);
 			}
 		}
 
 		for (int row = 0; row < 3; row++) {
 			for (int column = 0; column < 9; column++) {
-				addSlot(new Slot(inventory, column + row * 9 + 9, PLAYER_INV_X + column * SLOT_SPACING, PLAYER_INV_Y + row * SLOT_SPACING));
+				ToggleableSlot playerSlot = new ToggleableSlot(
+					inventory,
+					column + row * 9 + 9,
+					PLAYER_INV_X + column * SLOT_SPACING,
+					PLAYER_INV_Y + row * SLOT_SPACING
+				);
+				playerSlots.add(playerSlot);
+				addSlot(playerSlot);
 			}
 		}
 
 		for (int column = 0; column < 9; column++) {
-			addSlot(new Slot(inventory, column, PLAYER_INV_X + column * SLOT_SPACING, HOTBAR_Y));
+			ToggleableSlot hotbarSlot = new ToggleableSlot(inventory, column, PLAYER_INV_X + column * SLOT_SPACING, HOTBAR_Y);
+			playerSlots.add(hotbarSlot);
+			addSlot(hotbarSlot);
 		}
 
 		addDataSlot(freeClaimCount);
+	}
+
+	public boolean bakeryContext() {
+		return bakeryContext;
+	}
+
+	public List<BakeryBountyView> bakeryBounties() {
+		return bakeryBounties;
 	}
 
 	public BlockPos casePos() {
@@ -140,6 +177,16 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 	public int freeClaimCount() {
 		return freeClaimCount.get();
+	}
+
+	public void setBountiesViewActive(boolean active) {
+		boolean shopVisible = !active;
+		for (ToggleableSlot slot : caseSlots) {
+			slot.setActive(shopVisible);
+		}
+		for (ToggleableSlot slot : playerSlots) {
+			slot.setActive(shopVisible);
+		}
 	}
 
 	public boolean hasFreeClaimAvailable(int slot) {
@@ -279,11 +326,13 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 				setCarried(slot.safeInsert(carried, insertAmount));
 				slot.setChanged();
 				broadcastChanges();
+				reconcileBakeryIngredientDisplays();
 				return;
 			}
 		}
 
 		super.clicked(slotIndex, button, input, player);
+		reconcileBakeryIngredientDisplays();
 	}
 
 	private boolean claimFreeBakedGood(Player player, int slot) {
@@ -318,6 +367,18 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		});
 	}
 
+	private void reconcileBakeryIngredientDisplays() {
+		if (!bakeryContext) {
+			return;
+		}
+
+		access.execute((level, pos) -> {
+			if (level instanceof ServerLevel serverLevel) {
+				SettlementBakerWork.reconcileBakeryIngredientDisplaysNear(serverLevel, pos);
+			}
+		});
+	}
+
 	@Override
 	public ItemStack quickMoveStack(Player player, int slotIndex) {
 		Slot slot = slots.get(slotIndex);
@@ -334,6 +395,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 		if (moveItemStackTo(stack, 0, CASE_SLOT_COUNT, false)) {
 			slot.setByPlayer(ItemStack.EMPTY);
+			reconcileBakeryIngredientDisplays();
 			return original;
 		}
 
@@ -471,5 +533,27 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	}
 
 	public record BakeryTradeOffer(String paymentGoodsKey, int amount, int soldCount) {
+	}
+
+	private static class ToggleableSlot extends Slot {
+		private boolean active = true;
+
+		private ToggleableSlot(Container container, int slot, int x, int y) {
+			super(container, slot, x, y);
+		}
+
+		private void setActive(boolean active) {
+			this.active = active;
+		}
+
+		@Override
+		public boolean isActive() {
+			return active;
+		}
+
+		@Override
+		public boolean isHighlightable() {
+			return active;
+		}
 	}
 }

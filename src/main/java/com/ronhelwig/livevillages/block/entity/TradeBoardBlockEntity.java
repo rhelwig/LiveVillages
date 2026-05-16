@@ -180,6 +180,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 			serverLevel.dimension(),
 			worldPosition.immutable(),
 			SettlementKind.CUSTOM,
+			1,
 			Map.of(),
 			Map.of(),
 			Map.of(),

@@ -115,7 +115,7 @@ public final class SettlementFletcherWork {
 
 			fletcher.getNavigation().stop();
 
-			if (tick - LAST_ATTACK_TICKS.getOrDefault(fletcher.getUUID().toString(), Long.MIN_VALUE) < DEFENSE_ATTACK_COOLDOWN_TICKS) {
+			if (!attackCooldownReady(fletcher, tick)) {
 				continue;
 			}
 
@@ -222,6 +222,11 @@ public final class SettlementFletcherWork {
 		if (!fletcher.getMainHandItem().is(Items.BOW)) {
 			fletcher.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
 		}
+	}
+
+	private static boolean attackCooldownReady(Villager fletcher, long tick) {
+		Long lastAttackTick = LAST_ATTACK_TICKS.get(fletcher.getUUID().toString());
+		return lastAttackTick == null || tick - lastAttackTick >= DEFENSE_ATTACK_COOLDOWN_TICKS;
 	}
 
 	private record TimedTask(String taskKey, long tick) {

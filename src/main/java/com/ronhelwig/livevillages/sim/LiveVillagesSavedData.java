@@ -58,6 +58,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
+		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
 		Codec.INT.optionalFieldOf("next_region_cursor", 0).forGetter(data -> data.nextRegionCursor),
 		Codec.LONG.optionalFieldOf("last_global_update_tick", 0L).forGetter(data -> data.lastGlobalUpdateTick),
@@ -79,6 +80,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
 	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
+	private final LinkedHashMap<String, Long> preferredVillagerHomes;
 	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
 	private int nextRegionCursor;
 	private long lastGlobalUpdateTick;
@@ -104,7 +106,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -117,6 +119,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
 		Map<String, Map<String, Integer>> bakeryFreebiesOwed,
+		Map<String, Long> preferredVillagerHomes,
 		Map<String, Long> loadedRoadworkCatchupTicks,
 		int nextRegionCursor,
 		long lastGlobalUpdateTick,
@@ -133,6 +136,7 @@ public class LiveVillagesSavedData extends SavedData {
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
 		this.bakeryFreebiesOwed = new LinkedHashMap<>();
 		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
+		this.preferredVillagerHomes = new LinkedHashMap<>(preferredVillagerHomes);
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
 		this.nextRegionCursor = nextRegionCursor;
 		this.lastGlobalUpdateTick = lastGlobalUpdateTick;
@@ -341,6 +345,42 @@ public class LiveVillagesSavedData extends SavedData {
 		return true;
 	}
 
+	public Optional<BlockPos> preferredVillagerHome(UUID villagerId) {
+		if (villagerId == null) {
+			return Optional.empty();
+		}
+
+		Long home = preferredVillagerHomes.get(villagerId.toString());
+		return home == null ? Optional.empty() : Optional.of(BlockPos.of(home));
+	}
+
+	public boolean setPreferredVillagerHome(UUID villagerId, BlockPos homePos) {
+		if (villagerId == null || homePos == null) {
+			return false;
+		}
+
+		Long previous = preferredVillagerHomes.put(villagerId.toString(), homePos.asLong());
+		if (previous != null && previous == homePos.asLong()) {
+			return false;
+		}
+
+		setDirty();
+		return true;
+	}
+
+	public boolean clearPreferredVillagerHome(UUID villagerId) {
+		if (villagerId == null) {
+			return false;
+		}
+
+		if (preferredVillagerHomes.remove(villagerId.toString()) == null) {
+			return false;
+		}
+
+		setDirty();
+		return true;
+	}
+
 	public List<ChunkPos> reserveVillageScanChunks(net.minecraft.resources.ResourceKey<Level> dimension, net.minecraft.core.BlockPos center, int chunkBudget) {
 		if (chunkBudget <= 0) {
 			return List.of();
@@ -372,6 +412,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public void putSettlement(SettlementState settlement) {
+		settlement = settlement.withTier(SettlementTiers.unlockedTier(settlement));
 		SettlementState previous = settlements.put(settlement.id(), settlement);
 
 		if (!settlement.equals(previous)) {
@@ -381,6 +422,7 @@ public class LiveVillagesSavedData extends SavedData {
 
 	public SettlementState putSettlementAndRefreshBuildSiteMaterialStatus(SettlementState settlement, long currentTick) {
 		boolean changed = false;
+		settlement = settlement.withTier(SettlementTiers.unlockedTier(settlement));
 		SettlementState previous = settlements.put(settlement.id(), settlement);
 
 		if (!settlement.equals(previous)) {
@@ -497,7 +539,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (settlement != null) {
 				Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
 				returnedGoods.forEach((goodsKey, amount) -> SettlementGoods.addGoods(stock, goodsKey, amount));
-				settlements.put(settlementId, settlement.withStock(stock));
+				settlements.put(settlementId, settlement.withStock(stock).withTier(SettlementTiers.unlockedTier(settlement.withStock(stock))));
 				deliveriesChanged = true;
 			}
 		}
@@ -1424,12 +1466,12 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			if (!routeAdvanceResult.fromSettlement().equals(fromSettlement)) {
-				settlements.put(fromSettlement.id(), routeAdvanceResult.fromSettlement());
+				settlements.put(fromSettlement.id(), routeAdvanceResult.fromSettlement().withTier(SettlementTiers.unlockedTier(routeAdvanceResult.fromSettlement())));
 				changed = true;
 			}
 
 			if (!routeAdvanceResult.toSettlement().equals(toSettlement)) {
-				settlements.put(toSettlement.id(), routeAdvanceResult.toSettlement());
+				settlements.put(toSettlement.id(), routeAdvanceResult.toSettlement().withTier(SettlementTiers.unlockedTier(routeAdvanceResult.toSettlement())));
 				changed = true;
 			}
 		}

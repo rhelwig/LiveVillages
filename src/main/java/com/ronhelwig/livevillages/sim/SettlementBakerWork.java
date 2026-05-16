@@ -16,6 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -23,10 +24,12 @@ import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 
 import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.menu.BakeryBountyView;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
 public final class SettlementBakerWork {
@@ -54,6 +57,16 @@ public final class SettlementBakerWork {
 		resolveBakeryContext(level, pos).ifPresent(context -> syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites()));
 	}
 
+	public static void reconcileBakeryIngredientDisplaysNear(ServerLevel level, BlockPos pos) {
+		resolveBakeryContext(level, pos).ifPresent(context -> {
+			List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, context.bakeryBuildSites());
+			List<Container> ingredientContainers = bakeryIngredientContainers(level, context.bakeryBuildSites());
+			if (moveBakeryIngredientsIntoStorage(displayInventories, ingredientContainers)) {
+				syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites());
+			}
+		});
+	}
+
 	public static int bakeryFreebiesOwed(ServerLevel level, BlockPos pos, UUID playerId) {
 		return resolveBakeryContext(level, pos)
 			.map(context -> LiveVillagesSavedData.get(level.getServer()).bakeryFreebiesOwed(context.settlement().id(), playerId))
@@ -72,6 +85,29 @@ public final class SettlementBakerWork {
 
 	public static boolean isBakedGoodsKey(String goodsKey) {
 		return goodsKey != null && DISPLAYABLE_GOODS.contains(goodsKey);
+	}
+
+	public static boolean hasBakeryContext(ServerLevel level, BlockPos pos) {
+		return resolveBakeryContext(level, pos).isPresent();
+	}
+
+	public static List<BakeryBountyView> bakeryBountiesAt(ServerLevel level, BlockPos pos) {
+		return resolveBakeryContext(level, pos)
+			.map(context -> {
+				int settlementTier = SettlementTiers.unlockedTier(context.settlement());
+				List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, context.bakeryBuildSites());
+				List<Container> ingredientContainers = bakeryIngredientContainers(level, context.bakeryBuildSites());
+				if (moveBakeryIngredientsIntoStorage(displayInventories, ingredientContainers)) {
+					syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites());
+				}
+				Map<String, Integer> pantry = bakeryPantrySnapshot(
+					context.settlement().stock(),
+					ingredientContainers,
+					displayInventories
+				);
+				return bakeryBounties(pantry, settlementTier);
+			})
+			.orElse(List.of());
 	}
 
 	public static void recordBakerySale(ServerLevel level, BlockPos pos, String paymentGoodsKey, int paymentAmount) {
@@ -103,6 +139,11 @@ public final class SettlementBakerWork {
 			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.BAKERY)
 			.toList();
 		List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, bakeryBuildSites);
+		List<Container> ingredientContainers = bakeryIngredientContainers(level, bakeryBuildSites);
+		int settlementTier = SettlementTiers.unlockedTier(settlement);
+		if (moveBakeryIngredientsIntoStorage(displayInventories, ingredientContainers)) {
+			syncBakeryDisplays(level, settlement, bakeryBuildSites);
+		}
 		boolean stockChanged = restockDisplayCases(level, settlement, stock, bakeryBuildSites);
 		syncBakeryDisplays(level, settlement, bakeryBuildSites);
 
@@ -111,7 +152,6 @@ public final class SettlementBakerWork {
 			return stockChanged;
 		}
 
-		int settlementTier = SettlementTiers.unlockedTier(settlement);
 		long tick = level.getServer().getTickCount();
 
 		for (Villager baker : bakers) {
@@ -123,7 +163,7 @@ public final class SettlementBakerWork {
 				continue;
 			}
 
-			Map<String, Integer> pantry = bakeryPantrySnapshot(stock, displayInventories);
+			Map<String, Integer> pantry = bakeryPantrySnapshot(stock, ingredientContainers, displayInventories);
 			BakeryRecipe recipe = chooseRecipe(settlement, pantry, settlementTier);
 			BlockPos workPos = SettlementVillagers.bakerJobSite(level, baker)
 				.or(() -> bakeryBuildSites.stream()
@@ -140,7 +180,7 @@ public final class SettlementBakerWork {
 				continue;
 			}
 
-			if (craftRecipe(stock, displayInventories, recipe)) {
+			if (craftRecipe(stock, ingredientContainers, displayInventories, recipe)) {
 				baker.swing(InteractionHand.MAIN_HAND);
 				stockChanged = true;
 				stockChanged |= restockDisplayCases(level, settlement, stock, bakeryBuildSites);
@@ -161,7 +201,7 @@ public final class SettlementBakerWork {
 
 		for (int i = 0; i < batches; i++) {
 			BakeryRecipe recipe = chooseRecipe(settlement, stock, settlementTier);
-			if (recipe == null || !craftRecipe(stock, List.of(), recipe)) {
+			if (recipe == null || !craftRecipe(stock, List.of(), List.of(), recipe)) {
 				break;
 			}
 		}
@@ -235,13 +275,72 @@ public final class SettlementBakerWork {
 		return true;
 	}
 
-	private static boolean craftRecipe(Map<String, Integer> stock, List<SaleDisplayBlockEntity> displayInventories, BakeryRecipe recipe) {
-		if (!canCraft(bakeryPantrySnapshot(stock, displayInventories), recipe)) {
+	private static List<BakeryBountyView> bakeryBounties(Map<String, Integer> pantry, int settlementTier) {
+		Map<String, Set<String>> unlocksByIngredient = new LinkedHashMap<>();
+		Map<String, Set<String>> usedInByIngredient = new LinkedHashMap<>();
+
+		for (BakeryRecipe recipe : RECIPES) {
+			if (settlementTier < recipe.minTier()) {
+				continue;
+			}
+
+			List<String> missingIngredients = recipe.ingredients().entrySet().stream()
+				.filter(entry -> pantry.getOrDefault(entry.getKey(), 0) < entry.getValue())
+				.map(Map.Entry::getKey)
+				.sorted()
+				.toList();
+
+			if (missingIngredients.isEmpty()) {
+				continue;
+			}
+
+			for (String ingredientKey : missingIngredients) {
+				usedInByIngredient.computeIfAbsent(ingredientKey, ignored -> new LinkedHashSet<>())
+					.add(recipe.outputGoodsKey());
+			}
+
+			if (missingIngredients.size() == 1) {
+				String ingredientKey = missingIngredients.getFirst();
+				unlocksByIngredient.computeIfAbsent(ingredientKey, ignored -> new LinkedHashSet<>())
+					.add(recipe.outputGoodsKey());
+			}
+		}
+
+		return usedInByIngredient.entrySet().stream()
+			.map(entry -> new BakeryBountyView(
+				entry.getKey(),
+				sortedGoodsKeys(unlocksByIngredient.getOrDefault(entry.getKey(), Set.of())),
+				sortedGoodsKeys(entry.getValue())
+			))
+			.sorted(Comparator
+				.<BakeryBountyView>comparingInt(view -> view.unlockOutputGoodsKeys().size())
+				.reversed()
+				.thenComparing(Comparator.comparingInt((BakeryBountyView view) -> view.usedInOutputGoodsKeys().size()).reversed())
+				.thenComparing(BakeryBountyView::goodsKey))
+			.toList();
+	}
+
+	private static List<String> sortedGoodsKeys(Set<String> goodsKeys) {
+		return goodsKeys.stream()
+			.sorted(Comparator.comparingInt((String key) -> {
+				int index = DISPLAYABLE_GOODS.indexOf(key);
+				return index < 0 ? Integer.MAX_VALUE : index;
+			}).thenComparing(key -> key))
+			.toList();
+	}
+
+	private static boolean craftRecipe(
+		Map<String, Integer> stock,
+		List<Container> ingredientContainers,
+		List<SaleDisplayBlockEntity> displayInventories,
+		BakeryRecipe recipe
+	) {
+		if (!canCraft(bakeryPantrySnapshot(stock, ingredientContainers, displayInventories), recipe)) {
 			return false;
 		}
 
 		for (Map.Entry<String, Integer> ingredient : recipe.ingredients().entrySet()) {
-			consumeBakeryIngredient(stock, displayInventories, ingredient.getKey(), ingredient.getValue());
+			consumeBakeryIngredient(stock, ingredientContainers, displayInventories, ingredient.getKey(), ingredient.getValue());
 		}
 
 		SettlementGoods.addGoods(stock, recipe.outputGoodsKey(), recipe.outputAmount());
@@ -436,6 +535,30 @@ public final class SettlementBakerWork {
 		return displayInventories;
 	}
 
+	private static List<Container> bakeryIngredientContainers(ServerLevel level, Collection<SettlementBuildSite> bakeryBuildSites) {
+		LinkedHashMap<Long, Container> containers = new LinkedHashMap<>();
+
+		for (SettlementBuildSite buildSite : bakeryBuildSites) {
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (!"chest".equals(block.expectedMaterialKey())
+					|| (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED)) {
+					continue;
+				}
+
+				SettlementConstruction.buildSiteBlockPos(buildSite, block)
+					.filter(level::hasChunkAt)
+					.ifPresent(chestPos -> {
+						BlockEntity blockEntity = level.getBlockEntity(chestPos);
+						if (blockEntity instanceof Container container && !(blockEntity instanceof SaleDisplayBlockEntity)) {
+							containers.putIfAbsent(chestPos.asLong(), container);
+						}
+					});
+			}
+		}
+
+		return new ArrayList<>(containers.values());
+	}
+
 	private static Optional<BakeryContext> resolveBakeryContext(ServerLevel level, BlockPos pos) {
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
 		Optional<SettlementState> settlement = savedData.findSettlementForPosition(level.dimension(), pos, candidate -> true);
@@ -453,8 +576,13 @@ public final class SettlementBakerWork {
 		return Optional.of(new BakeryContext(settlement.get(), bakeryBuildSites));
 	}
 
-	private static Map<String, Integer> bakeryPantrySnapshot(Map<String, Integer> stock, List<SaleDisplayBlockEntity> displayInventories) {
+	private static Map<String, Integer> bakeryPantrySnapshot(
+		Map<String, Integer> stock,
+		List<Container> ingredientContainers,
+		List<SaleDisplayBlockEntity> displayInventories
+	) {
 		Map<String, Integer> pantry = new LinkedHashMap<>(stock);
+		addContainerGoods(pantry, ingredientContainers);
 
 		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
 			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
@@ -473,18 +601,13 @@ public final class SettlementBakerWork {
 
 	private static void consumeBakeryIngredient(
 		Map<String, Integer> stock,
+		List<Container> ingredientContainers,
 		List<SaleDisplayBlockEntity> displayInventories,
 		String goodsKey,
 		int amount
 	) {
 		int remaining = amount;
-		int stockAvailable = stock.getOrDefault(goodsKey, 0);
-		if (stockAvailable > 0) {
-			int stockConsumed = Math.min(stockAvailable, remaining);
-			SettlementGoods.consumeGoods(stock, goodsKey, stockConsumed);
-			remaining -= stockConsumed;
-		}
-
+		remaining = consumeIngredientFromContainers(ingredientContainers, goodsKey, remaining);
 		if (remaining <= 0) {
 			return;
 		}
@@ -507,6 +630,175 @@ public final class SettlementBakerWork {
 				return;
 			}
 		}
+
+		int stockAvailable = stock.getOrDefault(goodsKey, 0);
+		if (stockAvailable > 0) {
+			int stockConsumed = Math.min(stockAvailable, remaining);
+			SettlementGoods.consumeGoods(stock, goodsKey, stockConsumed);
+			remaining -= stockConsumed;
+		}
+	}
+
+	private static boolean moveBakeryIngredientsIntoStorage(
+		List<SaleDisplayBlockEntity> displayInventories,
+		List<Container> ingredientContainers
+	) {
+		if (ingredientContainers.isEmpty()) {
+			return false;
+		}
+
+		Set<String> ingredientGoodsKeys = allIngredientGoodsKeys();
+		boolean changed = false;
+
+		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+				ItemStack stack = displayInventory.getItem(slot);
+				String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+				if (stack.isEmpty() || goodsKey == null || !ingredientGoodsKeys.contains(goodsKey) || isBakedGoodsKey(goodsKey)) {
+					continue;
+				}
+
+				ItemStack remaining = insertIntoContainers(ingredientContainers, stack.copy());
+				if (remaining.getCount() == stack.getCount()) {
+					continue;
+				}
+
+				displayInventory.setItem(slot, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	private static Set<String> allIngredientGoodsKeys() {
+		Set<String> ingredientGoodsKeys = new LinkedHashSet<>();
+
+		for (BakeryRecipe recipe : RECIPES) {
+			ingredientGoodsKeys.addAll(recipe.ingredients().keySet());
+		}
+
+		return ingredientGoodsKeys;
+	}
+
+	private static Set<String> unlockedIngredientGoodsKeys(int settlementTier) {
+		Set<String> ingredientGoodsKeys = new LinkedHashSet<>();
+
+		for (BakeryRecipe recipe : RECIPES) {
+			if (settlementTier < recipe.minTier()) {
+				continue;
+			}
+
+			ingredientGoodsKeys.addAll(recipe.ingredients().keySet());
+		}
+
+		return ingredientGoodsKeys;
+	}
+
+	private static void addContainerGoods(Map<String, Integer> pantry, List<Container> ingredientContainers) {
+		for (Container container : ingredientContainers) {
+			for (int slot = 0; slot < container.getContainerSize(); slot++) {
+				ItemStack stack = container.getItem(slot);
+				String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+				if (stack.isEmpty() || goodsKey == null) {
+					continue;
+				}
+
+				SettlementGoods.addGoods(pantry, goodsKey, stack.getCount());
+			}
+		}
+	}
+
+	private static int consumeIngredientFromContainers(List<Container> ingredientContainers, String goodsKey, int amount) {
+		int remaining = amount;
+
+		for (Container container : ingredientContainers) {
+			boolean changed = false;
+			for (int slot = 0; slot < container.getContainerSize() && remaining > 0; slot++) {
+				ItemStack stack = container.getItem(slot);
+				if (stack.isEmpty() || !goodsKey.equals(TradeBoardTradeRules.goodsKeyForStack(stack))) {
+					continue;
+				}
+
+				int consumed = Math.min(remaining, stack.getCount());
+				ItemStack updated = stack.copy();
+				updated.shrink(consumed);
+				container.setItem(slot, updated.isEmpty() ? ItemStack.EMPTY : updated);
+				remaining -= consumed;
+				changed = true;
+			}
+
+			if (changed) {
+				container.setChanged();
+			}
+
+			if (remaining <= 0) {
+				return 0;
+			}
+		}
+
+		return remaining;
+	}
+
+	private static ItemStack insertIntoContainers(List<Container> containers, ItemStack stack) {
+		ItemStack remaining = stack.copy();
+
+		for (Container container : containers) {
+			remaining = insertIntoContainer(container, remaining);
+			if (remaining.isEmpty()) {
+				return ItemStack.EMPTY;
+			}
+		}
+
+		return remaining;
+	}
+
+	private static ItemStack insertIntoContainer(Container container, ItemStack stack) {
+		if (stack.isEmpty()) {
+			return ItemStack.EMPTY;
+		}
+
+		ItemStack remaining = stack.copy();
+		boolean changed = false;
+
+		for (int slot = 0; slot < container.getContainerSize() && !remaining.isEmpty(); slot++) {
+			ItemStack existing = container.getItem(slot);
+			if (existing.isEmpty()
+				|| !ItemStack.isSameItemSameComponents(existing, remaining)
+				|| !container.canPlaceItem(slot, remaining)) {
+				continue;
+			}
+
+			int slotLimit = Math.min(container.getMaxStackSize(remaining), existing.getMaxStackSize());
+			int capacity = slotLimit - existing.getCount();
+			if (capacity <= 0) {
+				continue;
+			}
+
+			int moved = Math.min(capacity, remaining.getCount());
+			ItemStack updated = existing.copy();
+			updated.grow(moved);
+			container.setItem(slot, updated);
+			remaining.shrink(moved);
+			changed = true;
+		}
+
+		for (int slot = 0; slot < container.getContainerSize() && !remaining.isEmpty(); slot++) {
+			if (!container.getItem(slot).isEmpty() || !container.canPlaceItem(slot, remaining)) {
+				continue;
+			}
+
+			int moved = Math.min(container.getMaxStackSize(remaining), remaining.getCount());
+			container.setItem(slot, remaining.copyWithCount(moved));
+			remaining.shrink(moved);
+			changed = true;
+		}
+
+		if (changed) {
+			container.setChanged();
+		}
+
+		return remaining;
 	}
 
 	private static int displayBundleAmount(String goodsKey) {

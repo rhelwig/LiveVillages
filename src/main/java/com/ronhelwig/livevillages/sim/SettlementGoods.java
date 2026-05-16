@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -114,7 +115,7 @@ public final class SettlementGoods {
 			return "apple";
 		}
 
-		if (stack.is(Items.EGG)) {
+		if (TradeBoardTradeRules.isEggItem(stack)) {
 			return "egg";
 		}
 
