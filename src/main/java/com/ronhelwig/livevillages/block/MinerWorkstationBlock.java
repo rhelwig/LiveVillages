@@ -71,20 +71,20 @@ public class MinerWorkstationBlock extends Block {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureMiner(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Mine Entrance construction started around this Miner Workstation."));
 			}
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureMiner(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Mine Entrance construction is already planned around this Miner Workstation."));
 			}
 		} else {
-			SettlementVillagers.ensureMiner(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (buildResult.isBlocked() && placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("The settlement can't build a Mine Entrance here."));

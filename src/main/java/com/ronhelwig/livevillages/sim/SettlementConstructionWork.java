@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 
@@ -43,6 +44,7 @@ public final class SettlementConstructionWork {
 	private static final int CONSTRUCTION_DELIVERY_BATCH_SIZE = 32;
 	private static final long CONSTRUCTION_DECIDE_INTERVAL_TICKS = 320L;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
+	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
 
 	private SettlementConstructionWork() {
 	}
@@ -800,6 +802,23 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
+				if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				Optional<PairedBlock> pairedBlock = pairedRootBlock(buildSite, block);
+				if (pairedBlock.isPresent()) {
+					Optional<BlockPos> pairedPos = SettlementConstruction.buildSiteBlockPos(buildSite, pairedBlock.get().block());
+					BlockState pairedPlannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, pairedBlock.get().block());
+					if (pairedPos.isEmpty()
+						|| pairedPlannedState == null
+						|| !level.hasChunkAt(pairedPos.get())
+						|| (requiresIndependentConstructionSupport(pairedPlannedState)
+							&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState))) {
+						continue;
+					}
+				}
+
 				candidateBlocksChecked++;
 
 				if (candidateBlocksChecked > MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE) {
@@ -905,6 +924,36 @@ public final class SettlementConstructionWork {
 		return plannedState.is(Blocks.WALL_TORCH) && !plannedState.canSurvive(level, targetPos);
 	}
 
+	private static boolean hasConstructionPlacementSupport(ServerLevel level, BlockPos targetPos, BlockState plannedState) {
+		if (!plannedState.canSurvive(level, targetPos)) {
+			return false;
+		}
+
+		for (Direction direction : Direction.values()) {
+			BlockPos neighborPos = targetPos.relative(direction);
+			if (!level.hasChunkAt(neighborPos)) {
+				continue;
+			}
+
+			BlockState neighborState = level.getBlockState(neighborPos);
+			if (isConstructionSupportBlock(level, neighborPos, neighborState)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isConstructionSupportBlock(ServerLevel level, BlockPos supportPos, BlockState supportState) {
+		return !SettlementConstruction.isBuildSiteReplaceable(supportState)
+			&& !supportState.getCollisionShape(level, supportPos).isEmpty();
+	}
+
+	private static boolean requiresIndependentConstructionSupport(BlockState plannedState) {
+		return !(plannedState.getBlock() instanceof DoorBlock)
+			|| plannedState.getValue(DoorBlock.HALF) != DoubleBlockHalf.UPPER;
+	}
+
 	private static ConstructionActionResult performConstructionTask(
 		ServerLevel level,
 		Map<String, Integer> stock,
@@ -987,6 +1036,13 @@ public final class SettlementConstructionWork {
 
 			return ConstructionActionResult.blockStatusChanged(
 				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, "blocked", tick),
+				false
+			);
+		}
+
+		if (!hasConstructionPlacementSupport(level, task.targetPos(), plannedState)) {
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, BLOCKED_REASON_UNSUPPORTED, tick),
 				false
 			);
 		}
@@ -1125,6 +1181,21 @@ public final class SettlementConstructionWork {
 
 			return ConstructionActionResult.blockStatusChanged(
 				updateBlockStatus(task.buildSite(), pairedBlock.index(), SettlementBuildBlockStatus.BLOCKED, "blocked", tick),
+				false
+			);
+		}
+
+		if (!hasConstructionPlacementSupport(level, task.targetPos(), plannedState)) {
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, BLOCKED_REASON_UNSUPPORTED, tick),
+				false
+			);
+		}
+
+		if (requiresIndependentConstructionSupport(pairedPlannedState)
+			&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState)) {
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), pairedBlock.index(), SettlementBuildBlockStatus.BLOCKED, BLOCKED_REASON_UNSUPPORTED, tick),
 				false
 			);
 		}

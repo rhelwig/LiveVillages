@@ -20,7 +20,7 @@ Repository documentation lives under `docs/`, except for the root [README.md](..
 - Finish the harbor trade pass: verify that docks, lighthouses, and cartography support affect real trade cadence and route quality the way the design intends.
 - Formalize settlement tiers so wealth and population gates drive visible structure, path, and fortification upgrades.
 - Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation, with dock and lighthouse bonuses preserved and docked-boat trips returning before gathering.
-- Keep `Baker` output consistent between loaded behavior and abstract settlement simulation, with settlement stock, tier-gated recipes, visible bakery displays, and bakery-side trading all drawing from the same goods state.
+- Keep `Baker` output consistent between loaded behavior and abstract settlement simulation, with settlement stock, tier-gated recipes, visible bakery displays, bakery-side trading, shared case-style bakery UI access, two-shelf `3x2` case rendering, and structure-wide display restocking all drawing from the same goods state.
 - Split bell-triggered loaded defense cleanly between civilian panic behavior and combat-capable villager rally behavior.
 - Finish migrating active issue tracking to GitHub issues and keep the placed `Trade Board` cosmetic display issue there as the source of truth.
 - Temporarily run worker productivity at `2x` during feature development so construction, roadwork, and other visible villager loops are faster to evaluate in playtests; retune later for normal play balance.
@@ -33,13 +33,19 @@ Already solid enough to plan from:
 - staged construction with persistent build sites, assisted player placement, and preview overlays
 - an in-game structure capture hotkey that exports the looked-at structure as a text blueprint draft for later curation
 - custom anchors and workstations for `Trade Board`, `Carpenter's Bench`, `Forester's Table`, `Surveyor's Table`, `Portmaster's Anchor`, `Lighthouse`, `Milepost`, `Simple Housing Shelter`, and `Housing Shelter`
-- a first-pass `Glass Display Case` block exists as a full-size clear bakery display block, ready for later bakery stock presentation and direct purchase interaction
-- `Glass Display Case` now has a separate block-local sale inventory and its own custom case menu, so bakery sale stock can diverge from the settlement's abstract food reserves
-- a first-pass `Baker's Counter` workstation exists as a wood-framed shelf-style bakery counter; it starts or resumes `Bakery` build sites, opens settlement trading directly, and anchors the first-pass `Baker` profession
+- a first-pass `Glass Display Case` block exists as a full-size clear bakery display block, with block-local sale inventory and direct purchase interaction
+- `Glass Display Case` and `Baker's Counter` now share the same block-local case-style sale inventory/menu model, so bakery sale stock can diverge from the settlement's abstract food reserves and bakery goods can expose ingredient-themed barter alongside emerald buys
+- bakery sale screens should support both full-stack barter and a worse-rate single-item convenience barter, while keeping the emerald purchase as the clearer default full-width action
+- bakery display restocking should treat the structure's `Baker's Counter` and `Glass Display Case` blocks as one shared display pool: top off matching stacks first, then prefer the least-filled display so goods spread visibly across the storefront instead of piling into the first case
+- donated bakery ingredients stored in bakery sale displays should count as usable first-pass pantry inputs, so players can seed recipes by dropping `wheat`, `egg`, `sugar`, and similar goods into display slots
+- workstation staffing should use a shared settlement-wide hiring pass instead of fixed `ensure...` call order, so scarce unemployed adults are steered toward the highest-priority reachable open jobs and profession pickup happens on the short loaded-maintenance cadence rather than only on long economy cycles
+- a first-pass `Baker's Counter` workstation exists as a wood-framed shelf-style bakery counter; it starts or resumes `Bakery` build sites, carries its own sale inventory even as a standalone block, and anchors the first-pass `Baker` profession
 - the first-pass `Bakery` blueprint now exists as a `Trading Post`-derived copy with `Glass Display Case` runs in place of the original fence-only market openings
 - custom professions for `Trademaster`, `Carpenter`, `Baker`, `Forester`, `Portmaster`, and `Roadwright`
+- custom villager profession overlays should exist for active custom roles so loaded villagers do not fall back to missing-texture placeholders; `Baker` now needs to stay aligned with the established white-and-light-blue bakery presentation
 - harbor map, terrain-memory cache, lighthouse support, and water-trade infrastructure bonuses
 - loaded-world work loops already exist in first-pass form for construction, butchery, baking, harbor work, routes, and farming support
+- staged construction placement should stay support-aware so workers do not place visibly floating slabs, stairs, or other disconnected pieces before their supporting neighbors exist
 - debug and inspection support exists through overlays, build previews, and `/livevillages settlements ...` commands
 
 ## Active Workstreams

@@ -1,6 +1,7 @@
 package com.ronhelwig.livevillages.menu;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -11,20 +12,24 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-import com.ronhelwig.livevillages.block.entity.GlassDisplayCaseBlockEntity;
+import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
+import com.ronhelwig.livevillages.sim.SettlementBakerWork;
 
 public class GlassDisplayCaseMenu extends AbstractContainerMenu {
-	public static final int CASE_SLOT_COUNT = GlassDisplayCaseBlockEntity.SLOT_COUNT;
+	private static final Component BUY_LABEL = Component.literal("Buy");
+	public static final int STACK_BARTER_BUTTON_ID_BASE = 100;
+	public static final int SINGLE_BARTER_BUTTON_ID_BASE = 200;
+	public static final int CASE_SLOT_COUNT = SaleDisplayBlockEntity.SLOT_COUNT;
 	public static final int CASE_COLUMNS = 3;
 	public static final int CASE_ROWS = 2;
-	public static final int CASE_START_X = 62;
-	public static final int CASE_START_Y = 20;
+	public static final int CASE_START_X = 156;
+	public static final int CASE_START_Y = 30;
 	public static final int SLOT_SPACING = 18;
-	public static final int PLAYER_INV_X = 8;
-	public static final int PLAYER_INV_Y = 84;
-	public static final int HOTBAR_Y = 142;
+	public static final int PLAYER_INV_X = 14;
+	public static final int PLAYER_INV_Y = 124;
+	public static final int HOTBAR_Y = 182;
 
 	private final Container caseInventory;
 	private final ContainerLevelAccess access;
@@ -96,38 +101,122 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		return Math.max(1, (int) Math.ceil(stack.getCount() * (bundlePrice / (double) bundleSize)));
 	}
 
+	public BakeryTradeOffer stackBarterOfferForSlot(int slot) {
+		return barterOfferForSlot(slot, false);
+	}
+
+	public BakeryTradeOffer singleBarterOfferForSlot(int slot) {
+		return barterOfferForSlot(slot, true);
+	}
+
+	public Component emeraldButtonLabel(int slot) {
+		int price = priceForSlot(slot);
+		if (price <= 0) {
+			return BUY_LABEL;
+		}
+
+		return Component.literal(price + " " + (price == 1 ? "Emerald" : "Emeralds"));
+	}
+
+	public Component stackBarterButtonLabel(int slot) {
+		BakeryTradeOffer offer = stackBarterOfferForSlot(slot);
+		if (offer == null) {
+			return BUY_LABEL;
+		}
+
+		return barterButtonLabel(offer);
+	}
+
+	public Component singleBarterButtonLabel(int slot) {
+		BakeryTradeOffer offer = singleBarterOfferForSlot(slot);
+		if (offer == null) {
+			return BUY_LABEL;
+		}
+
+		return barterButtonLabel(offer);
+	}
+
+	private Component barterButtonLabel(BakeryTradeOffer offer) {
+		String goodsLabel = TradeBoardTradeRules.compactLabel(
+			offer.paymentGoodsKey(),
+			humanizeGoodsLabel(offer.paymentGoodsKey())
+		);
+		return Component.literal(offer.amount() + " " + goodsLabel);
+	}
+
 	@Override
 	public boolean clickMenuButton(Player player, int buttonId) {
-		if (buttonId < 0 || buttonId >= CASE_SLOT_COUNT) {
+		boolean stackBarterPurchase = buttonId >= STACK_BARTER_BUTTON_ID_BASE && buttonId < STACK_BARTER_BUTTON_ID_BASE + CASE_SLOT_COUNT;
+		boolean singleBarterPurchase = buttonId >= SINGLE_BARTER_BUTTON_ID_BASE && buttonId < SINGLE_BARTER_BUTTON_ID_BASE + CASE_SLOT_COUNT;
+		boolean barterPurchase = stackBarterPurchase || singleBarterPurchase;
+		int slot = stackBarterPurchase
+			? buttonId - STACK_BARTER_BUTTON_ID_BASE
+			: singleBarterPurchase
+				? buttonId - SINGLE_BARTER_BUTTON_ID_BASE
+				: buttonId;
+
+		if (slot < 0 || slot >= CASE_SLOT_COUNT) {
 			return false;
 		}
 
-		ItemStack caseStack = caseInventory.getItem(buttonId);
-		if (caseStack.isEmpty()) {
+		ItemStack purchased = caseInventory.getItem(slot);
+		if (purchased.isEmpty()) {
 			return false;
 		}
 
-		int price = priceForSlot(buttonId);
-		if (price <= 0) {
-			return false;
+		String paymentGoodsKey = null;
+		int paymentAmount = 0;
+		int soldCount = purchased.getCount();
+
+		if (barterPurchase) {
+			BakeryTradeOffer offer = stackBarterPurchase ? stackBarterOfferForSlot(slot) : singleBarterOfferForSlot(slot);
+			if (offer == null || !removePlayerGoods(player.getInventory(), offer.paymentGoodsKey(), offer.amount())) {
+				if (offer != null) {
+					player.sendSystemMessage(Component.literal(
+						"You need " + offer.amount() + " " + humanizeGoodsLabel(offer.paymentGoodsKey()) + " to trade for that."
+					));
+				}
+				return false;
+			}
+			paymentGoodsKey = offer.paymentGoodsKey();
+			paymentAmount = offer.amount();
+			soldCount = offer.soldCount();
+		} else {
+			int price = priceForSlot(slot);
+			if (price <= 0) {
+				return false;
+			}
+
+			if (countEmeralds(player.getInventory()) < price) {
+				player.sendSystemMessage(Component.literal("You need " + price + " emeralds to buy that."));
+				return false;
+			}
+
+			if (!removeEmeralds(player.getInventory(), price)) {
+				return false;
+			}
+			paymentGoodsKey = "emerald";
+			paymentAmount = price;
 		}
 
-		if (countEmeralds(player.getInventory()) < price) {
-			player.sendSystemMessage(net.minecraft.network.chat.Component.literal("You need " + price + " emeralds to buy that."));
-			return false;
-		}
-
-		if (!removeEmeralds(player.getInventory(), price)) {
-			return false;
-		}
-
-		ItemStack purchased = caseStack.copy();
-		caseInventory.setItem(buttonId, ItemStack.EMPTY);
-		if (!player.getInventory().add(purchased)) {
-			player.drop(purchased, false);
+		ItemStack soldStack = purchased.copyWithCount(Math.min(soldCount, purchased.getCount()));
+		ItemStack remainingStack = purchased.copy();
+		remainingStack.shrink(soldStack.getCount());
+		caseInventory.setItem(slot, remainingStack.isEmpty() ? ItemStack.EMPTY : remainingStack);
+		if (!player.getInventory().add(soldStack)) {
+			player.drop(soldStack, false);
 		}
 		caseInventory.setChanged();
+		recordSalePayment(paymentGoodsKey, paymentAmount);
 		return true;
+	}
+
+	private void recordSalePayment(String goodsKey, int amount) {
+		access.execute((level, pos) -> {
+			if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+				SettlementBakerWork.recordBakerySale(serverLevel, pos, goodsKey, amount);
+			}
+		});
 	}
 
 	@Override
@@ -181,7 +270,11 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 	@Override
 	public boolean stillValid(Player player) {
-		return stillValid(access, player, LiveVillagesBlocks.GLASS_DISPLAY_CASE);
+		return access.evaluate((level, pos) -> {
+			boolean validBlock = level.getBlockState(pos).is(LiveVillagesBlocks.GLASS_DISPLAY_CASE)
+				|| level.getBlockState(pos).is(LiveVillagesBlocks.BAKERS_COUNTER);
+			return validBlock && player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D) <= 64.0D;
+		}, true);
 	}
 
 	private static int countEmeralds(Inventory inventory) {
@@ -212,5 +305,72 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		}
 
 		return remaining == 0;
+	}
+
+	private static boolean removePlayerGoods(Inventory inventory, String goodsKey, int amount) {
+		return TradeBoardTradeRules.removePlayerGoods(inventory, goodsKey, amount);
+	}
+
+	private static int requiredBakeryPaymentAmount(String soldGoodsKey, int soldCount, String paymentGoodsKey) {
+		if (soldGoodsKey == null || paymentGoodsKey == null || soldCount <= 0) {
+			return 0;
+		}
+
+		int saleItemValue = TradeBoardTradeRules.itemValuePoints(soldGoodsKey, 100);
+		if (saleItemValue <= 0) {
+			return 0;
+		}
+
+		int totalValue = saleItemValue * soldCount;
+		return TradeBoardTradeRules.requiredItemsForValue(paymentGoodsKey, 100, totalValue);
+	}
+
+	private static String preferredBakeryPaymentGoods(String soldGoodsKey) {
+		if (soldGoodsKey == null) {
+			return null;
+		}
+
+		return switch (soldGoodsKey) {
+			case "bread" -> "wheat";
+			case "baked_potato" -> "potato";
+			case "cookie" -> "wheat";
+			case "pumpkin_pie" -> "pumpkin";
+			case "cake" -> "wheat";
+			case "golden_apple" -> "apple";
+			default -> null;
+		};
+	}
+
+	private static String humanizeGoodsLabel(String goodsKey) {
+		ItemStack labelStack = TradeBoardTradeRules.createGoodsStack(goodsKey, 1);
+		if (!labelStack.isEmpty()) {
+			return labelStack.getHoverName().getString();
+		}
+
+		return goodsKey.replace('_', ' ');
+	}
+
+	private BakeryTradeOffer barterOfferForSlot(int slot, boolean singleItem) {
+		ItemStack stack = caseStack(slot);
+		if (stack.isEmpty()) {
+			return null;
+		}
+
+		String soldGoodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+		String paymentGoodsKey = preferredBakeryPaymentGoods(soldGoodsKey);
+		if (paymentGoodsKey == null) {
+			return null;
+		}
+
+		int soldCount = singleItem ? 1 : stack.getCount();
+		int requiredAmount = requiredBakeryPaymentAmount(soldGoodsKey, soldCount, paymentGoodsKey);
+		if (requiredAmount <= 0) {
+			return null;
+		}
+
+		return new BakeryTradeOffer(paymentGoodsKey, requiredAmount, soldCount);
+	}
+
+	public record BakeryTradeOffer(String paymentGoodsKey, int amount, int soldCount) {
 	}
 }

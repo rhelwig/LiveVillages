@@ -538,11 +538,7 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			Long previousSpawnTick = bootstrapVillagerSpawnTicks.put(settlement.id(), currentTick);
-			SettlementVillagers.ensureTrademaster(level, settlement);
-			SettlementVillagers.ensureCarpenter(level, settlement);
-			SettlementVillagers.ensureBaker(level, settlement);
-			SettlementVillagers.ensureMiner(level, settlement);
-			SettlementVillagers.ensureFletcher(level, settlement);
+			SettlementVillagers.ensureWorkforce(level, settlement);
 			SettlementVillagers.ensureVillagerHomes(level, settlement);
 			SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 			SettlementState updatedSettlement = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
@@ -576,6 +572,7 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			long taskStart = SettlementPerformanceLog.start();
+			changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, settlement);
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
@@ -972,7 +969,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureBaker(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1003,7 +1000,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureTrademaster(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1075,7 +1072,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensurePortmaster(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1122,7 +1119,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureFletcher(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1149,7 +1146,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureCarpenter(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1205,7 +1202,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureMiner(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1232,7 +1229,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureRoadwright(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1259,7 +1256,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureForester(level, settlement);
+				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
 			}
 		}
 
@@ -1283,14 +1280,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState simulationInput = settlement;
 
 			if (loadedSettlement && SettlementVillagers.usesActualVillagers(settlement)) {
-				SettlementVillagers.ensureTrademaster(level, settlement);
-				SettlementVillagers.ensureCarpenter(level, settlement);
-				SettlementVillagers.ensureBaker(level, settlement);
-				SettlementVillagers.ensureRoadwright(level, settlement);
-				SettlementVillagers.ensureForester(level, settlement);
-				SettlementVillagers.ensureMiner(level, settlement);
-				SettlementVillagers.ensurePortmaster(level, settlement);
-				SettlementVillagers.ensureFletcher(level, settlement);
+				SettlementVillagers.ensureWorkforce(level, settlement);
 				SettlementVillagers.ensureVillagerHomes(level, settlement);
 				SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 				simulationInput = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
@@ -1314,13 +1304,7 @@ public class LiveVillagesSavedData extends SavedData {
 				int spawnedVillagers = spawnSettlementVillagers(level, updatedSettlement, simulationResult.requestedVillagerSpawns());
 
 				if (spawnedVillagers > 0) {
-					SettlementVillagers.ensureTrademaster(level, updatedSettlement);
-					SettlementVillagers.ensureCarpenter(level, updatedSettlement);
-					SettlementVillagers.ensureBaker(level, updatedSettlement);
-					SettlementVillagers.ensureRoadwright(level, updatedSettlement);
-					SettlementVillagers.ensureForester(level, updatedSettlement);
-					SettlementVillagers.ensureMiner(level, updatedSettlement);
-					SettlementVillagers.ensureFletcher(level, updatedSettlement);
+					SettlementVillagers.ensureWorkforce(level, updatedSettlement);
 					SettlementVillagers.ensureVillagerHomes(level, updatedSettlement);
 					SettlementVillagers.ensureVillagerGatheringPoint(level, updatedSettlement);
 					updatedSettlement = updatedSettlement

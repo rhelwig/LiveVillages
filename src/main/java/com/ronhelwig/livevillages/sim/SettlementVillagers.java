@@ -296,6 +296,17 @@ public final class SettlementVillagers {
 		return heldFishermanJobSite(level, villager).map(BlockPos::immutable);
 	}
 
+	public static boolean ensureWorkforce(ServerLevel level, SettlementState settlement) {
+		if (!usesActualVillagers(settlement)) {
+			return false;
+		}
+
+		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		boolean changed = recruitPriorityWorkforce(level, settlement, villagers);
+		changed |= maintainAssignedWorkforce(level, settlement, villagers);
+		return changed;
+	}
+
 	public static boolean ensureTrademaster(ServerLevel level, SettlementState settlement) {
 		if (!usesActualVillagers(settlement)) {
 			return false;
@@ -567,6 +578,46 @@ public final class SettlementVillagers {
 		return changed;
 	}
 
+	public static boolean ensureFisherman(ServerLevel level, SettlementState settlement) {
+		if (!usesActualVillagers(settlement)) {
+			return false;
+		}
+
+		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		boolean changed = false;
+		int desiredFishermen = desiredFishermanCount(level, settlement);
+		long currentFishermen = villagers.stream()
+			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN))
+			.count();
+
+		if (currentFishermen < desiredFishermen) {
+			for (Villager villager : villagers.stream()
+				.filter(villager -> !villager.isBaby())
+				.filter(villager -> !villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN))
+				.filter(SettlementVillagers::canBecomeFisherman)
+				.sorted(Comparator.comparingInt(SettlementVillagers::fishermanCandidateRank)
+					.thenComparingDouble(villager -> distanceToCenterSqr(villager, settlement.center())))
+				.toList()) {
+				if (promoteToFisherman(level, villager)) {
+					changed = true;
+					currentFishermen++;
+				}
+
+				if (currentFishermen >= desiredFishermen) {
+					break;
+				}
+			}
+		}
+
+		for (Villager villager : villagers) {
+			if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
+				changed |= ensureFishermanJobSite(level, villager);
+			}
+		}
+
+		return changed;
+	}
+
 	public static boolean ensureVillagerHomes(ServerLevel level, SettlementState settlement) {
 		if (!usesActualVillagers(settlement)) {
 			return false;
@@ -622,6 +673,110 @@ public final class SettlementVillagers {
 			assignHome(level, villager, home.get(), Optional.empty());
 			claimedHomes.add(home.get());
 			changed = true;
+		}
+
+		return changed;
+	}
+
+	private static boolean recruitPriorityWorkforce(ServerLevel level, SettlementState settlement, List<Villager> villagers) {
+		List<Villager> unemployedVillagers = villagers.stream()
+			.filter(villager -> !villager.isBaby())
+			.filter(villager -> villager.getVillagerData().profession().is(VillagerProfession.NONE))
+			.sorted(Comparator.comparingDouble(villager -> distanceToCenterSqr(villager, settlement.center())))
+			.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+		Map<ProfessionDemandType, Integer> currentCounts = currentProfessionCounts(villagers);
+		boolean changed = false;
+
+		while (!unemployedVillagers.isEmpty()) {
+			List<ProfessionDemand> demands = prioritizedProfessionDemands(level, settlement, currentCounts);
+			if (demands.isEmpty()) {
+				break;
+			}
+
+			boolean assigned = false;
+			for (ProfessionDemand demand : demands) {
+				Optional<Villager> candidate = unemployedVillagers.stream()
+					.filter(villager -> canReachProfessionJobSite(level, villager, demand.type()))
+					.findFirst();
+				if (candidate.isEmpty()) {
+					continue;
+				}
+
+				Villager villager = candidate.get();
+				if (!promoteToProfession(level, villager, demand.type())) {
+					continue;
+				}
+
+				unemployedVillagers.remove(villager);
+				currentCounts.merge(demand.type(), 1, Integer::sum);
+				changed = true;
+				assigned = true;
+				break;
+			}
+
+			if (!assigned) {
+				break;
+			}
+		}
+
+		return changed;
+	}
+
+	private static boolean maintainAssignedWorkforce(ServerLevel level, SettlementState settlement, List<Villager> villagers) {
+		boolean changed = false;
+
+		for (Villager villager : villagers) {
+			if (isCustomTrademaster(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureTrademasterJobSite(level, villager);
+				continue;
+			}
+
+			if (isCustomCarpenter(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureCarpenterJobSite(level, villager);
+				changed |= ensureCarpenterWorkshopHome(level, villager, villagers);
+				continue;
+			}
+
+			if (isCustomBaker(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureBakerJobSite(level, villager);
+				continue;
+			}
+
+			if (isCustomRoadwright(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureRoadwrightJobSite(level, villager);
+				continue;
+			}
+
+			if (isCustomForester(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureForesterJobSite(level, villager);
+				continue;
+			}
+
+			if (isCustomMiner(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensureMinerJobSite(level, villager);
+				continue;
+			}
+
+			if (isCustomPortmaster(villager)) {
+				lockCustomProfession(villager);
+				changed |= ensurePortmasterJobSite(level, villager);
+				continue;
+			}
+
+			if (villager.getVillagerData().profession().is(VillagerProfession.FLETCHER)) {
+				changed |= ensureFletcherJobSite(level, villager);
+				continue;
+			}
+
+			if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
+				changed |= ensureFishermanJobSite(level, villager);
+			}
 		}
 
 		return changed;
@@ -1075,6 +1230,24 @@ public final class SettlementVillagers {
 		return true;
 	}
 
+	private static boolean promoteToFisherman(ServerLevel level, Villager villager) {
+		Optional<BlockPos> heldJobSite = heldFishermanJobSite(level, villager);
+
+		if (heldJobSite.isPresent()) {
+			assignFishermanJobSite(level, villager, heldJobSite.get());
+			return true;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		assignFishermanJobSite(level, villager, reachableJobSite.get());
+		return true;
+	}
+
 	private static boolean ensureCarpenterJobSite(ServerLevel level, Villager villager) {
 		if (heldCarpenterJobSite(level, villager).isPresent()) {
 			return false;
@@ -1304,6 +1477,21 @@ public final class SettlementVillagers {
 
 		villager.releasePoi(MemoryModuleType.JOB_SITE);
 		assignFletcherJobSite(level, villager, jobSite.get());
+		return true;
+	}
+
+	private static boolean ensureFishermanJobSite(ServerLevel level, Villager villager) {
+		if (heldFishermanJobSite(level, villager).isPresent()) {
+			return false;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		assignFishermanJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1604,6 +1792,23 @@ public final class SettlementVillagers {
 			.findFirst();
 	}
 
+	private static Optional<BlockPos> findReachableFishermanJobSite(
+		ServerLevel level,
+		Villager villager,
+		net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy occupancy
+	) {
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.FISHERMAN),
+			pos -> true,
+			villager.blockPosition(),
+			JOB_SITE_SEARCH_RADIUS_BLOCKS,
+			occupancy
+		)
+			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.findFirst();
+	}
+
 	private static void assignTrademasterJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
 		GlobalPos globalPos = GlobalPos.of(level.dimension(), jobSite);
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
@@ -1687,6 +1892,18 @@ public final class SettlementVillagers {
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
 		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
 		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FLETCHER));
+		lockCustomProfession(villager);
+		villager.setOffers(new MerchantOffers());
+		villager.refreshBrain(level);
+		level.broadcastEntityEvent(villager, (byte) 14);
+	}
+
+	private static void assignFishermanJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
+		GlobalPos globalPos = GlobalPos.of(level.dimension(), jobSite);
+		villager.releasePoi(MemoryModuleType.JOB_SITE);
+		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
+		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
+		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FISHERMAN));
 		lockCustomProfession(villager);
 		villager.setOffers(new MerchantOffers());
 		villager.refreshBrain(level);
@@ -1837,6 +2054,10 @@ public final class SettlementVillagers {
 
 	private static boolean canBecomeFletcher(Villager villager) {
 		return fletcherCandidateRank(villager) != Integer.MAX_VALUE;
+	}
+
+	private static boolean canBecomeFisherman(Villager villager) {
+		return fishermanCandidateRank(villager) != Integer.MAX_VALUE;
 	}
 
 	private static boolean canHelpWithConstruction(Villager villager) {
@@ -2246,6 +2467,141 @@ public final class SettlementVillagers {
 		return Integer.MAX_VALUE;
 	}
 
+	private static int fishermanCandidateRank(Villager villager) {
+		if (villager.isBaby()) {
+			return Integer.MAX_VALUE;
+		}
+
+		Holder<VillagerProfession> profession = villager.getVillagerData().profession();
+
+		if (profession.is(VillagerProfession.FISHERMAN)) {
+			return 0;
+		}
+
+		if (profession.is(VillagerProfession.NONE)) {
+			return 1;
+		}
+
+		return Integer.MAX_VALUE;
+	}
+
+	private static Map<ProfessionDemandType, Integer> currentProfessionCounts(List<Villager> villagers) {
+		Map<ProfessionDemandType, Integer> counts = new LinkedHashMap<>();
+
+		for (ProfessionDemandType type : ProfessionDemandType.values()) {
+			counts.put(type, 0);
+		}
+
+		for (Villager villager : villagers) {
+			if (villager.isBaby()) {
+				continue;
+			}
+
+			ProfessionDemandType type = currentProfessionType(villager);
+			if (type != null) {
+				counts.merge(type, 1, Integer::sum);
+			}
+		}
+
+		return counts;
+	}
+
+	private static ProfessionDemandType currentProfessionType(Villager villager) {
+		if (isCustomTrademaster(villager)) {
+			return ProfessionDemandType.TRADEMASTER;
+		}
+		if (isCustomCarpenter(villager)) {
+			return ProfessionDemandType.CARPENTER;
+		}
+		if (isCustomBaker(villager)) {
+			return ProfessionDemandType.BAKER;
+		}
+		if (isCustomRoadwright(villager)) {
+			return ProfessionDemandType.ROADWRIGHT;
+		}
+		if (isCustomForester(villager)) {
+			return ProfessionDemandType.FORESTER;
+		}
+		if (isCustomMiner(villager)) {
+			return ProfessionDemandType.MINER;
+		}
+		if (isCustomPortmaster(villager)) {
+			return ProfessionDemandType.PORTMASTER;
+		}
+		if (villager.getVillagerData().profession().is(VillagerProfession.FLETCHER)) {
+			return ProfessionDemandType.FLETCHER;
+		}
+		if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
+			return ProfessionDemandType.FISHERMAN;
+		}
+		return null;
+	}
+
+	private static List<ProfessionDemand> prioritizedProfessionDemands(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<ProfessionDemandType, Integer> currentCounts
+	) {
+		List<ProfessionDemand> demands = new ArrayList<>();
+
+		for (ProfessionDemandType type : ProfessionDemandType.values()) {
+			int desired = desiredProfessionCount(level, settlement, type);
+			int current = currentCounts.getOrDefault(type, 0);
+			int unmet = desired - current;
+			if (unmet > 0) {
+				demands.add(new ProfessionDemand(type, unmet));
+			}
+		}
+
+		demands.sort(Comparator
+			.<ProfessionDemand>comparingInt(ProfessionDemand::unmetDemand)
+			.reversed()
+			.thenComparing(Comparator.comparingInt((ProfessionDemand demand) -> demand.type().priority()).reversed()));
+		return demands;
+	}
+
+	private static int desiredProfessionCount(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI));
+			case CARPENTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI));
+			case BAKER -> desiredBakerCount(level, settlement);
+			case ROADWRIGHT -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI));
+			case FORESTER -> desiredSinglePoiProfessionCount(level, settlement, poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI));
+			case MINER -> desiredMinerCount(level, settlement);
+			case PORTMASTER -> desiredPortmasterCount(level, settlement);
+			case FLETCHER -> desiredFletcherCount(level, settlement);
+			case FISHERMAN -> desiredFishermanCount(level, settlement);
+		};
+	}
+
+	private static boolean canReachProfessionJobSite(ServerLevel level, Villager villager, ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> heldTrademasterJobSite(level, villager).isPresent() || findReachableTrademasterJobSite(level, villager).isPresent();
+			case CARPENTER -> heldCarpenterJobSite(level, villager).isPresent() || findReachableCarpenterJobSite(level, villager).isPresent();
+			case BAKER -> heldBakerJobSite(level, villager).isPresent() || findReachableBakerJobSite(level, villager).isPresent();
+			case ROADWRIGHT -> heldRoadwrightJobSite(level, villager).isPresent() || findReachableRoadwrightJobSite(level, villager).isPresent();
+			case FORESTER -> heldForesterJobSite(level, villager).isPresent() || findReachableForesterJobSite(level, villager).isPresent();
+			case MINER -> heldMinerJobSite(level, villager).isPresent() || findReachableMinerJobSite(level, villager).isPresent();
+			case PORTMASTER -> heldPortmasterJobSite(level, villager).isPresent() || findReachablePortmasterJobSite(level, villager).isPresent();
+			case FLETCHER -> heldFletcherJobSite(level, villager).isPresent() || findReachableFletcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
+			case FISHERMAN -> heldFishermanJobSite(level, villager).isPresent() || findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
+		};
+	}
+
+	private static boolean promoteToProfession(ServerLevel level, Villager villager, ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> promoteToTrademaster(level, villager);
+			case CARPENTER -> promoteToCarpenter(level, villager);
+			case BAKER -> promoteToBaker(level, villager);
+			case ROADWRIGHT -> promoteToRoadwright(level, villager);
+			case FORESTER -> promoteToForester(level, villager);
+			case MINER -> promoteToMiner(level, villager);
+			case PORTMASTER -> promoteToPortmaster(level, villager);
+			case FLETCHER -> promoteToFletcher(level, villager);
+			case FISHERMAN -> promoteToFisherman(level, villager);
+		};
+	}
+
 	private static int desiredFletcherCount(ServerLevel level, SettlementState settlement) {
 		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(PoiTypes.FLETCHER),
@@ -2261,6 +2617,21 @@ public final class SettlementVillagers {
 		return (int) Math.min(Integer.MAX_VALUE, workstationCount * 2L);
 	}
 
+	private static int desiredFishermanCount(ServerLevel level, SettlementState settlement) {
+		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.FISHERMAN),
+			pos -> true,
+			settlement.center(),
+			villagerRadius(settlement),
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.distinct()
+			.count();
+		return workstationCount > 0 ? 1 : 0;
+	}
+
 	private static int desiredBakerCount(ServerLevel level, SettlementState settlement) {
 		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI),
@@ -2274,6 +2645,23 @@ public final class SettlementVillagers {
 			.distinct()
 			.count();
 		return (int) Math.min(Integer.MAX_VALUE, workstationCount);
+	}
+
+	private static int desiredSinglePoiProfessionCount(
+		ServerLevel level,
+		SettlementState settlement,
+		java.util.function.Predicate<Holder<PoiType>> poiPredicate
+	) {
+		boolean hasWorkstation = level.getPoiManager().findAllClosestFirstWithType(
+			poiPredicate,
+			pos -> true,
+			settlement.center(),
+			villagerRadius(settlement),
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.findAny()
+			.isPresent();
+		return hasWorkstation ? 1 : 0;
 	}
 
 	private static int desiredPortmasterCount(ServerLevel level, SettlementState settlement) {
@@ -2555,6 +2943,31 @@ public final class SettlementVillagers {
 
 	public record ProfessionDebugInfo(String targetLabel, String detailLabel) {
 		public static final ProfessionDebugInfo EMPTY = new ProfessionDebugInfo("", "");
+	}
+
+	private enum ProfessionDemandType {
+		TRADEMASTER(90),
+		CARPENTER(80),
+		ROADWRIGHT(75),
+		BAKER(70),
+		FORESTER(60),
+		MINER(55),
+		PORTMASTER(50),
+		FLETCHER(40),
+		FISHERMAN(35);
+
+		private final int priority;
+
+		ProfessionDemandType(int priority) {
+			this.priority = priority;
+		}
+
+		private int priority() {
+			return priority;
+		}
+	}
+
+	private record ProfessionDemand(ProfessionDemandType type, int unmetDemand) {
 	}
 
 	public record VillagerDebugView(

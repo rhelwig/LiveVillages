@@ -74,14 +74,14 @@ public class CarpenterBenchBlock extends Block {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureCarpenter(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Carpenter's Workshop construction started around this Carpenter's Bench."));
 			}
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureCarpenter(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Carpenter's Workshop construction is already planned around this Carpenter's Bench."));

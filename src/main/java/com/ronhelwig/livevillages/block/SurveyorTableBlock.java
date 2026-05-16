@@ -85,14 +85,14 @@ public class SurveyorTableBlock extends Block {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureRoadwright(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Roadwright's Workshop construction started around this Surveyor's Table."));
 			}
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureRoadwright(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Roadwright's Workshop construction is already planned around this Surveyor's Table."));

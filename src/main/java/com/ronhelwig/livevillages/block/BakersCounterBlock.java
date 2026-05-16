@@ -16,10 +16,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -28,17 +31,17 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-import com.ronhelwig.livevillages.menu.SettlementTradeAccess;
+import com.ronhelwig.livevillages.block.entity.BakersCounterBlockEntity;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
-public class BakersCounterBlock extends HorizontalDirectionalBlock {
+public class BakersCounterBlock extends BaseEntityBlock {
 	public static final MapCodec<BakersCounterBlock> CODEC = simpleCodec(BakersCounterBlock::new);
 	public static final VoxelShape SHAPE = Shapes.block();
-	private static final Component CONTAINER_TITLE = Component.translatable("block.live-villages.bakers_counter");
+	public static final net.minecraft.world.level.block.state.properties.EnumProperty<Direction> FACING = HorizontalDirectionalBlock.FACING;
 
 	public BakersCounterBlock(BlockBehaviour.Properties properties) {
 		super(properties);
@@ -46,7 +49,7 @@ public class BakersCounterBlock extends HorizontalDirectionalBlock {
 	}
 
 	@Override
-	protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
+	protected MapCodec<? extends BaseEntityBlock> codec() {
 		return CODEC;
 	}
 
@@ -71,8 +74,18 @@ public class BakersCounterBlock extends HorizontalDirectionalBlock {
 	}
 
 	@Override
+	protected RenderShape getRenderShape(BlockState state) {
+		return RenderShape.MODEL;
+	}
+
+	@Override
 	protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
 		return SHAPE;
+	}
+
+	@Override
+	public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+		return new BakersCounterBlockEntity(pos, state);
 	}
 
 	@Override
@@ -106,14 +119,14 @@ public class BakersCounterBlock extends HorizontalDirectionalBlock {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureBaker(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Bakery construction started around this Baker's Counter."));
 			}
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureBaker(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Bakery construction is already planned around this Baker's Counter."));
@@ -129,15 +142,15 @@ public class BakersCounterBlock extends HorizontalDirectionalBlock {
 			return InteractionResult.SUCCESS;
 		}
 
-		if (!(level instanceof ServerLevel) || !(player instanceof ServerPlayer serverPlayer)) {
+		if (!(level instanceof ServerLevel)) {
 			return InteractionResult.PASS;
 		}
 
-		if (!SettlementTradeAccess.openTradeMenu(serverPlayer, pos, CONTAINER_TITLE)) {
-			player.sendSystemMessage(Component.literal("No settlement found near this Baker's Counter."));
+		if (level.getBlockEntity(pos) instanceof BakersCounterBlockEntity bakersCounter) {
+			player.openMenu(bakersCounter);
 			return InteractionResult.SUCCESS_SERVER;
 		}
 
-		return InteractionResult.SUCCESS_SERVER;
+		return InteractionResult.PASS;
 	}
 }

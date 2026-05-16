@@ -207,10 +207,10 @@ public class TradeBoardBlock extends BaseEntityBlock {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureTrademaster(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureTrademaster(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 		}
 
 		if (placer instanceof ServerPlayer serverPlayer) {

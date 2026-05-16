@@ -24,7 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 
-import com.ronhelwig.livevillages.block.entity.GlassDisplayCaseBlockEntity;
+import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
@@ -32,9 +32,9 @@ public final class SettlementBakerWork {
 	private static final double BAKING_REACH_DISTANCE_SQUARED = 6.25D;
 	private static final double BAKING_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 80L;
-	private static final long BAKING_DECIDE_INTERVAL_TICKS = 2_000L;
+	private static final long BAKING_DECIDE_INTERVAL_TICKS = 400L;
 	private static final double BATCHES_PER_BAKER_PER_DAY = SettlementEconomyRules.scaledWorkerDailyRate(6.0D);
-	private static final String DISPLAY_NAME_PREFIX = "livevillages_bakery_host_";
+	private static final String DISPLAY_NAME_PREFIX = "livevillages_bakery_display_";
 	private static final List<String> DISPLAYABLE_GOODS = List.of("golden_apple", "cake", "pumpkin_pie", "cookie", "baked_potato", "bread");
 	private static final List<BakeryRecipe> RECIPES = List.of(
 		new BakeryRecipe("baking_bread", 1, "bread", 1, Map.of("wheat", 3)),
@@ -49,6 +49,29 @@ public final class SettlementBakerWork {
 	private SettlementBakerWork() {
 	}
 
+	public static void syncBakeryDisplaysNear(ServerLevel level, BlockPos pos) {
+		resolveBakeryContext(level, pos).ifPresent(context -> syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites()));
+	}
+
+	public static void recordBakerySale(ServerLevel level, BlockPos pos, String paymentGoodsKey, int paymentAmount) {
+		resolveBakeryContext(level, pos).ifPresent(context -> {
+			Map<String, Integer> stock = new LinkedHashMap<>(context.settlement().stock());
+			boolean stockChanged = false;
+
+			if (paymentGoodsKey != null && !paymentGoodsKey.isBlank() && paymentAmount > 0) {
+				SettlementGoods.addGoods(stock, paymentGoodsKey, paymentAmount);
+				stockChanged = true;
+			}
+
+			stockChanged |= restockDisplayCases(level, context.settlement(), stock, context.bakeryBuildSites());
+			syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites());
+
+			if (stockChanged) {
+				LiveVillagesSavedData.get(level.getServer()).putSettlement(context.settlement().withStock(stock));
+			}
+		});
+	}
+
 	public static boolean maintainLoadedBaking(
 		ServerLevel level,
 		SettlementState settlement,
@@ -58,8 +81,9 @@ public final class SettlementBakerWork {
 		List<SettlementBuildSite> bakeryBuildSites = buildSites.stream()
 			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.BAKERY)
 			.toList();
+		List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, bakeryBuildSites);
 		boolean stockChanged = restockDisplayCases(level, settlement, stock, bakeryBuildSites);
-		syncBakeryDisplays(level, settlement, stock, bakeryBuildSites);
+		syncBakeryDisplays(level, settlement, bakeryBuildSites);
 
 		List<Villager> bakers = SettlementVillagers.nearbyBakers(level, settlement);
 		if (bakers.isEmpty()) {
@@ -78,7 +102,8 @@ public final class SettlementBakerWork {
 				continue;
 			}
 
-			BakeryRecipe recipe = chooseRecipe(settlement, stock, settlementTier);
+			Map<String, Integer> pantry = bakeryPantrySnapshot(stock, displayInventories);
+			BakeryRecipe recipe = chooseRecipe(settlement, pantry, settlementTier);
 			BlockPos workPos = SettlementVillagers.bakerJobSite(level, baker)
 				.or(() -> bakeryBuildSites.stream()
 					.map(buildSite -> SettlementConstruction.currentPlacedWorkstationPos(level, buildSite))
@@ -94,11 +119,11 @@ public final class SettlementBakerWork {
 				continue;
 			}
 
-			if (craftRecipe(stock, recipe)) {
+			if (craftRecipe(stock, displayInventories, recipe)) {
 				baker.swing(InteractionHand.MAIN_HAND);
 				stockChanged = true;
 				stockChanged |= restockDisplayCases(level, settlement, stock, bakeryBuildSites);
-				syncBakeryDisplays(level, settlement, stock, bakeryBuildSites);
+				syncBakeryDisplays(level, settlement, bakeryBuildSites);
 			}
 		}
 
@@ -115,7 +140,7 @@ public final class SettlementBakerWork {
 
 		for (int i = 0; i < batches; i++) {
 			BakeryRecipe recipe = chooseRecipe(settlement, stock, settlementTier);
-			if (recipe == null || !craftRecipe(stock, recipe)) {
+			if (recipe == null || !craftRecipe(stock, List.of(), recipe)) {
 				break;
 			}
 		}
@@ -131,16 +156,16 @@ public final class SettlementBakerWork {
 		return Optional.of(task.taskKey());
 	}
 
-	private static BakeryRecipe chooseRecipe(SettlementState settlement, Map<String, Integer> stock, int settlementTier) {
+	private static BakeryRecipe chooseRecipe(SettlementState settlement, Map<String, Integer> availableGoods, int settlementTier) {
 		BakeryRecipe bestRecipe = null;
 		int bestPriority = Integer.MIN_VALUE;
 
 		for (BakeryRecipe recipe : RECIPES) {
-			if (settlementTier < recipe.minTier() || !canCraft(stock, recipe)) {
+			if (settlementTier < recipe.minTier() || !canCraft(availableGoods, recipe)) {
 				continue;
 			}
 
-			int current = stock.getOrDefault(recipe.outputGoodsKey(), 0);
+			int current = availableGoods.getOrDefault(recipe.outputGoodsKey(), 0);
 			int goal = desiredOutputStock(settlement, recipe.outputGoodsKey());
 			if (goal > 0 && current >= goal) {
 				continue;
@@ -149,11 +174,15 @@ public final class SettlementBakerWork {
 			int shortage = Math.max(1, goal - current);
 			int priority = shortage * 100;
 
-			if (recipe.outputGoodsKey().equals("bread")) {
-				priority += 500;
+			if (current <= 0) {
+				priority += 220 + (recipe.minTier() * 30);
 			}
 
-			priority += recipe.minTier() * 10;
+			if (recipe.outputGoodsKey().equals("bread")) {
+				priority += current < Math.max(1, goal / 2) ? 180 : -80;
+			}
+
+			priority += recipe.minTier() * 20;
 			priority += recipe.outputAmount();
 
 			if (priority > bestPriority) {
@@ -185,13 +214,13 @@ public final class SettlementBakerWork {
 		return true;
 	}
 
-	private static boolean craftRecipe(Map<String, Integer> stock, BakeryRecipe recipe) {
-		if (!canCraft(stock, recipe)) {
+	private static boolean craftRecipe(Map<String, Integer> stock, List<SaleDisplayBlockEntity> displayInventories, BakeryRecipe recipe) {
+		if (!canCraft(bakeryPantrySnapshot(stock, displayInventories), recipe)) {
 			return false;
 		}
 
 		for (Map.Entry<String, Integer> ingredient : recipe.ingredients().entrySet()) {
-			SettlementGoods.consumeGoods(stock, ingredient.getKey(), ingredient.getValue());
+			consumeBakeryIngredient(stock, displayInventories, ingredient.getKey(), ingredient.getValue());
 		}
 
 		SettlementGoods.addGoods(stock, recipe.outputGoodsKey(), recipe.outputAmount());
@@ -228,49 +257,41 @@ public final class SettlementBakerWork {
 	private static void syncBakeryDisplays(
 		ServerLevel level,
 		SettlementState settlement,
-		Map<String, Integer> stock,
 		Collection<SettlementBuildSite> bakeryBuildSites
 	) {
 		List<DisplayHost> hosts = bakeryDisplayHosts(level, bakeryBuildSites);
-		int settlementTier = SettlementTiers.unlockedTier(settlement);
-		List<String> displayGoodsKeys = displayableGoodsKeys(stock, settlementTier);
-		Map<Long, ItemStack> desiredDisplays = new LinkedHashMap<>();
-		int workstationDisplayIndex = 0;
+		Map<String, DesiredDisplay> desiredDisplays = new LinkedHashMap<>();
 
 		for (DisplayHost host : hosts) {
-			ItemStack desiredStack;
-			if (host.workstation()) {
-				desiredStack = displayGoodsKeys.isEmpty()
-					? ItemStack.EMPTY
-					: TradeBoardTradeRules.createGoodsStack(displayGoodsKeys.get(workstationDisplayIndex % displayGoodsKeys.size()), 1);
-				workstationDisplayIndex++;
-			} else {
-				desiredStack = level.getBlockEntity(host.pos()) instanceof GlassDisplayCaseBlockEntity displayCase
-					? displayCase.representativeStack()
-					: ItemStack.EMPTY;
-			}
-			desiredDisplays.put(host.pos().asLong(), desiredStack);
-		}
-
-		Map<Long, List<Display.ItemDisplay>> existingDisplays = new HashMap<>();
-		double scanRadius = SettlementVillagers.settlementRadiusBlocks(settlement) + 16.0D;
-		AABB bounds = new AABB(settlement.center()).inflate(scanRadius);
-
-		for (Display.ItemDisplay display : level.getEntitiesOfClass(Display.ItemDisplay.class, bounds, entity -> hostKey(entity) != null)) {
-			Long hostKey = hostKey(display);
-
-			if (hostKey == null) {
-				display.discard();
+			if (!(level.getBlockEntity(host.pos()) instanceof SaleDisplayBlockEntity displayInventory)) {
 				continue;
 			}
 
-			existingDisplays.computeIfAbsent(hostKey, ignored -> new ArrayList<>()).add(display);
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+				ItemStack desiredStack = displayInventory.getItem(slot);
+				if (desiredStack.isEmpty()) {
+					continue;
+				}
+
+				desiredDisplays.put(displaySlotTag(host.pos(), slot), new DesiredDisplay(host, slot, desiredStack.copy()));
+			}
 		}
 
-		Set<Long> validHosts = new LinkedHashSet<>(desiredDisplays.keySet());
+		Map<String, List<Display.ItemDisplay>> existingDisplays = new HashMap<>();
+		double scanRadius = SettlementVillagers.settlementRadiusBlocks(settlement) + 16.0D;
+		AABB bounds = new AABB(settlement.center()).inflate(scanRadius);
 
-		for (Map.Entry<Long, List<Display.ItemDisplay>> entry : existingDisplays.entrySet()) {
-			if (validHosts.contains(entry.getKey())) {
+		for (Display.ItemDisplay display : level.getEntitiesOfClass(Display.ItemDisplay.class, bounds, entity -> displayTag(entity) != null)) {
+			String displayTag = displayTag(display);
+			if (displayTag != null) {
+				existingDisplays.computeIfAbsent(displayTag, ignored -> new ArrayList<>()).add(display);
+			}
+		}
+
+		Set<String> validDisplays = new LinkedHashSet<>(desiredDisplays.keySet());
+
+		for (Map.Entry<String, List<Display.ItemDisplay>> entry : existingDisplays.entrySet()) {
+			if (validDisplays.contains(entry.getKey())) {
 				continue;
 			}
 
@@ -279,23 +300,15 @@ public final class SettlementBakerWork {
 			}
 		}
 
-		for (DisplayHost host : hosts) {
-			long hostKey = host.pos().asLong();
-			List<Display.ItemDisplay> displaysAtHost = existingDisplays.getOrDefault(hostKey, List.of());
+		for (Map.Entry<String, DesiredDisplay> entry : desiredDisplays.entrySet()) {
+			List<Display.ItemDisplay> displaysAtHost = existingDisplays.getOrDefault(entry.getKey(), List.of());
 			Display.ItemDisplay primary = displaysAtHost.isEmpty() ? null : displaysAtHost.get(0);
-			ItemStack desiredStack = desiredDisplays.getOrDefault(hostKey, ItemStack.EMPTY);
-
-			if (desiredStack.isEmpty()) {
-				for (Display.ItemDisplay display : displaysAtHost) {
-					display.discard();
-				}
-				continue;
-			}
+			DesiredDisplay desiredDisplay = entry.getValue();
 
 			if (primary == null || primary.isRemoved()) {
-				primary = spawnDisplay(level, host, desiredStack);
+				primary = spawnDisplay(level, desiredDisplay);
 			} else {
-				updateDisplay(primary, host, desiredStack);
+				updateDisplay(primary, desiredDisplay);
 			}
 
 			for (int i = 1; i < displaysAtHost.size(); i++) {
@@ -349,59 +362,199 @@ public final class SettlementBakerWork {
 		Map<String, Integer> stock,
 		Collection<SettlementBuildSite> bakeryBuildSites
 	) {
-		List<GlassDisplayCaseBlockEntity> displayCases = bakeryDisplayCases(level, bakeryBuildSites);
-		if (displayCases.isEmpty()) {
+		List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, bakeryBuildSites);
+		if (displayInventories.isEmpty()) {
 			return false;
 		}
 
-		int settlementTier = SettlementTiers.unlockedTier(settlement);
-		Map<String, Integer> availableBundles = new LinkedHashMap<>();
-		for (String goodsKey : DISPLAYABLE_GOODS) {
-			if (settlementTier < SettlementEconomyRules.requiredTierForGoods(goodsKey)) {
+		Map<String, Integer> availableSurplus = availableDisplaySurplus(settlement, stock);
+		if (availableSurplus.isEmpty()) {
+			return false;
+		}
+
+		boolean changed = topOffMatchingDisplayStacks(displayInventories, stock, availableSurplus);
+
+		while (true) {
+			String goodsKey = nextNewDisplayGoodsKey(displayInventories, availableSurplus);
+			if (goodsKey == null) {
+				break;
+			}
+
+			SaleDisplayBlockEntity targetDisplay = nextDisplayForNewStack(displayInventories);
+			if (targetDisplay == null) {
+				break;
+			}
+
+			int emptySlot = targetDisplay.firstEmptySlot();
+			if (emptySlot < 0) {
+				break;
+			}
+
+			int displayAmount = Math.min(displayNewStackAmount(goodsKey), availableSurplus.getOrDefault(goodsKey, 0));
+			ItemStack displayStack = TradeBoardTradeRules.createGoodsStack(goodsKey, displayAmount);
+			if (displayAmount <= 0 || displayStack.isEmpty()) {
+				availableSurplus.remove(goodsKey);
 				continue;
 			}
 
-			int bundleAmount = displayBundleAmount(goodsKey);
-			if (bundleAmount <= 0) {
+			targetDisplay.setItem(emptySlot, displayStack);
+			consumeDisplayGoods(stock, availableSurplus, goodsKey, displayAmount);
+			changed = true;
+		}
+
+		return changed;
+	}
+
+	private static List<SaleDisplayBlockEntity> bakeryDisplayInventories(ServerLevel level, Collection<SettlementBuildSite> bakeryBuildSites) {
+		List<SaleDisplayBlockEntity> displayInventories = new ArrayList<>();
+		for (DisplayHost host : bakeryDisplayHosts(level, bakeryBuildSites)) {
+			if (level.getBlockEntity(host.pos()) instanceof SaleDisplayBlockEntity displayInventory) {
+				displayInventories.add(displayInventory);
+			}
+		}
+		return displayInventories;
+	}
+
+	private static Optional<BakeryContext> resolveBakeryContext(ServerLevel level, BlockPos pos) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.findSettlementForPosition(level.dimension(), pos, candidate -> true);
+		if (settlement.isEmpty()) {
+			return Optional.empty();
+		}
+
+		List<SettlementBuildSite> bakeryBuildSites = savedData.getBuildSitesForSettlement(settlement.get().id()).stream()
+			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.BAKERY)
+			.toList();
+		if (bakeryBuildSites.isEmpty()) {
+			return Optional.empty();
+		}
+
+		return Optional.of(new BakeryContext(settlement.get(), bakeryBuildSites));
+	}
+
+	private static Map<String, Integer> bakeryPantrySnapshot(Map<String, Integer> stock, List<SaleDisplayBlockEntity> displayInventories) {
+		Map<String, Integer> pantry = new LinkedHashMap<>(stock);
+
+		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+				ItemStack stack = displayInventory.getItem(slot);
+				String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack);
+				if (stack.isEmpty() || goodsKey == null) {
+					continue;
+				}
+
+				SettlementGoods.addGoods(pantry, goodsKey, stack.getCount());
+			}
+		}
+
+		return pantry;
+	}
+
+	private static void consumeBakeryIngredient(
+		Map<String, Integer> stock,
+		List<SaleDisplayBlockEntity> displayInventories,
+		String goodsKey,
+		int amount
+	) {
+		int remaining = amount;
+		int stockAvailable = stock.getOrDefault(goodsKey, 0);
+		if (stockAvailable > 0) {
+			int stockConsumed = Math.min(stockAvailable, remaining);
+			SettlementGoods.consumeGoods(stock, goodsKey, stockConsumed);
+			remaining -= stockConsumed;
+		}
+
+		if (remaining <= 0) {
+			return;
+		}
+
+		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT && remaining > 0; slot++) {
+				ItemStack displayStack = displayInventory.getItem(slot);
+				if (displayStack.isEmpty() || !goodsKey.equals(TradeBoardTradeRules.goodsKeyForStack(displayStack))) {
+					continue;
+				}
+
+				int consumed = Math.min(remaining, displayStack.getCount());
+				ItemStack updatedStack = displayStack.copy();
+				updatedStack.shrink(consumed);
+				displayInventory.setItem(slot, updatedStack.isEmpty() ? ItemStack.EMPTY : updatedStack);
+				remaining -= consumed;
+			}
+
+			if (remaining <= 0) {
+				return;
+			}
+		}
+	}
+
+	private static int displayBundleAmount(String goodsKey) {
+		return Math.max(1, TradeBoardTradeRules.bundleSize(goodsKey));
+	}
+
+	private static int displayNewStackAmount(String goodsKey) {
+		ItemStack prototype = TradeBoardTradeRules.createGoodsStack(goodsKey, 1);
+		if (prototype.isEmpty()) {
+			return 0;
+		}
+
+		return Math.min(displayBundleAmount(goodsKey), prototype.getMaxStackSize());
+	}
+
+	private static Map<String, Integer> availableDisplaySurplus(SettlementState settlement, Map<String, Integer> stock) {
+		int settlementTier = SettlementTiers.unlockedTier(settlement);
+		Map<String, Integer> availableSurplus = new LinkedHashMap<>();
+
+		for (String goodsKey : DISPLAYABLE_GOODS) {
+			if (settlementTier < SettlementEconomyRules.requiredTierForGoods(goodsKey)) {
 				continue;
 			}
 
 			int current = stock.getOrDefault(goodsKey, 0);
 			int target = SettlementEconomyRules.targetForGoods(settlement, goodsKey);
 			int surplus = current - target;
-			if (surplus >= bundleAmount) {
-				availableBundles.put(goodsKey, surplus);
+			if (surplus > 0) {
+				availableSurplus.put(goodsKey, surplus);
 			}
 		}
 
+		return availableSurplus;
+	}
+
+	private static boolean topOffMatchingDisplayStacks(
+		List<SaleDisplayBlockEntity> displayInventories,
+		Map<String, Integer> stock,
+		Map<String, Integer> availableSurplus
+	) {
 		boolean changed = false;
-		for (GlassDisplayCaseBlockEntity displayCase : displayCases) {
-			while (true) {
-				int emptySlot = displayCase.firstEmptySlot();
-				if (emptySlot < 0) {
-					break;
-				}
 
-				String goodsKey = nextDisplayGoodsKey(availableBundles);
-				if (goodsKey == null) {
-					break;
-				}
-
-				int bundleAmount = displayBundleAmount(goodsKey);
-				ItemStack displayStack = TradeBoardTradeRules.createGoodsStack(goodsKey, bundleAmount);
+		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+				ItemStack displayStack = displayInventory.getItem(slot);
 				if (displayStack.isEmpty()) {
-					availableBundles.remove(goodsKey);
 					continue;
 				}
 
-				displayCase.setItem(emptySlot, displayStack);
-				SettlementGoods.consumeGoods(stock, goodsKey, bundleAmount);
-				int remainingSurplus = availableBundles.getOrDefault(goodsKey, 0) - bundleAmount;
-				if (remainingSurplus < bundleAmount) {
-					availableBundles.remove(goodsKey);
-				} else {
-					availableBundles.put(goodsKey, remainingSurplus);
+				String goodsKey = TradeBoardTradeRules.goodsKeyForStack(displayStack);
+				if (goodsKey == null || !DISPLAYABLE_GOODS.contains(goodsKey)) {
+					continue;
 				}
+
+				int available = availableSurplus.getOrDefault(goodsKey, 0);
+				if (available <= 0) {
+					continue;
+				}
+
+				int capacity = displayStack.getMaxStackSize() - displayStack.getCount();
+				if (capacity <= 0) {
+					continue;
+				}
+
+				int addAmount = Math.min(available, capacity);
+				ItemStack updatedStack = displayStack.copy();
+				updatedStack.grow(addAmount);
+				displayInventory.setItem(slot, updatedStack);
+				consumeDisplayGoods(stock, availableSurplus, goodsKey, addAmount);
 				changed = true;
 			}
 		}
@@ -409,70 +562,120 @@ public final class SettlementBakerWork {
 		return changed;
 	}
 
-	private static List<GlassDisplayCaseBlockEntity> bakeryDisplayCases(ServerLevel level, Collection<SettlementBuildSite> bakeryBuildSites) {
-		List<GlassDisplayCaseBlockEntity> displayCases = new ArrayList<>();
-		for (DisplayHost host : bakeryDisplayHosts(level, bakeryBuildSites)) {
-			if (host.workstation()) {
-				continue;
-			}
-
-			if (level.getBlockEntity(host.pos()) instanceof GlassDisplayCaseBlockEntity displayCase) {
-				displayCases.add(displayCase);
-			}
-		}
-		return displayCases;
-	}
-
-	private static int displayBundleAmount(String goodsKey) {
-		return Math.max(1, TradeBoardTradeRules.bundleSize(goodsKey));
-	}
-
-	private static String nextDisplayGoodsKey(Map<String, Integer> availableBundles) {
-		return availableBundles.entrySet().stream()
-			.sorted(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue).reversed())
+	private static String nextNewDisplayGoodsKey(List<SaleDisplayBlockEntity> displayInventories, Map<String, Integer> availableSurplus) {
+		return availableSurplus.entrySet().stream()
+			.filter(entry -> entry.getValue() >= displayNewStackAmount(entry.getKey()))
+			.sorted(Comparator
+				.<Map.Entry<String, Integer>>comparingInt(entry -> displayedSlotCount(displayInventories, entry.getKey()))
+				.thenComparing(Map.Entry<String, Integer>::getValue, Comparator.reverseOrder())
+				.thenComparingInt(entry -> DISPLAYABLE_GOODS.indexOf(entry.getKey())))
 			.map(Map.Entry::getKey)
 			.findFirst()
 			.orElse(null);
 	}
 
-	private static Display.ItemDisplay spawnDisplay(ServerLevel level, DisplayHost host, ItemStack stack) {
+	private static SaleDisplayBlockEntity nextDisplayForNewStack(List<SaleDisplayBlockEntity> displayInventories) {
+		return displayInventories.stream()
+			.filter(displayInventory -> displayInventory.firstEmptySlot() >= 0)
+			.min(Comparator.comparingInt(SettlementBakerWork::occupiedSlotCount))
+			.orElse(null);
+	}
+
+	private static int occupiedSlotCount(SaleDisplayBlockEntity displayInventory) {
+		int occupied = 0;
+		for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+			if (!displayInventory.getItem(slot).isEmpty()) {
+				occupied++;
+			}
+		}
+		return occupied;
+	}
+
+	private static int displayedSlotCount(List<SaleDisplayBlockEntity> displayInventories, String goodsKey) {
+		int displayedSlots = 0;
+
+		for (SaleDisplayBlockEntity displayInventory : displayInventories) {
+			for (int slot = 0; slot < SaleDisplayBlockEntity.SLOT_COUNT; slot++) {
+				if (goodsKey.equals(TradeBoardTradeRules.goodsKeyForStack(displayInventory.getItem(slot)))) {
+					displayedSlots++;
+				}
+			}
+		}
+
+		return displayedSlots;
+	}
+
+	private static void consumeDisplayGoods(
+		Map<String, Integer> stock,
+		Map<String, Integer> availableSurplus,
+		String goodsKey,
+		int amount
+	) {
+		if (amount <= 0) {
+			return;
+		}
+
+		SettlementGoods.consumeGoods(stock, goodsKey, amount);
+		int remaining = availableSurplus.getOrDefault(goodsKey, 0) - amount;
+		if (remaining > 0) {
+			availableSurplus.put(goodsKey, remaining);
+		} else {
+			availableSurplus.remove(goodsKey);
+		}
+	}
+
+	private static Display.ItemDisplay spawnDisplay(ServerLevel level, DesiredDisplay desiredDisplay) {
 		Display.ItemDisplay display = new Display.ItemDisplay(EntityType.ITEM_DISPLAY, level);
 		display.setInvulnerable(true);
 		display.setNoGravity(true);
 		display.setSilent(true);
-		updateDisplay(display, host, stack);
+		updateDisplay(display, desiredDisplay);
 		level.addFreshEntity(display);
 		return display;
 	}
 
-	private static void updateDisplay(Display.ItemDisplay display, DisplayHost host, ItemStack stack) {
-		double yOffset = host.workstation() ? 0.95D : 0.35D;
-		display.setPos(host.pos().getX() + 0.5D, host.pos().getY() + yOffset, host.pos().getZ() + 0.5D);
-		display.setCustomName(Component.literal(hostTag(host.pos())));
+	private static void updateDisplay(Display.ItemDisplay display, DesiredDisplay desiredDisplay) {
+		DisplayHost host = desiredDisplay.host();
+		double x = host.pos().getX() + 0.5D + shelfColumnXOffset(desiredDisplay.slot());
+		double y = host.pos().getY() + shelfYOffset(host.workstation(), desiredDisplay.slot());
+		double z = host.pos().getZ() + 0.5D;
+
+		display.setPos(x, y, z);
+		display.setCustomName(Component.literal(desiredDisplay.tag()));
 		display.setCustomNameVisible(false);
 		display.setItemTransform(ItemDisplayContext.GROUND);
-		display.setItemStack(stack.copy());
+		display.setItemStack(desiredDisplay.stack().copy());
 	}
 
-	private static Long hostKey(Display.ItemDisplay display) {
+	private static String displayTag(Display.ItemDisplay display) {
 		if (!display.hasCustomName()) {
 			return null;
 		}
 
 		String name = display.getCustomName().getString();
-		if (!name.startsWith(DISPLAY_NAME_PREFIX)) {
-			return null;
-		}
-
-		try {
-			return Long.parseLong(name.substring(DISPLAY_NAME_PREFIX.length()));
-		} catch (NumberFormatException ignored) {
-			return null;
-		}
+		return name.startsWith(DISPLAY_NAME_PREFIX) ? name : null;
 	}
 
-	private static String hostTag(BlockPos pos) {
-		return DISPLAY_NAME_PREFIX + pos.asLong();
+	private static String displaySlotTag(BlockPos pos, int slot) {
+		return DISPLAY_NAME_PREFIX + pos.asLong() + "_slot_" + slot;
+	}
+
+	private static double shelfColumnXOffset(int slot) {
+		int column = Math.floorMod(slot, SaleDisplayBlockEntity.SLOT_COUNT / 2);
+		return switch (column) {
+			case 0 -> -0.20D;
+			case 1 -> 0.0D;
+			default -> 0.20D;
+		};
+	}
+
+	private static double shelfYOffset(boolean workstation, int slot) {
+		int row = slot / (SaleDisplayBlockEntity.SLOT_COUNT / 2);
+		if (workstation) {
+			return row == 0 ? 0.78D : 0.28D;
+		}
+
+		return row == 0 ? 0.58D : 0.12D;
 	}
 
 	private record BakeryRecipe(
@@ -487,6 +690,15 @@ public final class SettlementBakerWork {
 	private record DisplayHost(BlockPos pos, boolean workstation) {
 	}
 
+	private record DesiredDisplay(DisplayHost host, int slot, ItemStack stack) {
+		private String tag() {
+			return displaySlotTag(host.pos(), slot);
+		}
+	}
+
 	private record TimedTask(String taskKey, long tick) {
+	}
+
+	private record BakeryContext(SettlementState settlement, List<SettlementBuildSite> bakeryBuildSites) {
 	}
 }

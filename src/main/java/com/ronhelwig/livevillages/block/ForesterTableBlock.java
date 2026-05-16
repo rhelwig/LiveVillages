@@ -75,14 +75,14 @@ public class ForesterTableBlock extends Block {
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureForester(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Forester's Workshop construction started around this Forester's Table."));
 			}
 		} else if (buildResult.isResumed()) {
 			savedData.putBuildSite(buildResult.buildSite());
-			SettlementVillagers.ensureForester(serverLevel, settlement);
+			SettlementVillagers.ensureWorkforce(serverLevel, settlement);
 
 			if (placer instanceof ServerPlayer serverPlayer) {
 				serverPlayer.sendSystemMessage(Component.literal("Forester's Workshop construction is already planned around this Forester's Table."));

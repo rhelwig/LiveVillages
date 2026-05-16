@@ -104,7 +104,7 @@ public class PortmasterAnchorBlock extends HorizontalDirectionalBlock {
 			return;
 		}
 
-		SettlementVillagers.ensurePortmaster(serverLevel, settlement.get());
+		SettlementVillagers.ensureWorkforce(serverLevel, settlement.get());
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.get().stock());
 		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartDockAtPortmasterAnchor(
