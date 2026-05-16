@@ -7,11 +7,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
@@ -29,12 +36,17 @@ public final class SettlementDefenseWork {
 	private static final long BELL_ALARM_DURATION_TICKS = 400L;
 	private static final long TASK_MEMORY_TICKS = 40L;
 	private static final long MELEE_ATTACK_COOLDOWN_TICKS = 20L;
+	private static final double DEFENSE_CUE_PARTICLE_SPREAD = 0.18D;
 	private static final Map<String, BellAlarm> BELL_ALARMS = new HashMap<>();
 	private static final Map<String, Long> LAST_BELL_RING_TICKS = new HashMap<>();
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, Long> LAST_ATTACK_TICKS = new HashMap<>();
 
 	private SettlementDefenseWork() {
+	}
+
+	public static void register() {
+		ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register(SettlementDefenseWork::onKilledOtherEntity);
 	}
 
 	public static void onBellRung(ServerLevel level, BlockPos bellPos) {
@@ -117,6 +129,25 @@ public final class SettlementDefenseWork {
 		return Math.max(VANILLA_BELL_RANGE_BLOCKS, (SettlementVillagers.settlementRadiusBlocks(settlement) + 1) / 2);
 	}
 
+	private static void onKilledOtherEntity(ServerLevel level, Entity entity, LivingEntity killedEntity, net.minecraft.world.damagesource.DamageSource damageSource) {
+		if (!(entity instanceof ServerPlayer player) || !(killedEntity instanceof Monster monster)) {
+			return;
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.findSettlementForPosition(
+			level.dimension(),
+			monster.blockPosition(),
+			existingSettlement -> existingSettlement.kind() != SettlementKind.OUTPOST && SettlementVillagers.usesActualVillagers(existingSettlement)
+		);
+
+		if (settlement.isEmpty() || !isThreateningSettlement(level, settlement.get(), monster)) {
+			return;
+		}
+
+		savedData.addBakeryFreebiesOwed(settlement.get().id(), player.getUUID(), 1);
+	}
+
 	private static Optional<ActiveBellAlarm> resolveActiveAlarm(ServerLevel level, SettlementState settlement) {
 		String key = alarmKey(settlement);
 		BellAlarm alarm = BELL_ALARMS.get(key);
@@ -166,6 +197,18 @@ public final class SettlementDefenseWork {
 			.min(Comparator.comparingDouble(monster -> monster.distanceToSqr(origin.getX() + 0.5D, origin.getY() + 0.5D, origin.getZ() + 0.5D)));
 	}
 
+	private static boolean isThreateningSettlement(ServerLevel level, SettlementState settlement, Monster monster) {
+		int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		if (monster.blockPosition().distSqr(settlement.center()) <= (double) settlementRadius * settlementRadius) {
+			return true;
+		}
+
+		return resolveActiveAlarm(level, settlement)
+			.filter(alarm -> monster.getUUID().equals(alarm.target().getUUID())
+				|| monster.blockPosition().distSqr(alarm.bellPos()) <= (double) alarm.responseRadius() * alarm.responseRadius())
+			.isPresent();
+	}
+
 	private static void engageBellDefender(ServerLevel level, Villager defender, Monster target, long tick) {
 		showDefenseWeapon(defender);
 		defender.setAggressive(true);
@@ -186,7 +229,56 @@ public final class SettlementDefenseWork {
 
 		defender.swing(InteractionHand.MAIN_HAND);
 		target.hurt(level.damageSources().mobAttack(defender), 4.0F);
+		signalDefenderMeleeImpact(level, target);
 		LAST_ATTACK_TICKS.put(defender.getUUID().toString(), tick);
+	}
+
+	public static void signalDefenderRangedAttack(ServerLevel level, Villager defender) {
+		level.playSound(
+			null,
+			defender.getX(),
+			defender.getY(),
+			defender.getZ(),
+			SoundEvents.SKELETON_SHOOT,
+			SoundSource.NEUTRAL,
+			1.0F,
+			1.0F / (defender.getRandom().nextFloat() * 0.4F + 0.8F)
+		);
+		level.sendParticles(
+			ParticleTypes.CRIT,
+			defender.getX(),
+			defender.getEyeY() - 0.1D,
+			defender.getZ(),
+			4,
+			DEFENSE_CUE_PARTICLE_SPREAD,
+			DEFENSE_CUE_PARTICLE_SPREAD,
+			DEFENSE_CUE_PARTICLE_SPREAD,
+			0.01D
+		);
+	}
+
+	private static void signalDefenderMeleeImpact(ServerLevel level, Monster target) {
+		level.playSound(
+			null,
+			target.getX(),
+			target.getY(),
+			target.getZ(),
+			SoundEvents.PLAYER_ATTACK_SWEEP,
+			SoundSource.NEUTRAL,
+			0.7F,
+			1.0F + (target.getRandom().nextFloat() * 0.2F)
+		);
+		level.sendParticles(
+			ParticleTypes.SWEEP_ATTACK,
+			target.getX(),
+			target.getY(0.5D),
+			target.getZ(),
+			1,
+			0.0D,
+			0.0D,
+			0.0D,
+			0.0D
+		);
 	}
 
 	private static void resetDefender(Villager defender) {

@@ -24,8 +24,8 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	private static final int ACTION_BUTTON_HEIGHT = 16;
 	private static final Component STOCK_LABEL = Component.literal("Sale Stock");
 	private static final Component DONATE_NOTE_1 = Component.literal("Drop items into empty slots");
-	private static final Component DONATE_NOTE_2 = Component.literal("to donate them to this display.");
-	private static final Component EMPTY_NOTE = Component.literal("Bakery can restock empty slots.");
+	private static final Component DONATE_NOTE_2 = Component.literal("or matching stacks to donate.");
+	private static final Component EMPTY_NOTE = Component.literal("Bakery can restock any open slots.");
 	private static final Component ACTION_LABEL = Component.literal("Selected Trade");
 	private static final Component ACTION_HINT = Component.literal("Hover a stocked slot to trade.");
 
@@ -154,7 +154,9 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 
 		singleBarterButton = Button.builder(Component.literal("Single"), ignored -> {
 			int slot = actionableSlot();
-			int buttonId = GlassDisplayCaseMenu.SINGLE_BARTER_BUTTON_ID_BASE + slot;
+			int buttonId = menu.hasFreeClaimAvailable(slot)
+				? GlassDisplayCaseMenu.FREE_CLAIM_BUTTON_ID_BASE + slot
+				: GlassDisplayCaseMenu.SINGLE_BARTER_BUTTON_ID_BASE + slot;
 			if (slot >= 0 && minecraft != null && minecraft.gameMode != null && minecraft.player != null && menu.clickMenuButton(minecraft.player, buttonId)) {
 				minecraft.gameMode.handleInventoryButtonClick(menu.containerId, buttonId);
 			}
@@ -182,7 +184,7 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 		boolean hasStack = !selectedStack.isEmpty();
 		int slot = actionableSlot();
 		boolean hasStackBarter = slot >= 0 && menu.stackBarterOfferForSlot(slot) != null;
-		boolean hasSingleBarter = slot >= 0 && menu.singleBarterOfferForSlot(slot) != null;
+		boolean hasSingleBarter = slot >= 0 && (menu.hasFreeClaimAvailable(slot) || menu.singleBarterOfferForSlot(slot) != null);
 
 		stackBarterButton.visible = hasStack && hasStackBarter;
 		stackBarterButton.active = hasStack && hasStackBarter;

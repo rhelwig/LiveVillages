@@ -128,7 +128,7 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 
 	@Override
 	public boolean canPlaceItem(int slot, ItemStack stack) {
-		return slot >= 0 && slot < SLOT_COUNT && items.get(slot).isEmpty();
+		return slot >= 0 && slot < SLOT_COUNT && canAddToDisplaySlot(items.get(slot), stack, getMaxStackSize(stack));
 	}
 
 	@Override
@@ -148,6 +148,23 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 		}
 
 		return -1;
+	}
+
+	public static boolean canAddToDisplaySlot(ItemStack existing, ItemStack incoming, int slotLimit) {
+		if (incoming.isEmpty()) {
+			return false;
+		}
+
+		if (existing.isEmpty()) {
+			return true;
+		}
+
+		if (!ItemStack.isSameItemSameComponents(existing, incoming)) {
+			return false;
+		}
+
+		int maxStackSize = Math.min(slotLimit, Math.min(existing.getMaxStackSize(), incoming.getMaxStackSize()));
+		return existing.getCount() < maxStackSize;
 	}
 
 	private void syncClient() {

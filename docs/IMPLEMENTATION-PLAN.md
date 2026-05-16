@@ -35,7 +35,8 @@ Already solid enough to plan from:
 - custom anchors and workstations for `Trade Board`, `Carpenter's Bench`, `Forester's Table`, `Surveyor's Table`, `Portmaster's Anchor`, `Lighthouse`, `Milepost`, `Simple Housing Shelter`, and `Housing Shelter`
 - a first-pass `Glass Display Case` block exists as a full-size clear bakery display block, with block-local sale inventory and direct purchase interaction
 - `Glass Display Case` and `Baker's Counter` now share the same block-local case-style sale inventory/menu model, so bakery sale stock can diverge from the settlement's abstract food reserves and bakery goods can expose ingredient-themed barter alongside emerald buys
-- bakery sale screens should support both full-stack barter and a worse-rate single-item convenience barter, while keeping the emerald purchase as the clearer default full-width action
+- bakery sale screens should support both capped-bulk barter and a worse-rate single-item convenience barter, while keeping the emerald purchase as the clearer default full-width action
+- bakery sale screens should allow top-offs into matching occupied display stacks, cap the bulk purchase action at `12` items, and let settlement-defense freebie claims convert the single-item bakery action into a `Free` baked-good pickup when owed
 - bakery display restocking should treat the structure's `Baker's Counter` and `Glass Display Case` blocks as one shared display pool: top off matching stacks first, then prefer the least-filled display so goods spread visibly across the storefront instead of piling into the first case
 - donated bakery ingredients stored in bakery sale displays should count as usable first-pass pantry inputs, so players can seed recipes by dropping `wheat`, `egg`, `sugar`, and similar goods into display slots
 - workstation staffing should use a shared settlement-wide hiring pass instead of fixed `ensure...` call order, so scarce unemployed adults are steered toward the highest-priority reachable open jobs and profession pickup happens on the short loaded-maintenance cadence rather than only on long economy cycles
@@ -98,6 +99,7 @@ Focus:
 - bell response should separate noncombatant panic from rally behavior for combat-capable professions
 - bell influence radius should be `max(25, half settlement radius)` rather than a tiny fixed center
 - keep profession priority sane so urgent defense interrupts the right workers without making routine work feel erratic
+- keep villager defense contributions legible in loaded combat with lightweight attack sounds or particles, rather than invisible help that players cannot verify
 - keep evening behavior coherent: miners should surface in time for the social gathering, and home-bed assignment should settle into quick repeatable nightly returns instead of fresh bed scrambles
 - treat underground worker settlement membership as a horizontal-radius cylinder for census and home-assignment purposes so deep miners still count and keep their village behavior
 - extend loaded Miner work beyond the starter shaft with first-pass primary side tunnels about every `5` levels, using temporary `dirt` / `cobblestone` floor supports when needed so adjacent exposed ore is not left untouched beside the ladder run

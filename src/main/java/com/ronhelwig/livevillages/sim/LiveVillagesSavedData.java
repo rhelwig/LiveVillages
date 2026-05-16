@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.Predicate;
 
 import com.mojang.serialization.Codec;
@@ -56,6 +57,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SharedTerrainCell.CODEC).optionalFieldOf("shared_terrain_knowledge", Map.of()).forGetter(data -> data.sharedTerrainKnowledge),
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
+		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
 		Codec.INT.optionalFieldOf("next_region_cursor", 0).forGetter(data -> data.nextRegionCursor),
 		Codec.LONG.optionalFieldOf("last_global_update_tick", 0L).forGetter(data -> data.lastGlobalUpdateTick),
@@ -76,6 +78,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SharedTerrainCell> sharedTerrainKnowledge;
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
+	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
 	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
 	private int nextRegionCursor;
 	private long lastGlobalUpdateTick;
@@ -101,7 +104,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -113,6 +116,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SharedTerrainCell> sharedTerrainKnowledge,
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
+		Map<String, Map<String, Integer>> bakeryFreebiesOwed,
 		Map<String, Long> loadedRoadworkCatchupTicks,
 		int nextRegionCursor,
 		long lastGlobalUpdateTick,
@@ -127,6 +131,8 @@ public class LiveVillagesSavedData extends SavedData {
 		this.savedSurveyorObservations = new LinkedHashMap<>(savedSurveyorObservations);
 		this.savedRoadworkPlans = new LinkedHashMap<>();
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
+		this.bakeryFreebiesOwed = new LinkedHashMap<>();
+		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
 		this.nextRegionCursor = nextRegionCursor;
 		this.lastGlobalUpdateTick = lastGlobalUpdateTick;
@@ -286,6 +292,55 @@ public class LiveVillagesSavedData extends SavedData {
 		return buildSites.size();
 	}
 
+	public int bakeryFreebiesOwed(String settlementId, UUID playerId) {
+		if (settlementId == null || playerId == null) {
+			return 0;
+		}
+
+		Map<String, Integer> playerFreebies = bakeryFreebiesOwed.get(settlementId);
+		if (playerFreebies == null) {
+			return 0;
+		}
+
+		return Math.max(0, playerFreebies.getOrDefault(playerId.toString(), 0));
+	}
+
+	public void addBakeryFreebiesOwed(String settlementId, UUID playerId, int amount) {
+		if (settlementId == null || settlementId.isBlank() || playerId == null || amount <= 0) {
+			return;
+		}
+
+		Map<String, Integer> updated = new LinkedHashMap<>(bakeryFreebiesOwed.getOrDefault(settlementId, Map.of()));
+		String playerKey = playerId.toString();
+		updated.put(playerKey, updated.getOrDefault(playerKey, 0) + amount);
+		bakeryFreebiesOwed.put(settlementId, updated);
+		setDirty();
+	}
+
+	public boolean consumeBakeryFreebie(String settlementId, UUID playerId) {
+		int current = bakeryFreebiesOwed(settlementId, playerId);
+		if (current <= 0) {
+			return false;
+		}
+
+		Map<String, Integer> updated = new LinkedHashMap<>(bakeryFreebiesOwed.getOrDefault(settlementId, Map.of()));
+		String playerKey = playerId.toString();
+		if (current == 1) {
+			updated.remove(playerKey);
+		} else {
+			updated.put(playerKey, current - 1);
+		}
+
+		if (updated.isEmpty()) {
+			bakeryFreebiesOwed.remove(settlementId);
+		} else {
+			bakeryFreebiesOwed.put(settlementId, updated);
+		}
+
+		setDirty();
+		return true;
+	}
+
 	public List<ChunkPos> reserveVillageScanChunks(net.minecraft.resources.ResourceKey<Level> dimension, net.minecraft.core.BlockPos center, int chunkBudget) {
 		if (chunkBudget <= 0) {
 			return List.of();
@@ -351,6 +406,7 @@ public class LiveVillagesSavedData extends SavedData {
 	public void removeSettlement(String settlementId) {
 		boolean removed = settlements.remove(settlementId) != null;
 		removed |= bootstrapVillagerSpawnTicks.remove(settlementId) != null;
+		removed |= bakeryFreebiesOwed.remove(settlementId) != null;
 		removed |= buildSites.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 		removed |= constructionDeliveries.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 

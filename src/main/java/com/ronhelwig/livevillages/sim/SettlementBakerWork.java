@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -51,6 +52,26 @@ public final class SettlementBakerWork {
 
 	public static void syncBakeryDisplaysNear(ServerLevel level, BlockPos pos) {
 		resolveBakeryContext(level, pos).ifPresent(context -> syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites()));
+	}
+
+	public static int bakeryFreebiesOwed(ServerLevel level, BlockPos pos, UUID playerId) {
+		return resolveBakeryContext(level, pos)
+			.map(context -> LiveVillagesSavedData.get(level.getServer()).bakeryFreebiesOwed(context.settlement().id(), playerId))
+			.orElse(0);
+	}
+
+	public static boolean consumeBakeryFreebie(ServerLevel level, BlockPos pos, UUID playerId) {
+		return resolveBakeryContext(level, pos)
+			.map(context -> LiveVillagesSavedData.get(level.getServer()).consumeBakeryFreebie(context.settlement().id(), playerId))
+			.orElse(false);
+	}
+
+	public static boolean isBakedGoods(ItemStack stack) {
+		return isBakedGoodsKey(TradeBoardTradeRules.goodsKeyForStack(stack));
+	}
+
+	public static boolean isBakedGoodsKey(String goodsKey) {
+		return goodsKey != null && DISPLAYABLE_GOODS.contains(goodsKey);
 	}
 
 	public static void recordBakerySale(ServerLevel level, BlockPos pos, String paymentGoodsKey, int paymentAmount) {

@@ -9,7 +9,6 @@ import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Monster;
@@ -212,7 +211,7 @@ public final class SettlementFletcherWork {
 		arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
 		arrow.shoot(x, y, z, 1.6F, 14 - level.getDifficulty().getId() * 4);
 		level.addFreshEntity(arrow);
-		fletcher.playSound(SoundEvents.SKELETON_SHOOT, 1.0F, 1.0F / (fletcher.getRandom().nextFloat() * 0.4F + 0.8F));
+		SettlementDefenseWork.signalDefenderRangedAttack(level, fletcher);
 	}
 
 	private static boolean isWithinWorkReach(Villager fletcher, BlockPos workPos) {
