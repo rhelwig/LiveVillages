@@ -17,7 +17,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import com.ronhelwig.livevillages.menu.TradeBoardGoodsView;
 import com.ronhelwig.livevillages.menu.TradeBoardInventoryEntryView;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
-import com.ronhelwig.livevillages.menu.TradeBoardPlayerGoodsView;
 import com.ronhelwig.livevillages.menu.TradeBoardProjectView;
 import com.ronhelwig.livevillages.menu.TradeBoardRouteView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
@@ -66,20 +65,30 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private static final int DONATION_BUTTON_Y = SCREEN_HEIGHT - 32;
 	private static final int DONATION_BUTTON_WIDTH = 50;
 	private static final int DONATE_CONTENTS_BUTTON_WIDTH = 104;
+	private static final int BOUNTY_INFO_X = 12;
+	private static final int BOUNTY_INFO_WIDTH = 212;
+	private static final int BOUNTY_LIST_LEFT_X = 12;
+	private static final int BOUNTY_LIST_RIGHT_X = 122;
+	private static final int BOUNTY_LIST_COLUMN_WIDTH = 98;
+	private static final int BOUNTY_DETAIL_X = 232;
+	private static final int BOUNTY_DETAIL_WIDTH = SCREEN_WIDTH - BOUNTY_DETAIL_X - 10;
+	private static final int BOUNTY_ROW_HEIGHT = 14;
+	private static final int BOUNTY_LIST_Y = 92;
+	private static final int BOUNTY_DETAIL_Y = 68;
+	private static final int WRAPPED_TEXT_LINE_HEIGHT = 10;
 	private static Tab lastActiveTab = Tab.OVERVIEW;
+	private static final Component BOUNTY_LABEL = Component.literal("Settlement Bounties");
+	private static final Component BOUNTY_HINT = Component.literal("Hover a wanted good to see how much the settlement still needs.");
+	private static final Component BOUNTY_TRADE_NOTE = Component.literal("Use Trade to donate goods the settlement currently wants.");
 
 	private final Inventory playerInventory;
 	private Tab activeTab = lastActiveTab;
 	private String selectedPlayerGoodsKey;
-	private int selectedVillageGoodsIndex = -1;
-	private boolean hasPlayerGoodsSnapshot;
-	private List<TradeBoardPlayerGoodsView> playerGoodsSnapshot = List.of();
 	private boolean hasPlayerInventoryRowsSnapshot;
 	private List<TradeBoardInventoryEntryView> playerInventoryRowsSnapshot = List.of();
 	private String feedbackMessage = "";
 	private int feedbackColor = 0xFF9F8E72;
 	private PlayerInventoryListWidget playerInventoryList;
-	private VillageGoodsListWidget villageGoodsList;
 
 	public TradeBoardScreen(TradeBoardMenu menu, Inventory playerInventory, Component title) {
 		super(menu, playerInventory, title, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -108,7 +117,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		graphics.fill(leftPos + 1, topPos + 27, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF2C241A);
 		graphics.outline(leftPos, topPos, imageWidth, imageHeight, 0xFFB69155);
 
-		if (activeTab.isTradeTab()) {
+		if (activeTab.usesTradeDivider()) {
 			int dividerX = leftPos + RIGHT_COLUMN_X - 8;
 			graphics.fill(dividerX, topPos + TRADE_SECTION_TOP_Y - 6, dividerX + 1, topPos + imageHeight - 18, 0xFF4A3A26);
 		}
@@ -122,7 +131,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		graphics.text(font, settlement.settlementName(), 10, 8, 0xFFF8E6BE, false);
 		graphics.text(font, settlement.growthSummary(), imageWidth - 10 - growthWidth, 9, 0xFFF2CF84, false);
 
-		if (!activeTab.isTradeTab()) {
+		if (!activeTab.hidesTopSummary()) {
 			int y = TOP_SUMMARY_Y;
 			graphics.text(
 				font,
@@ -154,8 +163,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 		switch (activeTab) {
 			case OVERVIEW -> drawOverviewTab(graphics, settlement);
-			case YOUR_GOODS -> drawYourGoodsTab(graphics, settlement);
-			case VILLAGE_GOODS -> drawVillageGoodsTab(graphics, settlement);
+			case TRADE -> drawTradeTab(graphics, settlement);
+			case BOUNTIES -> drawBountiesTab(graphics, mouseX, mouseY, settlement);
 			case ROUTES -> drawRoutesTab(graphics, settlement);
 		}
 	}
@@ -177,14 +186,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		if (activeTab == Tab.YOUR_GOODS && playerInventoryList != null && playerInventoryList.isMouseOver(mouseX, mouseY)) {
+		if (activeTab == Tab.TRADE && playerInventoryList != null && playerInventoryList.isMouseOver(mouseX, mouseY)) {
 			if (playerInventoryList.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
-				return true;
-			}
-		}
-
-		if (activeTab == Tab.VILLAGE_GOODS && villageGoodsList != null && villageGoodsList.isMouseOver(mouseX, mouseY)) {
-			if (villageGoodsList.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
 				return true;
 			}
 		}
@@ -196,7 +199,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	protected void extractTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
 		super.extractTooltip(graphics, mouseX, mouseY);
 
-		if (activeTab != Tab.YOUR_GOODS || playerInventoryList == null) {
+		if (activeTab != Tab.TRADE || playerInventoryList == null) {
 			return;
 		}
 
@@ -213,12 +216,9 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		clampSelections();
 		addTabButtons();
 
-		if (activeTab == Tab.YOUR_GOODS) {
+		if (activeTab == Tab.TRADE) {
 			rebuildPlayerInventoryList();
 			addPlayerGoodsButtons();
-		} else if (activeTab == Tab.VILLAGE_GOODS) {
-			rebuildVillageGoodsList();
-			addVillageGoodsButtons();
 		}
 	}
 
@@ -235,21 +235,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 		playerInventoryList.rebuild(playerInventoryRows(), selectedPlayerGoodsKey);
 		addRenderableWidget(playerInventoryList);
-	}
-
-	private void rebuildVillageGoodsList() {
-		if (minecraft == null) {
-			return;
-		}
-
-		if (villageGoodsList == null) {
-			villageGoodsList = new VillageGoodsListWidget(minecraft);
-		} else {
-			villageGoodsList.updateBounds();
-		}
-
-		villageGoodsList.rebuild(villageGoodsRows(), selectedVillageGoodsIndex);
-		addRenderableWidget(villageGoodsList);
 	}
 
 	private void addTabButtons() {
@@ -319,25 +304,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		addRenderableWidget(button);
 	}
 
-	private void addVillageGoodsButtons() {
-		List<TradeBoardGoodsView> goodsRows = villageGoodsRows();
-
-		if (selectedVillageGoodsIndex >= 0 && selectedVillageGoodsIndex < goodsRows.size()) {
-			TradeBoardGoodsView selected = goodsRows.get(selectedVillageGoodsIndex);
-			List<GoodsTradeOption> paymentOptions = paymentOptionsForVillageGoods(selected);
-			int optionCount = Math.min(DETAIL_OPTION_ROWS, paymentOptions.size());
-
-			for (int index = 0; index < optionCount; index++) {
-				int buttonId = TradeBoardTrading.villageTradeButtonId(selectedVillageGoodsIndex, index);
-				addRenderableWidget(
-					Button.builder(Component.literal("Trade"), clicked -> sendTradeButton(buttonId))
-						.bounds(detailButtonX(), topPos + detailOptionRowY(index) - 5, ACTION_BUTTON_WIDTH, ROW_BUTTON_HEIGHT)
-						.build()
-				);
-			}
-		}
-	}
-
 	private void drawOverviewTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
 		drawTextSection(
 			graphics,
@@ -356,8 +322,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		drawProjectSection(graphics, RIGHT_COLUMN_X, SECONDARY_SECTION_TOP_Y, "Projects & Sites", settlement.projects(), settlement.projects().size());
 	}
 
-	private void drawYourGoodsTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
-		graphics.text(font, "Inventory Goods", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+	private void drawTradeTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
+		graphics.text(font, "Trade", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
 		graphics.text(font, "Selected Good", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
 
 		TradeBoardInventoryEntryView selected = selectedPlayerEntry();
@@ -369,24 +335,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			graphics.text(font, "Choose one of your goods on the left.", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, 0xFF9F8E72, false);
 		} else {
 			drawPlayerGoodsDetail(graphics, selected, settlement);
-		}
-
-		drawFeedback(graphics);
-	}
-
-	private void drawVillageGoodsTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
-		List<TradeBoardGoodsView> goodsRows = villageGoodsRows();
-		graphics.text(font, "Village Goods", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
-		graphics.text(font, "Selected Good", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
-
-		if (goodsRows.isEmpty()) {
-			graphics.text(font, "No protected surplus", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, 0xFF9F8E72, false);
-		}
-
-		if (selectedVillageGoodsIndex < 0 || selectedVillageGoodsIndex >= goodsRows.size()) {
-			graphics.text(font, "Choose one village good on the left.", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, 0xFF9F8E72, false);
-		} else {
-			drawVillageGoodsDetail(graphics, goodsRows.get(selectedVillageGoodsIndex), settlement);
 		}
 
 		drawFeedback(graphics);
@@ -460,44 +408,10 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		drawDonationControls(graphics, selected);
 	}
 
-	private void drawVillageGoodsDetail(GuiGraphicsExtractor graphics, TradeBoardGoodsView selected, TradeBoardSettlementView settlement) {
-		drawSelectionFill(graphics, RIGHT_COLUMN_X, DETAIL_SUMMARY_Y - GOODS_ROW_HIGHLIGHT_Y_OFFSET, DETAIL_SECTION_WIDTH, GOODS_ROW_HIGHLIGHT_HEIGHT, true);
-		drawGoodsIcon(graphics, selected.goodsKey(), RIGHT_COLUMN_X + 1, DETAIL_SUMMARY_Y - 4, Math.min(64, selected.current()));
-		String label = TradeBoardTradeRules.compactLabel(selected.goodsKey(), selected.label());
-		graphics.text(font, trimToWidth(label + " x" + selected.tradeBundleSize(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y, 0xFFE8DDC8, false);
-		String note = "Can spare " + availableVillageGoods(selected) + ", keeps " + selected.target() + " in reserve.";
-		graphics.text(font, trimToWidth(note, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y + GOODS_NOTE_Y_OFFSET, 0xFFDCC8A4, false);
-
-		graphics.text(font, "Village wants in return", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
-		drawPaymentOptions(graphics, selected, settlement);
-	}
-
 	private void drawPayoutOptions(GuiGraphicsExtractor graphics, PlayerGoodsOption selected, TradeBoardSettlementView settlement) {
 		List<GoodsTradeOption> options = TradeBoardTrading.payoutOptionsForPlayerGoods(selected, settlement);
 		if (options.isEmpty()) {
 			graphics.text(font, "No protected surplus to trade back yet.", RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
-			return;
-		}
-
-		int visibleCount = Math.min(DETAIL_OPTION_ROWS, options.size());
-
-		for (int index = 0; index < visibleCount; index++) {
-			GoodsTradeOption option = options.get(index);
-			int rowY = detailOptionRowY(index);
-			drawGoodsIcon(graphics, option.goodsKey(), RIGHT_COLUMN_X + 1, rowY - 4, Math.min(64, option.amount()));
-			String optionLabel = TradeBoardTradeRules.compactLabel(option.goodsKey(), option.label());
-			graphics.text(font, trimToWidth(option.amount() + " " + optionLabel, DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY, 0xFFE8DDC8, false);
-			graphics.text(font, trimToWidth("For " + selected.tradeBundleSize() + " " + selected.label().toLowerCase(), DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY + 9, 0xFFDCC8A4, false);
-		}
-
-		drawDetailHiddenCount(graphics, options.size(), visibleCount);
-	}
-
-	private void drawPaymentOptions(GuiGraphicsExtractor graphics, TradeBoardGoodsView selected, TradeBoardSettlementView settlement) {
-		List<GoodsTradeOption> options = paymentOptionsForVillageGoods(selected);
-		if (options.isEmpty()) {
-			String message = "You do not have any goods " + settlement.settlementName() + " wants for this trade yet.";
-			graphics.text(font, trimToWidth(message, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
 			return;
 		}
 
@@ -559,6 +473,50 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		if (!feedbackMessage.isBlank()) {
 			graphics.text(font, trimToWidth(feedbackMessage, imageWidth - 20), WIDE_SECTION_X, imageHeight - 16, feedbackColor, false);
 		}
+	}
+
+	private void drawBountiesTab(GuiGraphicsExtractor graphics, int mouseX, int mouseY, TradeBoardSettlementView settlement) {
+		List<TradeBoardGoodsView> shortages = settlement.shortages();
+		graphics.text(font, BOUNTY_LABEL, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+
+		if (shortages.isEmpty()) {
+			graphics.fill(8, TRADE_SECTION_TOP_Y + 18, imageWidth - 10, imageHeight - 10, 0x11FFF5E6);
+			int infoBottom = drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, 224, 0xFFDCC8A4);
+			drawWrappedText(graphics, Component.literal("No missing settlement goods right now."), BOUNTY_INFO_X, infoBottom + 10, 224, 0xFFE8DDC8);
+			drawWrappedText(graphics, Component.literal("Current stock already covers every known reserve target."), BOUNTY_INFO_X, infoBottom + 24, 224, 0xFF9F8E72);
+			drawFeedback(graphics);
+			return;
+		}
+
+		graphics.fill(8, TRADE_SECTION_TOP_Y + 4, 224, imageHeight - 10, 0x11FFF5E6);
+		graphics.fill(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 10, imageHeight - 10, 0x22FFF5E6);
+		graphics.outline(8, 80, 216, imageHeight - 90, 0x447A633F);
+		graphics.outline(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 238, imageHeight - TRADE_SECTION_TOP_Y - 14, 0x447A633F);
+		drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, BOUNTY_INFO_WIDTH, 0xFFDCC8A4);
+
+		TradeBoardGoodsView hoveredBounty = hoveredBounty(mouseX, mouseY, shortages);
+		for (int index = 0; index < shortages.size(); index++) {
+			TradeBoardGoodsView bounty = shortages.get(index);
+			int columnX = bountyColumnX(index, shortages.size());
+			int rowY = bountyRowY(index, shortages.size());
+			drawBountyEntry(graphics, columnX, rowY, bounty, bounty.equals(hoveredBounty));
+		}
+
+		if (hoveredBounty == null) {
+			drawWrappedText(graphics, BOUNTY_HINT, BOUNTY_DETAIL_X, BOUNTY_DETAIL_Y, BOUNTY_DETAIL_WIDTH, 0xFFDCC8A4);
+			drawFeedback(graphics);
+			return;
+		}
+
+		List<Component> detailLines = bountyDetailLines(hoveredBounty, settlement);
+		int detailY = BOUNTY_DETAIL_Y;
+		for (int index = 0; index < detailLines.size(); index++) {
+			Component line = detailLines.get(index);
+			int color = index == 0 ? 0xFFE8DDC8 : 0xFFDCC8A4;
+			detailY = drawWrappedText(graphics, line, BOUNTY_DETAIL_X, detailY, BOUNTY_DETAIL_WIDTH, color) + 2;
+		}
+
+		drawFeedback(graphics);
 	}
 
 	private void drawTextSection(
@@ -676,14 +634,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		rebuildTradeBoardWidgets();
 	}
 
-	private void selectVillageGoods(int index) {
-		selectedVillageGoodsIndex = index;
-		if (villageGoodsList != null) {
-			villageGoodsList.selectIndex(index);
-		}
-		rebuildTradeBoardWidgets();
-	}
-
 	private void switchTab(Tab tab) {
 		if (tab == activeTab) {
 			return;
@@ -696,8 +646,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	private void updateFromServer(TradeBoardRefreshPayload payload) {
 		menu.updateSettlement(payload.settlement());
-		playerGoodsSnapshot = payload.playerGoods();
-		hasPlayerGoodsSnapshot = true;
 		playerInventoryRowsSnapshot = payload.inventoryRows();
 		hasPlayerInventoryRowsSnapshot = true;
 		feedbackMessage = payload.message();
@@ -728,13 +676,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 				selectedPlayerGoodsKey = playerRows.get(0).rowKey();
 			}
 		}
-
-		int villageRows = villageGoodsRows().size();
-		if (villageRows <= 0) {
-			selectedVillageGoodsIndex = 0;
-		} else {
-			selectedVillageGoodsIndex = Math.max(0, Math.min(selectedVillageGoodsIndex, villageRows - 1));
-		}
 	}
 
 	private List<TradeBoardInventoryEntryView> playerInventoryRows() {
@@ -764,16 +705,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		return -1;
 	}
 
-	private List<TradeBoardGoodsView> villageGoodsRows() {
-		return TradeBoardTrading.villageGoodsOptions(menu.settlement());
-	}
-
-	private List<GoodsTradeOption> paymentOptionsForVillageGoods(TradeBoardGoodsView selected) {
-		return hasPlayerGoodsSnapshot
-			? TradeBoardTrading.paymentOptionsForVillageGoods(selected, playerGoodsSnapshot, menu.settlement())
-			: TradeBoardTrading.paymentOptionsForVillageGoods(selected, playerInventory, menu.settlement());
-	}
-
 	private static int donationAmount(TradeBoardInventoryEntryView selected, int donationIndex) {
 		if (selected == null || selected.totalCount() <= 0) {
 			return 0;
@@ -786,10 +717,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			case TradeBoardTrading.DONATE_ALL_INDEX -> selected.totalCount();
 			default -> 0;
 		};
-	}
-
-	private static int availableVillageGoods(TradeBoardGoodsView goods) {
-		return Math.max(0, goods.current() - goods.target());
 	}
 
 	private PlayerGoodsOption tradeOptionForRow(TradeBoardInventoryEntryView entry) {
@@ -887,12 +814,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		return x >= RIGHT_COLUMN_X ? DETAIL_SECTION_WIDTH : GOODS_ROW_WIDTH;
 	}
 
-	private record VillageGoodsEntryView(
-		int goodsIndex,
-		TradeBoardGoodsView goods
-	) {
-	}
-
 	private final class PlayerInventoryListWidget extends ObjectSelectionList<PlayerInventoryListEntry> {
 		private PlayerInventoryListWidget(net.minecraft.client.Minecraft minecraft) {
 			super(minecraft, GOODS_LIST_WIDTH, GOODS_LIST_HEIGHT, topPos + GOODS_LIST_TOP_Y, GOODS_LIST_ITEM_HEIGHT);
@@ -932,62 +853,6 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 		private PlayerInventoryListEntry hoveredEntry() {
 			return getHovered();
-		}
-
-		@Override
-		public int getRowWidth() {
-			return GOODS_ROW_WIDTH;
-		}
-
-		@Override
-		protected int scrollBarX() {
-			return leftPos + LEFT_COLUMN_X + GOODS_ROW_WIDTH + 4;
-		}
-
-		@Override
-		protected void extractListBackground(GuiGraphicsExtractor graphics) {
-		}
-
-		@Override
-		protected void extractListSeparators(GuiGraphicsExtractor graphics) {
-		}
-	}
-
-	private final class VillageGoodsListWidget extends ObjectSelectionList<VillageGoodsListEntry> {
-		private VillageGoodsListWidget(net.minecraft.client.Minecraft minecraft) {
-			super(minecraft, GOODS_LIST_WIDTH, GOODS_LIST_HEIGHT, topPos + GOODS_LIST_TOP_Y, GOODS_LIST_ITEM_HEIGHT);
-			centerListVertically = false;
-			updateBounds();
-		}
-
-		private void updateBounds() {
-			updateSizeAndPosition(GOODS_LIST_WIDTH, GOODS_LIST_HEIGHT, leftPos + LEFT_COLUMN_X - 2, topPos + GOODS_LIST_TOP_Y);
-		}
-
-		private void rebuild(List<TradeBoardGoodsView> entries, int selectedIndex) {
-			updateBounds();
-			List<VillageGoodsEntryView> rows = new ArrayList<>();
-			for (int index = 0; index < entries.size(); index++) {
-				rows.add(new VillageGoodsEntryView(index, entries.get(index)));
-			}
-			replaceEntries(rows.stream().map(VillageGoodsListEntry::new).toList());
-
-			for (VillageGoodsListEntry entry : children()) {
-				if (entry.view.goodsIndex() == selectedIndex) {
-					setSelected(entry);
-					break;
-				}
-			}
-		}
-
-		private void selectIndex(int goodsIndex) {
-			for (VillageGoodsListEntry entry : children()) {
-				if (entry.view.goodsIndex() == goodsIndex) {
-					setSelected(entry);
-					scrollToEntry(entry);
-					break;
-				}
-			}
 		}
 
 		@Override
@@ -1054,46 +919,102 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		}
 	}
 
-	private final class VillageGoodsListEntry extends ObjectSelectionList.Entry<VillageGoodsListEntry> {
-		private final VillageGoodsEntryView view;
+	private void drawBountyEntry(GuiGraphicsExtractor graphics, int x, int y, TradeBoardGoodsView bounty, boolean hovered) {
+		graphics.fill(x - 2, y - 1, x + BOUNTY_LIST_COLUMN_WIDTH, y + 12, hovered ? 0x553E6A3B : 0x22FFF5E6);
+		graphics.outline(x - 2, y - 1, BOUNTY_LIST_COLUMN_WIDTH + 2, 13, hovered ? 0xFF9BC87D : 0x447A633F);
+		drawGoodsIcon(graphics, bounty.goodsKey(), x, y - 2, Math.max(1, bounty.current()));
+		String label = TradeBoardTradeRules.compactLabel(bounty.goodsKey(), bounty.label());
+		graphics.text(font, trimToWidth(label, BOUNTY_LIST_COLUMN_WIDTH - 24), x + 18, y + 1, 0xFFE8DDC8, false);
+	}
 
-		private VillageGoodsListEntry(VillageGoodsEntryView view) {
-			this.view = view;
+	private TradeBoardGoodsView hoveredBounty(int mouseX, int mouseY, List<TradeBoardGoodsView> shortages) {
+		for (int index = 0; index < shortages.size(); index++) {
+			int x = leftPos + bountyColumnX(index, shortages.size()) - 2;
+			int y = topPos + bountyRowY(index, shortages.size()) - 1;
+			if (mouseX >= x && mouseX < x + BOUNTY_LIST_COLUMN_WIDTH + 2 && mouseY >= y && mouseY < y + 13) {
+				return shortages.get(index);
+			}
 		}
 
-		@Override
-		public Component getNarration() {
-			String label = TradeBoardTradeRules.compactLabel(view.goods().goodsKey(), view.goods().label());
-			return Component.literal(label + " x" + view.goods().tradeBundleSize());
+		return null;
+	}
+
+	private int bountyColumnX(int index, int totalBounties) {
+		int rowsPerColumn = Math.max(1, (totalBounties + 1) / 2);
+		return index < rowsPerColumn ? BOUNTY_LIST_LEFT_X : BOUNTY_LIST_RIGHT_X;
+	}
+
+	private int bountyRowY(int index, int totalBounties) {
+		int rowsPerColumn = Math.max(1, (totalBounties + 1) / 2);
+		int row = index % rowsPerColumn;
+		return BOUNTY_LIST_Y + row * BOUNTY_ROW_HEIGHT;
+	}
+
+	private List<Component> bountyDetailLines(TradeBoardGoodsView bounty, TradeBoardSettlementView settlement) {
+		List<Component> lines = new ArrayList<>();
+		String label = TradeBoardTradeRules.compactLabel(bounty.goodsKey(), bounty.label());
+		int shortageAmount = Math.max(0, bounty.target() - bounty.current());
+		lines.add(Component.literal("Needs " + shortageAmount + " more " + label.toLowerCase() + "."));
+		lines.add(Component.literal("Stock: " + bounty.current() + " on hand, target reserve " + bounty.target() + "."));
+		if (bounty.tradeBundleSize() > 0) {
+			lines.add(Component.literal("Trade counts bundles of " + bounty.tradeBundleSize() + " " + label.toLowerCase() + "."));
+		}
+		if (bounty.tradePricePercent() > 100) {
+			lines.add(Component.literal("This shortage pays " + bounty.tradePricePercent() + "% of base trade value."));
+		} else {
+			lines.add(Component.literal(settlement.settlementName() + " will still take direct donations for this good."));
+		}
+		return lines;
+	}
+
+	private int drawWrappedText(GuiGraphicsExtractor graphics, Component text, int x, int y, int width, int color) {
+		int lineY = y;
+		for (String line : wrapText(text.getString(), width)) {
+			graphics.text(font, Component.literal(line), x, lineY, color, false);
+			lineY += WRAPPED_TEXT_LINE_HEIGHT;
+		}
+		return lineY;
+	}
+
+	private List<String> wrapText(String value, int width) {
+		if (value.isBlank()) {
+			return List.of("");
 		}
 
-		@Override
-		public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float partialTick) {
-			int x = getContentX() + 4;
-			int y = getContentY() + 2;
-			TradeBoardGoodsView goods = view.goods();
-			String label = TradeBoardTradeRules.compactLabel(goods.goodsKey(), goods.label());
-
-			drawGoodsIcon(graphics, goods.goodsKey(), x, y, Math.min(64, goods.current()));
-			graphics.text(font, trimToWidth(label + " x" + goods.tradeBundleSize(), GOODS_ROW_WIDTH - 24), x + 19, y + 2, 0xFFE8DDC8, false);
-			graphics.text(font, trimToWidth("Spare " + availableVillageGoods(goods) + ", keeps " + goods.target(), GOODS_ROW_WIDTH - 24), x + 19, y + 10, 0xFFDCC8A4, false);
-		}
-
-		@Override
-		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-			if (event.button() != 0) {
-				return false;
+		List<String> lines = new ArrayList<>();
+		StringBuilder current = new StringBuilder();
+		for (String word : value.split(" ")) {
+			String candidate = current.isEmpty() ? word : current + " " + word;
+			if (font.width(candidate) <= width) {
+				current.setLength(0);
+				current.append(candidate);
+				continue;
 			}
 
-			selectVillageGoods(view.goodsIndex());
-			return true;
+			if (!current.isEmpty()) {
+				lines.add(current.toString());
+				current.setLength(0);
+			}
+
+			if (font.width(word) <= width) {
+				current.append(word);
+				continue;
+			}
+
+			lines.add(trimToWidth(word, width));
 		}
+
+		if (!current.isEmpty()) {
+			lines.add(current.toString());
+		}
+
+		return lines;
 	}
 
 	private enum Tab {
 		OVERVIEW("Overview"),
-		YOUR_GOODS("Your Goods"),
-		VILLAGE_GOODS("Village"),
+		TRADE("Trade"),
+		BOUNTIES("Bounties"),
 		ROUTES("Routes");
 
 		private final String label;
@@ -1102,8 +1023,12 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			this.label = label;
 		}
 
-		private boolean isTradeTab() {
-			return this == YOUR_GOODS || this == VILLAGE_GOODS;
+		private boolean usesTradeDivider() {
+			return this == TRADE;
+		}
+
+		private boolean hidesTopSummary() {
+			return this == TRADE || this == BOUNTIES;
 		}
 	}
 }
