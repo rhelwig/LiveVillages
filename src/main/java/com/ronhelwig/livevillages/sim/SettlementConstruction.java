@@ -47,6 +47,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
+import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.ShelterAnchorBlock;
@@ -1098,8 +1099,8 @@ public final class SettlementConstruction {
 				".....",
 				".....",
 				".....",
-				".....",
-				"....."
+				"L...R",
+				".F.F."
 			},
 			{
 				".....",
@@ -3002,6 +3003,7 @@ public final class SettlementConstruction {
 			case "fence" -> currentState.is(BlockTags.WOODEN_FENCES) && plannedState.is(BlockTags.WOODEN_FENCES);
 			case "fence_gate" -> currentState.is(BlockTags.FENCE_GATES) && plannedState.getBlock() instanceof FenceGateBlock;
 			case "glass" -> currentState.is(plannedState.getBlock());
+			case "glass_display_case" -> LiveVillagesBlocks.isGlassDisplayCase(currentState) && LiveVillagesBlocks.isGlassDisplayCase(plannedState);
 			case "lantern" -> currentState.hasProperty(LanternBlock.HANGING) && plannedState.hasProperty(LanternBlock.HANGING);
 			case "logs" -> currentState.is(BlockTags.LOGS) && plannedState.is(BlockTags.LOGS);
 			case "planks" -> currentState.is(BlockTags.PLANKS) && plannedState.is(BlockTags.PLANKS);
@@ -3741,7 +3743,7 @@ public final class SettlementConstruction {
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
 			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
 			case 'W' -> workstationStateFor(structureKind, facing);
-			case 'Q' -> LiveVillagesBlocks.GLASS_DISPLAY_CASE.defaultBlockState();
+			case 'Q' -> displayCaseStateFor(blueprint, facing, right, forward, up);
 			case 'B' -> slabStateFor(structureKind, woodFamily, up);
 			case 'S' -> stairStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			default -> null;
@@ -3750,6 +3752,14 @@ public final class SettlementConstruction {
 
 	private static BlockState chestStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
 		return Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, chestFacingFor(blueprint, facing, right, forward, up));
+	}
+
+	private static BlockState displayCaseStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
+		Direction explicitFacing = explicitBlueprintFacing(blueprint, facing, right, forward, up);
+		return LiveVillagesBlocks.GLASS_DISPLAY_CASE.defaultBlockState().setValue(
+			GlassDisplayCaseBlock.FACING,
+			explicitFacing == null ? facing : explicitFacing
+		);
 	}
 
 	private static Direction chestFacingFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {

@@ -7,6 +7,6 @@ import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
 
 public class BakersCounterBlockEntity extends SaleDisplayBlockEntity {
 	public BakersCounterBlockEntity(BlockPos pos, BlockState blockState) {
-		super(LiveVillagesBlockEntities.BAKERS_COUNTER, pos, blockState, "block.live-villages.bakers_counter");
+		super(LiveVillagesBlockEntities.BAKERS_COUNTER, pos, blockState);
 	}
 }

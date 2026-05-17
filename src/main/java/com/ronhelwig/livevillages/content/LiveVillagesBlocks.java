@@ -5,12 +5,14 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
@@ -27,6 +29,7 @@ import com.ronhelwig.livevillages.block.SurveyorTableBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 
 public final class LiveVillagesBlocks {
+	public static final TagKey<Block> GLASS_DISPLAY_CASES = TagKey.create(Registries.BLOCK, id("glass_display_cases"));
 	public static final TradeBoardBlock TRADE_BOARD = registerBlock(
 		"trade_board",
 		new TradeBoardBlock(
@@ -79,6 +82,54 @@ public final class LiveVillagesBlocks {
 	public static final Item GLASS_DISPLAY_CASE_ITEM = registerItem(
 		"glass_display_case",
 		new BlockItem(GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("glass_display_case")).useBlockDescriptionPrefix())
+	);
+	public static final Block COPPER_GLASS_DISPLAY_CASE = registerBlock(
+		"copper_glass_display_case",
+		new GlassDisplayCaseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("copper_glass_display_case"))
+				.sound(SoundType.METAL)
+		)
+	);
+	public static final Item COPPER_GLASS_DISPLAY_CASE_ITEM = registerItem(
+		"copper_glass_display_case",
+		new BlockItem(COPPER_GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("copper_glass_display_case")).useBlockDescriptionPrefix())
+	);
+	public static final Block IRON_GLASS_DISPLAY_CASE = registerBlock(
+		"iron_glass_display_case",
+		new GlassDisplayCaseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("iron_glass_display_case"))
+				.sound(SoundType.METAL)
+		)
+	);
+	public static final Item IRON_GLASS_DISPLAY_CASE_ITEM = registerItem(
+		"iron_glass_display_case",
+		new BlockItem(IRON_GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("iron_glass_display_case")).useBlockDescriptionPrefix())
+	);
+	public static final Block GOLD_GLASS_DISPLAY_CASE = registerBlock(
+		"gold_glass_display_case",
+		new GlassDisplayCaseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("gold_glass_display_case"))
+				.sound(SoundType.METAL)
+		)
+	);
+	public static final Item GOLD_GLASS_DISPLAY_CASE_ITEM = registerItem(
+		"gold_glass_display_case",
+		new BlockItem(GOLD_GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("gold_glass_display_case")).useBlockDescriptionPrefix())
+	);
+	public static final Block DIAMOND_GLASS_DISPLAY_CASE = registerBlock(
+		"diamond_glass_display_case",
+		new GlassDisplayCaseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
+				.setId(blockKey("diamond_glass_display_case"))
+				.sound(SoundType.METAL)
+		)
+	);
+	public static final Item DIAMOND_GLASS_DISPLAY_CASE_ITEM = registerItem(
+		"diamond_glass_display_case",
+		new BlockItem(DIAMOND_GLASS_DISPLAY_CASE, new Item.Properties().setId(itemKey("diamond_glass_display_case")).useBlockDescriptionPrefix())
 	);
 	public static final BakersCounterBlock BAKERS_COUNTER = registerBlock(
 		"bakers_counter",
@@ -190,6 +241,10 @@ public final class LiveVillagesBlocks {
 	}
 
 	public static void register() {
+	}
+
+	public static boolean isGlassDisplayCase(BlockState state) {
+		return state.is(GLASS_DISPLAY_CASES);
 	}
 
 	private static <T extends Block> T registerBlock(String path, T block) {

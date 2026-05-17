@@ -26,7 +26,14 @@ public final class LiveVillagesBlockEntities {
 	public static final BlockEntityType<GlassDisplayCaseBlockEntity> GLASS_DISPLAY_CASE = Registry.register(
 		BuiltInRegistries.BLOCK_ENTITY_TYPE,
 		LiveVillages.id("glass_display_case"),
-		FabricBlockEntityTypeBuilder.create(GlassDisplayCaseBlockEntity::new, LiveVillagesBlocks.GLASS_DISPLAY_CASE).build()
+		FabricBlockEntityTypeBuilder.create(
+			GlassDisplayCaseBlockEntity::new,
+			LiveVillagesBlocks.GLASS_DISPLAY_CASE,
+			LiveVillagesBlocks.COPPER_GLASS_DISPLAY_CASE,
+			LiveVillagesBlocks.IRON_GLASS_DISPLAY_CASE,
+			LiveVillagesBlocks.GOLD_GLASS_DISPLAY_CASE,
+			LiveVillagesBlocks.DIAMOND_GLASS_DISPLAY_CASE
+		).build()
 	);
 	public static final BlockEntityType<BakersCounterBlockEntity> BAKERS_COUNTER = Registry.register(
 		BuiltInRegistries.BLOCK_ENTITY_TYPE,

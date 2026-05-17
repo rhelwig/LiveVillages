@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.BakersCounterBlock;
+import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 import net.minecraft.core.BlockPos;
@@ -1444,8 +1446,10 @@ public final class SettlementConstructionWork {
 	private static boolean requiresExactState(BlockState state) {
 		return state.getBlock() instanceof BedBlock
 			|| state.getBlock() instanceof DoorBlock
+			|| state.getBlock() instanceof BakersCounterBlock
 			|| state.getBlock() instanceof FenceBlock
 			|| state.getBlock() instanceof FenceGateBlock
+			|| state.getBlock() instanceof GlassDisplayCaseBlock
 			|| state.getBlock() instanceof LadderBlock
 			|| state.getBlock() instanceof RotatedPillarBlock
 			|| state.getBlock() instanceof SlabBlock

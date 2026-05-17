@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "live-villages:copper_glass_display_case"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "live-villages:blocks/copper_glass_display_case"
+}

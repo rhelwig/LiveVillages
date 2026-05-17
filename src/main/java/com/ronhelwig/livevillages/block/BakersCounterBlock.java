@@ -9,6 +9,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -32,7 +34,9 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import com.ronhelwig.livevillages.block.entity.BakersCounterBlockEntity;
+import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.SettlementBakerWork;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementState;
@@ -86,6 +90,19 @@ public class BakersCounterBlock extends BaseEntityBlock {
 	@Override
 	public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
 		return new BakersCounterBlockEntity(pos, state);
+	}
+
+	@Override
+	public void destroy(LevelAccessor level, BlockPos pos, BlockState state) {
+		if (level instanceof Level world && world.getBlockEntity(pos) instanceof SaleDisplayBlockEntity display) {
+			Containers.dropContents(world, pos, display);
+			world.updateNeighbourForOutputSignal(pos, this);
+			if (world instanceof ServerLevel serverLevel) {
+				SettlementBakerWork.clearDisplayVisualsAt(serverLevel, pos);
+			}
+		}
+
+		super.destroy(level, pos, state);
 	}
 
 	@Override

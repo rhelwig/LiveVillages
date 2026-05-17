@@ -16,6 +16,8 @@ import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.Blocks;
 
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+
 public record BuildSitePreviewBlockView(
 	BlockPos pos,
 	String materialKey,
@@ -65,6 +67,7 @@ public record BuildSitePreviewBlockView(
 			case "planks" -> stack.is(ItemTags.PLANKS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "cobblestone" -> isStoneFamilyItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "glass" -> stack.is(Items.GLASS) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "glass_display_case" -> blockItem != null && LiveVillagesBlocks.isGlassDisplayCase(blockItem.getBlock().defaultBlockState()) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "stairs" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_STAIRS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "slab" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_SLABS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "door" -> blockItem != null && blockItem.getBlock() instanceof DoorBlock && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_DOORS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;

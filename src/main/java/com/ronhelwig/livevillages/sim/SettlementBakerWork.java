@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -24,7 +25,9 @@ import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
@@ -39,6 +42,7 @@ public final class SettlementBakerWork {
 	private static final long BAKING_DECIDE_INTERVAL_TICKS = 400L;
 	private static final double BATCHES_PER_BAKER_PER_DAY = SettlementEconomyRules.scaledWorkerDailyRate(6.0D);
 	private static final String DISPLAY_NAME_PREFIX = "livevillages_bakery_display_";
+	private static final String DISPLAY_SLOT_MARKER = "_slot_";
 	private static final List<String> DISPLAYABLE_GOODS = List.of("golden_apple", "cake", "pumpkin_pie", "cookie", "baked_potato", "bread");
 	private static final List<BakeryRecipe> RECIPES = List.of(
 		new BakeryRecipe("baking_bread", 1, "bread", 1, Map.of("wheat", 3)),
@@ -53,8 +57,36 @@ public final class SettlementBakerWork {
 	private SettlementBakerWork() {
 	}
 
-	public static void syncBakeryDisplaysNear(ServerLevel level, BlockPos pos) {
-		resolveBakeryContext(level, pos).ifPresent(context -> syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites()));
+	public static void syncDisplayVisualsNear(ServerLevel level, BlockPos pos) {
+		Optional<BakeryContext> bakeryContext = resolveBakeryContext(level, pos);
+		if (bakeryContext.isPresent()) {
+			BakeryContext context = bakeryContext.get();
+			syncBakeryDisplays(level, context.settlement(), context.bakeryBuildSites());
+			return;
+		}
+
+		if (!level.hasChunkAt(pos)) {
+			clearDisplayVisualsAt(level, pos);
+			return;
+		}
+
+		BlockState state = level.getBlockState(pos);
+		if (LiveVillagesBlocks.isGlassDisplayCase(state) && level.getBlockEntity(pos) instanceof SaleDisplayBlockEntity) {
+			syncStandaloneDisplay(level, pos, state);
+			return;
+		}
+
+		clearDisplayVisualsAt(level, pos);
+	}
+
+	public static void clearDisplayVisualsAt(ServerLevel level, BlockPos pos) {
+		for (Display.ItemDisplay display : level.getEntitiesOfClass(
+			Display.ItemDisplay.class,
+			new AABB(pos).inflate(2.0D),
+			entity -> displayHostPosLong(displayTag(entity)) == pos.asLong()
+		)) {
+			display.discard();
+		}
 	}
 
 	public static void reconcileBakeryIngredientDisplaysNear(ServerLevel level, BlockPos pos) {
@@ -380,9 +412,25 @@ public final class SettlementBakerWork {
 		Collection<SettlementBuildSite> bakeryBuildSites
 	) {
 		List<DisplayHost> hosts = bakeryDisplayHosts(level, bakeryBuildSites);
+		double scanRadius = SettlementVillagers.settlementRadiusBlocks(settlement) + 16.0D;
+		AABB bounds = new AABB(settlement.center()).inflate(scanRadius);
+		syncDisplayHosts(level, hosts, bounds);
+	}
+
+	private static void syncStandaloneDisplay(ServerLevel level, BlockPos pos, BlockState state) {
+		syncDisplayHosts(
+			level,
+			List.of(new DisplayHost(pos.immutable(), false, displayFacing(state))),
+			new AABB(pos).inflate(2.0D)
+		);
+	}
+
+	private static void syncDisplayHosts(ServerLevel level, Collection<DisplayHost> hosts, AABB bounds) {
 		Map<String, DesiredDisplay> desiredDisplays = new LinkedHashMap<>();
+		Set<Long> managedHosts = new LinkedHashSet<>();
 
 		for (DisplayHost host : hosts) {
+			managedHosts.add(host.pos().asLong());
 			if (!(level.getBlockEntity(host.pos()) instanceof SaleDisplayBlockEntity displayInventory)) {
 				continue;
 			}
@@ -398,13 +446,11 @@ public final class SettlementBakerWork {
 		}
 
 		Map<String, List<Display.ItemDisplay>> existingDisplays = new HashMap<>();
-		double scanRadius = SettlementVillagers.settlementRadiusBlocks(settlement) + 16.0D;
-		AABB bounds = new AABB(settlement.center()).inflate(scanRadius);
-
 		for (Display.ItemDisplay display : level.getEntitiesOfClass(Display.ItemDisplay.class, bounds, entity -> displayTag(entity) != null)) {
-			String displayTag = displayTag(display);
-			if (displayTag != null) {
-				existingDisplays.computeIfAbsent(displayTag, ignored -> new ArrayList<>()).add(display);
+			String tag = displayTag(display);
+			long hostPos = displayHostPosLong(tag);
+			if (tag != null && managedHosts.contains(hostPos)) {
+				existingDisplays.computeIfAbsent(tag, ignored -> new ArrayList<>()).add(display);
 			}
 		}
 
@@ -442,8 +488,14 @@ public final class SettlementBakerWork {
 
 		for (SettlementBuildSite buildSite : bakeryBuildSites) {
 			BlockPos workstationPos = SettlementConstruction.currentPlacedWorkstationPos(level, buildSite);
-			if (level.hasChunkAt(workstationPos) && level.getBlockState(workstationPos).is(LiveVillagesBlocks.BAKERS_COUNTER)) {
-				hosts.put(workstationPos.asLong(), new DisplayHost(workstationPos.immutable(), true));
+			if (level.hasChunkAt(workstationPos)) {
+				BlockState workstationState = level.getBlockState(workstationPos);
+				if (workstationState.is(LiveVillagesBlocks.BAKERS_COUNTER)) {
+					hosts.put(
+						workstationPos.asLong(),
+						new DisplayHost(workstationPos.immutable(), true, displayFacing(workstationState))
+					);
+				}
 			}
 
 			for (SettlementBuildBlockState block : buildSite.blocks()) {
@@ -453,8 +505,15 @@ public final class SettlementBakerWork {
 
 				SettlementConstruction.buildSiteBlockPos(buildSite, block)
 					.filter(level::hasChunkAt)
-					.filter(pos -> level.getBlockState(pos).is(LiveVillagesBlocks.GLASS_DISPLAY_CASE))
-					.ifPresent(pos -> hosts.putIfAbsent(pos.asLong(), new DisplayHost(pos.immutable(), false)));
+					.ifPresent(pos -> {
+						BlockState displayState = level.getBlockState(pos);
+						if (LiveVillagesBlocks.isGlassDisplayCase(displayState)) {
+							hosts.putIfAbsent(
+								pos.asLong(),
+								new DisplayHost(pos.immutable(), false, displayFacing(displayState))
+							);
+						}
+					});
 			}
 		}
 
@@ -570,6 +629,12 @@ public final class SettlementBakerWork {
 			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.BAKERY)
 			.toList();
 		if (bakeryBuildSites.isEmpty()) {
+			return Optional.empty();
+		}
+
+		boolean isBakeryHost = bakeryDisplayHosts(level, bakeryBuildSites).stream()
+			.anyMatch(host -> host.pos().equals(pos));
+		if (!isBakeryHost) {
 			return Optional.empty();
 		}
 
@@ -949,11 +1014,20 @@ public final class SettlementBakerWork {
 
 	private static void updateDisplay(Display.ItemDisplay display, DesiredDisplay desiredDisplay) {
 		DisplayHost host = desiredDisplay.host();
-		double x = host.pos().getX() + 0.5D + shelfColumnXOffset(desiredDisplay.slot());
+		Direction right = host.facing().getClockWise();
+		double sideOffset = shelfColumnOffset(desiredDisplay.slot());
+		double frontOffset = shelfDepthOffset(host.workstation());
+		double x = host.pos().getX() + 0.5D
+			+ (right.getStepX() * sideOffset)
+			+ (host.facing().getStepX() * frontOffset);
 		double y = host.pos().getY() + shelfYOffset(host.workstation(), desiredDisplay.slot());
-		double z = host.pos().getZ() + 0.5D;
+		double z = host.pos().getZ() + 0.5D
+			+ (right.getStepZ() * sideOffset)
+			+ (host.facing().getStepZ() * frontOffset);
 
 		display.setPos(x, y, z);
+		display.setYRot(host.facing().toYRot());
+		display.setXRot(0.0F);
 		display.setCustomName(Component.literal(desiredDisplay.tag()));
 		display.setCustomNameVisible(false);
 		display.setItemTransform(ItemDisplayContext.GROUND);
@@ -973,13 +1047,34 @@ public final class SettlementBakerWork {
 		return DISPLAY_NAME_PREFIX + pos.asLong() + "_slot_" + slot;
 	}
 
-	private static double shelfColumnXOffset(int slot) {
+	private static long displayHostPosLong(String tag) {
+		if (tag == null || !tag.startsWith(DISPLAY_NAME_PREFIX)) {
+			return Long.MIN_VALUE;
+		}
+
+		int slotMarker = tag.indexOf(DISPLAY_SLOT_MARKER, DISPLAY_NAME_PREFIX.length());
+		if (slotMarker < 0) {
+			return Long.MIN_VALUE;
+		}
+
+		try {
+			return Long.parseLong(tag.substring(DISPLAY_NAME_PREFIX.length(), slotMarker));
+		} catch (NumberFormatException ignored) {
+			return Long.MIN_VALUE;
+		}
+	}
+
+	private static double shelfColumnOffset(int slot) {
 		int column = Math.floorMod(slot, SaleDisplayBlockEntity.SLOT_COUNT / 2);
 		return switch (column) {
 			case 0 -> -0.20D;
 			case 1 -> 0.0D;
 			default -> 0.20D;
 		};
+	}
+
+	private static double shelfDepthOffset(boolean workstation) {
+		return workstation ? 0.08D : 0.0D;
 	}
 
 	private static double shelfYOffset(boolean workstation, int slot) {
@@ -991,6 +1086,14 @@ public final class SettlementBakerWork {
 		return row == 0 ? 0.58D : 0.12D;
 	}
 
+	private static Direction displayFacing(BlockState state) {
+		if (state.hasProperty(HorizontalDirectionalBlock.FACING)) {
+			return state.getValue(HorizontalDirectionalBlock.FACING);
+		}
+
+		return Direction.NORTH;
+	}
+
 	private record BakeryRecipe(
 		String taskKey,
 		int minTier,
@@ -1000,7 +1103,7 @@ public final class SettlementBakerWork {
 	) {
 	}
 
-	private record DisplayHost(BlockPos pos, boolean workstation) {
+	private record DisplayHost(BlockPos pos, boolean workstation, Direction facing) {
 	}
 
 	private record DesiredDisplay(DisplayHost host, int slot, ItemStack stack) {

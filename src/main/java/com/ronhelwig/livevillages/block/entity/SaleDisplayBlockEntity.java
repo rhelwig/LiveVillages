@@ -33,12 +33,10 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 	public static final int SLOT_COUNT = 6;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 
-	private final String translationKey;
 	private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
 
-	protected SaleDisplayBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState, String translationKey) {
+	protected SaleDisplayBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
 		super(type, pos, blockState);
-		this.translationKey = translationKey;
 	}
 
 	@Override
@@ -68,7 +66,7 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 
 	@Override
 	public Component getDisplayName() {
-		return Component.translatable(translationKey);
+		return Component.translatable(getBlockState().getBlock().getDescriptionId());
 	}
 
 	@Override
@@ -197,7 +195,7 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 		if (level != null && !level.isClientSide()) {
 			level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
 			if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-				SettlementBakerWork.syncBakeryDisplaysNear(serverLevel, worldPosition);
+				SettlementBakerWork.syncDisplayVisualsNear(serverLevel, worldPosition);
 			}
 		}
 	}

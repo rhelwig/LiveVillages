@@ -1,0 +1,7 @@
+{
+  "parent": "live-villages:block/framed_glass_display_case",
+  "textures": {
+    "frame": "minecraft:block/diamond_block",
+    "particle": "minecraft:block/diamond_block"
+  }
+}

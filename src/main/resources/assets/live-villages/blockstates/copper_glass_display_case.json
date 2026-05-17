@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "live-villages:block/copper_glass_display_case"
+    },
+    "facing=east": {
+      "model": "live-villages:block/copper_glass_display_case",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "live-villages:block/copper_glass_display_case",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "live-villages:block/copper_glass_display_case",
+      "y": 270
+    }
+  }
+}

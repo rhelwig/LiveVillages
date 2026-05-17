@@ -46,6 +46,9 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	private static final int BOUNTY_ROW_HEIGHT = 14;
 	private static final int BOUNTY_LIST_Y = 92;
 	private static final int BOUNTY_DETAIL_Y = 42;
+	private static final Component STORAGE_LABEL = Component.literal("Storage");
+	private static final Component STORAGE_NOTE_1 = Component.literal("Standalone cases work like");
+	private static final Component STORAGE_NOTE_2 = Component.literal("a 6-slot container.");
 	private static final Component STOCK_LABEL = Component.literal("Sale Stock");
 	private static final Component DONATE_NOTE_1 = Component.literal("Donate into empty slots");
 	private static final Component DONATE_NOTE_2 = Component.literal("or matching stacks.");
@@ -115,20 +118,22 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 				topPos + STOCK_SECTION_BOTTOM - 8,
 				0x22FFF5E6
 			);
-			graphics.fill(
-				leftPos + ACTION_PANEL_X,
-				topPos + ACTION_PANEL_Y,
-				leftPos + ACTION_PANEL_X + ACTION_PANEL_WIDTH,
-				topPos + ACTION_PANEL_Y + ACTION_PANEL_HEIGHT,
-				0x22FFF5E6
-			);
-			graphics.outline(
-				leftPos + ACTION_PANEL_X,
-				topPos + ACTION_PANEL_Y,
-				ACTION_PANEL_WIDTH,
-				ACTION_PANEL_HEIGHT,
-				0x447A633F
-			);
+			if (menu.bakeryContext()) {
+				graphics.fill(
+					leftPos + ACTION_PANEL_X,
+					topPos + ACTION_PANEL_Y,
+					leftPos + ACTION_PANEL_X + ACTION_PANEL_WIDTH,
+					topPos + ACTION_PANEL_Y + ACTION_PANEL_HEIGHT,
+					0x22FFF5E6
+				);
+				graphics.outline(
+					leftPos + ACTION_PANEL_X,
+					topPos + ACTION_PANEL_Y,
+					ACTION_PANEL_WIDTH,
+					ACTION_PANEL_HEIGHT,
+					0x447A633F
+				);
+			}
 
 			for (int slot = 0; slot < GlassDisplayCaseMenu.CASE_SLOT_COUNT; slot++) {
 				int column = slot % GlassDisplayCaseMenu.CASE_COLUMNS;
@@ -152,6 +157,13 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 		}
 
 		graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xFFD8C4A0, false);
+		if (!menu.bakeryContext()) {
+			graphics.text(font, STORAGE_LABEL, INFO_X, INFO_TITLE_Y, 0xFF4E381A, false);
+			int nextInfoY = drawWrappedText(graphics, STORAGE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, 0xFF4E381A);
+			drawWrappedText(graphics, STORAGE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF4E381A);
+			return;
+		}
+
 		graphics.text(font, STOCK_LABEL, INFO_X, INFO_TITLE_Y, 0xFF4E381A, false);
 		int nextInfoY = drawWrappedText(graphics, DONATE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, 0xFF4E381A);
 		nextInfoY = drawWrappedText(graphics, DONATE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF4E381A);
@@ -246,6 +258,10 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	}
 
 	private void rebuildButtons() {
+		if (!menu.bakeryContext()) {
+			return;
+		}
+
 		stackBarterButton = Button.builder(Component.literal("Stack"), ignored -> {
 			int slot = actionableSlot();
 			int buttonId = GlassDisplayCaseMenu.STACK_BARTER_BUTTON_ID_BASE + slot;

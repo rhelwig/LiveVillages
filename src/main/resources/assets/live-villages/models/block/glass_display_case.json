@@ -1,6 +1,7 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "live-villages:block/framed_glass_display_case",
   "textures": {
-    "all": "minecraft:block/glass"
+    "frame": "minecraft:block/stripped_oak_log",
+    "particle": "minecraft:block/stripped_oak_log"
   }
 }

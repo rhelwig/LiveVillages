@@ -103,11 +103,15 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 				ToggleableSlot displaySlot = new ToggleableSlot(caseInventory, slot, x, y) {
 					@Override
 					public boolean mayPickup(Player player) {
-						return false;
+						return !bakeryContext;
 					}
 
 					@Override
 					public boolean mayPlace(ItemStack stack) {
+						if (!bakeryContext) {
+							return true;
+						}
+
 						return SaleDisplayBlockEntity.canAddToDisplaySlot(getItem(), stack, getMaxStackSize(stack));
 					}
 				};
@@ -242,6 +246,10 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 	@Override
 	public boolean clickMenuButton(Player player, int buttonId) {
+		if (!bakeryContext) {
+			return false;
+		}
+
 		boolean stackBarterPurchase = buttonId >= STACK_BARTER_BUTTON_ID_BASE && buttonId < STACK_BARTER_BUTTON_ID_BASE + CASE_SLOT_COUNT;
 		boolean singleBarterPurchase = buttonId >= SINGLE_BARTER_BUTTON_ID_BASE && buttonId < SINGLE_BARTER_BUTTON_ID_BASE + CASE_SLOT_COUNT;
 		boolean freeClaimPurchase = buttonId >= FREE_CLAIM_BUTTON_ID_BASE && buttonId < FREE_CLAIM_BUTTON_ID_BASE + CASE_SLOT_COUNT;
@@ -317,7 +325,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 	@Override
 	public void clicked(int slotIndex, int button, ContainerInput input, Player player) {
-		if (input == ContainerInput.PICKUP && (button == 0 || button == 1) && slotIndex >= 0 && slotIndex < CASE_SLOT_COUNT) {
+		if (bakeryContext && input == ContainerInput.PICKUP && (button == 0 || button == 1) && slotIndex >= 0 && slotIndex < CASE_SLOT_COUNT) {
 			Slot slot = getSlot(slotIndex);
 			ItemStack carried = getCarried();
 
@@ -388,29 +396,24 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 		ItemStack stack = slot.getItem();
 		ItemStack original = stack.copy();
-
-		if (slotIndex < CASE_SLOT_COUNT) {
-			return ItemStack.EMPTY;
-		}
-
-		if (moveItemStackTo(stack, 0, CASE_SLOT_COUNT, false)) {
-			slot.setByPlayer(ItemStack.EMPTY);
-			reconcileBakeryIngredientDisplays();
-			return original;
-		}
-
 		int inventoryStart = CASE_SLOT_COUNT;
 		int inventoryEnd = inventoryStart + 27;
 		int hotbarStart = inventoryEnd;
 		int hotbarEnd = hotbarStart + 9;
 
-		if (slotIndex < inventoryEnd) {
-			if (!moveItemStackTo(stack, hotbarStart, hotbarEnd, false)) {
+		if (slotIndex < CASE_SLOT_COUNT) {
+			if (bakeryContext || !moveItemStackTo(stack, inventoryStart, hotbarEnd, true)) {
 				return ItemStack.EMPTY;
 			}
-		} else if (slotIndex < hotbarEnd) {
-			if (!moveItemStackTo(stack, inventoryStart, inventoryEnd, false)) {
-				return ItemStack.EMPTY;
+		} else if (!moveItemStackTo(stack, 0, CASE_SLOT_COUNT, false)) {
+			if (slotIndex < inventoryEnd) {
+				if (!moveItemStackTo(stack, hotbarStart, hotbarEnd, false)) {
+					return ItemStack.EMPTY;
+				}
+			} else if (slotIndex < hotbarEnd) {
+				if (!moveItemStackTo(stack, inventoryStart, inventoryEnd, false)) {
+					return ItemStack.EMPTY;
+				}
 			}
 		}
 
@@ -420,6 +423,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 			slot.setChanged();
 		}
 
+		reconcileBakeryIngredientDisplays();
 		return original;
 	}
 
@@ -432,7 +436,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	@Override
 	public boolean stillValid(Player player) {
 		return access.evaluate((level, pos) -> {
-			boolean validBlock = level.getBlockState(pos).is(LiveVillagesBlocks.GLASS_DISPLAY_CASE)
+			boolean validBlock = LiveVillagesBlocks.isGlassDisplayCase(level.getBlockState(pos))
 				|| level.getBlockState(pos).is(LiveVillagesBlocks.BAKERS_COUNTER);
 			return validBlock && player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D) <= 64.0D;
 		}, true);
