@@ -7,6 +7,7 @@ import net.minecraft.world.entity.npc.villager.Villager;
 
 public final class SettlementVillagerWorkSchedule {
 	private static final long DAY_TICKS = 24_000L;
+	private static final long VILLAGE_GATHERING_START_TICK = 9_000L;
 	private static final long[] BREAK_START_TICKS = {2_600L, 5_200L, 7_600L};
 	private static final long BREAK_SPREAD_TICKS = 900L;
 	private static final long BREAK_DURATION_TICKS = 240L;
@@ -16,7 +17,17 @@ public final class SettlementVillagerWorkSchedule {
 	}
 
 	public static boolean shouldStartNewWork(ServerLevel level, Villager villager, String workKey, long decideIntervalTicks) {
-		return !isTakingBreak(level, villager) && isDecideTurn(level, villager, workKey, decideIntervalTicks);
+		return isProfessionWorkTime(level) && !isTakingBreak(level, villager) && isDecideTurn(level, villager, workKey, decideIntervalTicks);
+	}
+
+	public static boolean isProfessionWorkTime(ServerLevel level) {
+		long dayTime = Math.floorMod(level.getOverworldClockTime(), DAY_TICKS);
+		return dayTime < VILLAGE_GATHERING_START_TICK;
+	}
+
+	public static boolean shouldYieldForVillageSchedule(ServerLevel level) {
+		long dayTime = Math.floorMod(level.getOverworldClockTime(), DAY_TICKS);
+		return dayTime >= VILLAGE_GATHERING_START_TICK;
 	}
 
 	public static boolean isTakingBreak(ServerLevel level, Villager villager) {

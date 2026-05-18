@@ -185,6 +185,14 @@ public final class SettlementBakerWork {
 		}
 
 		long tick = level.getServer().getTickCount();
+		if (SettlementVillagerWorkSchedule.shouldYieldForVillageSchedule(level)) {
+			for (Villager baker : bakers) {
+				baker.getNavigation().stop();
+				ACTIVE_TASKS.remove(baker.getUUID().toString());
+			}
+
+			return stockChanged;
+		}
 
 		for (Villager baker : bakers) {
 			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, baker, "baking", BAKING_DECIDE_INTERVAL_TICKS)) {

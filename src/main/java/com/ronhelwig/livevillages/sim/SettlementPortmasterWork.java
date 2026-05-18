@@ -47,6 +47,15 @@ public final class SettlementPortmasterWork {
 		List<BlockPos> lighthouses = SettlementConstruction.findLighthouseTops(level, settlement);
 		long tick = level.getServer().getTickCount();
 
+		if (SettlementVillagerWorkSchedule.shouldYieldForVillageSchedule(level)) {
+			for (Villager portmaster : portmasters) {
+				portmaster.getNavigation().stop();
+				ACTIVE_TASKS.remove(portmaster.getUUID().toString());
+			}
+
+			return;
+		}
+
 		for (Villager portmaster : portmasters) {
 			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, portmaster, "harbor", HARBOR_DECIDE_INTERVAL_TICKS)) {
 				if (SettlementVillagerWorkSchedule.isTakingBreak(level, portmaster)) {

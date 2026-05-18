@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.sim;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
@@ -23,12 +25,18 @@ import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 
+import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 public final class SettlementVillagers {
 	private static final int STANDARD_RADIUS_BLOCKS = 64;
 	private static final int VILLAGE_RADIUS_BLOCKS = 96;
+	private static final int FIELD_WORK_RADIUS_NUMERATOR = 3;
+	private static final int FIELD_WORK_RADIUS_DENOMINATOR = 2;
+	private static final int ROADWRIGHT_WORK_RADIUS_NUMERATOR = 2;
+	private static final int ROADWRIGHT_WORK_RADIUS_DENOMINATOR = 1;
 	private static final int JOB_SITE_SEARCH_RADIUS_BLOCKS = 48;
 	private static final int CARPENTER_HOME_SEARCH_RADIUS_BLOCKS = 5;
 	private static final int WORKSTATION_HOME_SEARCH_RADIUS_BLOCKS = 5;
@@ -39,6 +47,10 @@ public final class SettlementVillagers {
 	private static final long VILLAGE_REST_START_TICK = 12_000L;
 	private static final long VILLAGE_WAKEUP_END_TICK = 2_000L;
 	private static final int CUSTOM_PROFESSION_LOCK_XP = 1;
+	private static final int RETURN_DIAGNOSTIC_INTERVAL_TICKS = 200;
+	private static final long RETURN_DIAGNOSTIC_GRACE_TICKS = 600L;
+	private static final int RETURN_DIAGNOSTIC_HOSTILE_RADIUS_BLOCKS = 12;
+	private static final Map<String, Long> RETURN_DIAGNOSTIC_TICKS = new HashMap<>();
 
 	private SettlementVillagers() {
 	}
@@ -48,11 +60,34 @@ public final class SettlementVillagers {
 	}
 
 	public static int countNearbyVillagers(ServerLevel level, SettlementState settlement) {
-		return countNearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		return settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement)).size();
 	}
 
 	public static int settlementRadiusBlocks(SettlementState settlement) {
 		return villagerRadius(settlement);
+	}
+
+	public static int professionWorkRadiusBlocks(SettlementState settlement, String roleKey) {
+		int baseRadius = villagerRadius(settlement);
+		if (roleKey == null) {
+			return baseRadius;
+		}
+
+		return switch (roleKey) {
+			case SettlementRoleKeys.MINER, SettlementRoleKeys.FISHERMAN, SettlementRoleKeys.FORESTER ->
+				scaledRadius(baseRadius, FIELD_WORK_RADIUS_NUMERATOR, FIELD_WORK_RADIUS_DENOMINATOR);
+			case SettlementRoleKeys.ROADWRIGHT ->
+				scaledRadius(baseRadius, ROADWRIGHT_WORK_RADIUS_NUMERATOR, ROADWRIGHT_WORK_RADIUS_DENOMINATOR);
+			default -> baseRadius;
+		};
+	}
+
+	private static int settlementMemberRadiusBlocks(SettlementState settlement) {
+		return professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT);
+	}
+
+	private static int scaledRadius(int radiusBlocks, int numerator, int denominator) {
+		return Math.max(radiusBlocks, (radiusBlocks * numerator + denominator - 1) / denominator);
 	}
 
 	public static int countNearbyVillagers(ServerLevel level, BlockPos center, int radiusBlocks) {
@@ -60,7 +95,7 @@ public final class SettlementVillagers {
 	}
 
 	public static Map<String, Integer> censusPopulation(ServerLevel level, SettlementState settlement) {
-		return createOperationalPopulation(nearbyVillagers(level, settlement.center(), villagerRadius(settlement)));
+		return createOperationalPopulation(settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement)));
 	}
 
 	public static Map<String, Integer> nearbyProfessionPopulation(ServerLevel level, SettlementState settlement) {
@@ -70,7 +105,7 @@ public final class SettlementVillagers {
 
 		LinkedHashMap<String, Integer> population = new LinkedHashMap<>();
 
-		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+		for (Villager villager : settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement))) {
 			String professionKey = displayProfessionKey(villager);
 
 			if (professionKey == null || professionKey.isBlank()) {
@@ -84,19 +119,19 @@ public final class SettlementVillagers {
 	}
 
 	public static List<Villager> nearbyFarmers(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FARMER))
 			.toList();
 	}
 
 	public static List<Villager> nearbyButchers(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.BUTCHER))
 			.toList();
 	}
 
 	public static List<Villager> nearbyFishermen(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.FISHERMAN)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN))
 			.toList();
 	}
@@ -106,67 +141,67 @@ public final class SettlementVillagers {
 	}
 
 	public static List<Villager> nearbyAdultVillagers(ServerLevel level, SettlementState settlement, int radiusBlocks) {
-		return nearbyVillagers(level, settlement.center(), radiusBlocks).stream()
+		return settlementVillagers(level, settlement, radiusBlocks).stream()
 			.filter(villager -> !villager.isBaby())
 			.toList();
 	}
 
 	public static List<Villager> nearbyForesters(ServerLevel level, SettlementState settlement, int radiusBlocks) {
-		return nearbyVillagers(level, settlement.center(), radiusBlocks).stream()
+		return settlementVillagers(level, settlement, Math.max(radiusBlocks, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.FORESTER))).stream()
 			.filter(villager -> !villager.isBaby() && isCustomForester(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyCarpenters(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomCarpenter(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyBakers(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomBaker(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyMiners(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.MINER)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomMiner(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyFletchers(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FLETCHER))
 			.toList();
 	}
 
 	public static List<Villager> nearbyMasons(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.MASON))
 			.toList();
 	}
 
 	public static List<Villager> nearbyPortmasters(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomPortmaster(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyConstructionWorkers(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(SettlementVillagers::canHelpWithConstruction)
 			.toList();
 	}
 
 	public static List<Villager> nearbyRoadwrights(ServerLevel level, SettlementState settlement) {
-		return nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		return settlementVillagers(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT)).stream()
 			.filter(villager -> !villager.isBaby() && isCustomRoadwright(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyRoadworkHelpers(ServerLevel level, SettlementState settlement) {
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, villagerRadius(settlement));
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomRoadwright)) {
 			return List.of();
@@ -187,7 +222,7 @@ public final class SettlementVillagers {
 		LinkedHashMap<String, VillagerTaskCount> taskCounts = new LinkedHashMap<>();
 		boolean roadworkActive = roadworkTaskKeysByVillager.values().stream().anyMatch("improving_paths"::equals);
 
-		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+		for (Villager villager : settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement))) {
 			String roleKey = villager.isBaby() ? "child" : displayProfessionKey(villager);
 
 			if (roleKey == null || roleKey.isBlank()) {
@@ -218,7 +253,7 @@ public final class SettlementVillagers {
 		boolean roadworkActive = roadworkTaskKeysByVillager.values().stream().anyMatch("improving_paths"::equals);
 		List<VillagerDebugView> debugViews = new ArrayList<>();
 
-		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+		for (Villager villager : settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement))) {
 			String roleKey = villager.isBaby() ? "child" : displayProfessionKey(villager);
 
 			if (roleKey == null || roleKey.isBlank()) {
@@ -301,7 +336,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = recruitPriorityWorkforce(level, settlement, villagers);
 		changed |= maintainAssignedWorkforce(level, settlement, villagers);
 		return changed;
@@ -312,7 +347,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomTrademaster)) {
@@ -339,7 +374,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomCarpenter)) {
@@ -369,7 +404,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 		int desiredBakers = desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BAKER);
 		long currentBakers = villagers.stream()
@@ -409,7 +444,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomRoadwright)) {
@@ -436,7 +471,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomForester)) {
@@ -463,7 +498,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 		int desiredMiners = desiredMinerCount(level, settlement);
 		long currentMiners = villagers.stream()
@@ -503,7 +538,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 		int desiredPortmasters = desiredPortmasterCount(level, settlement);
 		long currentPortmasters = villagers.stream()
@@ -543,7 +578,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 		int desiredFletchers = desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FLETCHER);
 		long currentFletchers = villagers.stream()
@@ -583,7 +618,7 @@ public final class SettlementVillagers {
 			return false;
 		}
 
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement));
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = false;
 		int desiredFishermen = desiredFishermanCount(level, settlement);
 		long currentFishermen = villagers.stream()
@@ -624,7 +659,7 @@ public final class SettlementVillagers {
 		}
 
 		List<SettlementBuildSite> buildSites = LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id());
-		List<Villager> villagers = nearbyVillagers(level, settlement.center(), villagerRadius(settlement)).stream()
+		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement)).stream()
 			.sorted(Comparator.comparingInt((Villager villager) -> homeAssignmentPriority(level, villager, buildSites))
 				.thenComparing(villager -> villager.getUUID().toString()))
 			.toList();
@@ -640,7 +675,7 @@ public final class SettlementVillagers {
 			Optional<BlockPos> preferredHome = preferredAssignedHome(level, villager)
 				.filter(home -> isValidHome(level, settlement, home));
 			List<BlockPos> preferredHomes = preferredWorkstationHomes(level, villager, buildSites);
-			Optional<BlockPos> ownedHome = chooseOwnedHome(level, villager, currentHome, preferredHome, preferredHomes, claimedOwnedHomes);
+			Optional<BlockPos> ownedHome = chooseOwnedHome(level, settlement, villager, currentHome, preferredHome, preferredHomes, claimedOwnedHomes);
 
 			if (ownedHome.isPresent()) {
 				changed |= setPreferredAssignedHome(level, villager, ownedHome.get());
@@ -791,7 +826,7 @@ public final class SettlementVillagers {
 		BlockPos gatheringPos = resolveGatheringPos(level, settlement);
 		boolean changed = false;
 
-		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+		for (Villager villager : settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement))) {
 			Optional<BlockPos> currentMeetingPoint = villager.getBrain().getMemory(MemoryModuleType.MEETING_POINT)
 				.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
 				.map(GlobalPos::pos);
@@ -805,6 +840,24 @@ public final class SettlementVillagers {
 		}
 
 		return changed;
+	}
+
+	public static void logEveningReturnDiagnostics(ServerLevel level, SettlementState settlement) {
+		if (!usesActualVillagers(settlement) || (!isVillageGatheringTime(level) && !isVillageRestTime(level))) {
+			return;
+		}
+
+		for (Villager villager : settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement))) {
+			if (villager.isSleeping()) {
+				continue;
+			}
+
+			if (isVillageGatheringTime(level)) {
+				logGatheringReturnDiagnostic(level, settlement, villager);
+			} else if (isVillageRestTime(level)) {
+				logHomeReturnDiagnostic(level, settlement, villager);
+			}
+		}
 	}
 
 	public static Map<String, Integer> createOperationalPopulation(int villagers) {
@@ -1022,6 +1075,62 @@ public final class SettlementVillagers {
 
 	private static List<Villager> nearbyVillagers(ServerLevel level, BlockPos center, int radiusBlocks) {
 		return SettlementLoadedObservation.nearbyVillagers(level, center, radiusBlocks);
+	}
+
+	private static List<Villager> settlementVillagers(ServerLevel level, SettlementState settlement, int radiusBlocks) {
+		int baseRadius = villagerRadius(settlement);
+		int scanRadius = Math.max(baseRadius, radiusBlocks);
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		List<Villager> villagers = SettlementLoadedObservation.nearbyVillagers(level, settlement, scanRadius).stream()
+			.filter(villager -> belongsToSettlement(level, savedData, settlement, villager, radiusBlocks, baseRadius))
+			.toList();
+
+		for (Villager villager : villagers) {
+			if (savedData.villagerSettlement(villager.getUUID()).isEmpty()
+				&& shouldRememberSettlementMembership(level, settlement, villager, baseRadius)) {
+				savedData.setVillagerSettlement(villager.getUUID(), settlement.id());
+			}
+		}
+
+		return villagers;
+	}
+
+	private static boolean belongsToSettlement(
+		ServerLevel level,
+		LiveVillagesSavedData savedData,
+		SettlementState settlement,
+		Villager villager,
+		int radiusBlocks,
+		int baseRadius
+	) {
+		double distanceSquared = distanceToCenterSqr(villager, settlement.center());
+		double radiusSquared = (double) radiusBlocks * radiusBlocks;
+		Optional<String> assignedSettlementId = savedData.villagerSettlement(villager.getUUID());
+
+		if (assignedSettlementId.isPresent()) {
+			return assignedSettlementId.get().equals(settlement.id()) && distanceSquared <= radiusSquared;
+		}
+
+		if (distanceSquared <= (double) baseRadius * baseRadius) {
+			return true;
+		}
+
+		return heldJobSite(level, villager)
+			.map(jobSite -> jobSiteBelongsToSettlement(settlement, villager, jobSite, radiusBlocks))
+			.orElse(false);
+	}
+
+	private static boolean shouldRememberSettlementMembership(ServerLevel level, SettlementState settlement, Villager villager, int baseRadius) {
+		return distanceToCenterSqr(villager, settlement.center()) <= (double) baseRadius * baseRadius
+			|| heldJobSite(level, villager)
+				.map(jobSite -> jobSiteBelongsToSettlement(settlement, villager, jobSite, settlementMemberRadiusBlocks(settlement)))
+				.orElse(false);
+	}
+
+	private static boolean jobSiteBelongsToSettlement(SettlementState settlement, Villager villager, BlockPos jobSite, int radiusBlocks) {
+		int roleRadius = professionWorkRadiusBlocks(settlement, displayProfessionKey(villager));
+		int allowedRadius = Math.min(radiusBlocks, roleRadius);
+		return horizontalDistanceSqr(jobSite, settlement.center()) <= (double) allowedRadius * allowedRadius;
 	}
 
 	private static boolean promoteToTrademaster(ServerLevel level, Villager villager) {
@@ -1493,6 +1602,18 @@ public final class SettlementVillagers {
 			.findFirst();
 	}
 
+	private static Optional<BlockPos> findUnclaimedSettlementHome(ServerLevel level, SettlementState settlement, Set<BlockPos> claimedHomes) {
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.HOME),
+			pos -> !claimedHomes.contains(pos) && isValidHome(level, settlement, pos),
+			settlement.center(),
+			HOME_SEARCH_RADIUS_BLOCKS,
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.findFirst();
+	}
+
 	private static Optional<BlockPos> findReachableAlternateHome(
 		ServerLevel level,
 		Villager villager,
@@ -1521,6 +1642,7 @@ public final class SettlementVillagers {
 
 	private static Optional<BlockPos> chooseOwnedHome(
 		ServerLevel level,
+		SettlementState settlement,
 		Villager villager,
 		Optional<BlockPos> currentHome,
 		Optional<BlockPos> preferredHome,
@@ -1557,7 +1679,16 @@ public final class SettlementVillagers {
 			return generalOwnedHome;
 		}
 
-		return findReachableHome(level, villager, claimedOwnedHomes);
+		Optional<BlockPos> reachableHome = findReachableHome(level, villager, claimedOwnedHomes);
+		if (reachableHome.isPresent()) {
+			return reachableHome;
+		}
+
+		if (isCustomMiner(villager)) {
+			return findUnclaimedSettlementHome(level, settlement, claimedOwnedHomes);
+		}
+
+		return Optional.empty();
 	}
 
 	private static Optional<SettlementBuildSite> preferredWorkstationHomeBuildSite(ServerLevel level, Villager villager, List<SettlementBuildSite> buildSites) {
@@ -1655,16 +1786,17 @@ public final class SettlementVillagers {
 	}
 
 	private static Optional<BlockPos> findReachableMinerJobSite(ServerLevel level, Villager villager) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> level.getPoiManager().findAllClosestFirstWithType(
+				poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
+				pos -> horizontalDistanceSqr(pos, settlement.center()) <= (double) professionSearchRadiusBlocks(settlement, ProfessionDemandType.MINER) * professionSearchRadiusBlocks(settlement, ProfessionDemandType.MINER),
+				villager.blockPosition(),
+				Math.max(JOB_SITE_SEARCH_RADIUS_BLOCKS, professionSearchRadiusBlocks(settlement, ProfessionDemandType.MINER)),
+				net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE
+			)
+				.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+				.map(com.mojang.datafixers.util.Pair::getSecond)
+				.findFirst());
 	}
 
 	private static Optional<BlockPos> findReachablePortmasterJobSite(ServerLevel level, Villager villager) {
@@ -1702,7 +1834,7 @@ public final class SettlementVillagers {
 			poiPredicate,
 			pos -> true,
 			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
+			Math.max(JOB_SITE_SEARCH_RADIUS_BLOCKS, professionSearchRadiusBlocks(settlement, type)),
 			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
 			.filter(pair -> workstationHasRemainingCapacity(level, settlement, type, pair.getSecond()))
@@ -1716,16 +1848,17 @@ public final class SettlementVillagers {
 		Villager villager,
 		net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy occupancy
 	) {
-		return level.getPoiManager().findAllClosestFirstWithType(
-			poiType -> poiType.is(PoiTypes.FISHERMAN),
-			pos -> true,
-			villager.blockPosition(),
-			JOB_SITE_SEARCH_RADIUS_BLOCKS,
-			occupancy
-		)
-			.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
-			.map(com.mojang.datafixers.util.Pair::getSecond)
-			.findFirst();
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> level.getPoiManager().findAllClosestFirstWithType(
+				poiType -> poiType.is(PoiTypes.FISHERMAN),
+				pos -> horizontalDistanceSqr(pos, settlement.center()) <= (double) professionSearchRadiusBlocks(settlement, ProfessionDemandType.FISHERMAN) * professionSearchRadiusBlocks(settlement, ProfessionDemandType.FISHERMAN),
+				villager.blockPosition(),
+				Math.max(JOB_SITE_SEARCH_RADIUS_BLOCKS, professionSearchRadiusBlocks(settlement, ProfessionDemandType.FISHERMAN)),
+				occupancy
+			)
+				.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+				.map(com.mojang.datafixers.util.Pair::getSecond)
+				.findFirst());
 	}
 
 	private static void assignTrademasterJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
@@ -1939,6 +2072,12 @@ public final class SettlementVillagers {
 			.map(GlobalPos::pos);
 	}
 
+	private static Optional<BlockPos> heldJobSite(ServerLevel level, Villager villager) {
+		return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
+			.filter(globalPos -> globalPos.dimension().equals(level.dimension()))
+			.map(GlobalPos::pos);
+	}
+
 	private static boolean isValidHome(ServerLevel level, SettlementState settlement, BlockPos homePos) {
 		return horizontalDistanceSqr(homePos, settlement.center()) <= HOME_SEARCH_RADIUS_BLOCKS * HOME_SEARCH_RADIUS_BLOCKS
 			&& level.hasChunkAt(homePos)
@@ -1980,6 +2119,95 @@ public final class SettlementVillagers {
 	private static boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
 		var path = villager.getNavigation().createPath(pos, poiType.value().validRange());
 		return path != null && path.canReach();
+	}
+
+	private static void logGatheringReturnDiagnostic(ServerLevel level, SettlementState settlement, Villager villager) {
+		BlockPos gatheringPos = resolveGatheringPos(level, settlement);
+		if (villager.blockPosition().distSqr(gatheringPos) <= GATHERING_RADIUS_BLOCKS * GATHERING_RADIUS_BLOCKS) {
+			return;
+		}
+
+		var path = villager.getNavigation().createPath(gatheringPos, GATHERING_RADIUS_BLOCKS);
+		String reason = path == null ? "no_path_created" : (path.canReach() ? "path_reachable_but_not_arrived" : "path_unreachable");
+		if ("path_reachable_but_not_arrived".equals(reason) && ticksSinceDayTime(level, VILLAGE_GATHERING_START_TICK) < RETURN_DIAGNOSTIC_GRACE_TICKS) {
+			return;
+		}
+
+		logEveningReturnDiagnostic(level, settlement, villager, "gathering", gatheringPos, reason);
+	}
+
+	private static void logHomeReturnDiagnostic(ServerLevel level, SettlementState settlement, Villager villager) {
+		Optional<BlockPos> homePos = heldHome(level, villager);
+		if (homePos.isEmpty()) {
+			logEveningReturnDiagnostic(level, settlement, villager, "home", resolveGatheringPos(level, settlement), "no_home_memory");
+			return;
+		}
+
+		if (villager.blockPosition().distSqr(homePos.get()) <= 4.0D) {
+			return;
+		}
+
+		var path = villager.getNavigation().createPath(homePos.get(), 1);
+		String reason = path == null ? "no_path_created" : (path.canReach() ? "path_reachable_but_not_arrived" : "path_unreachable");
+		if ("path_reachable_but_not_arrived".equals(reason) && ticksSinceDayTime(level, VILLAGE_REST_START_TICK) < RETURN_DIAGNOSTIC_GRACE_TICKS) {
+			return;
+		}
+
+		logEveningReturnDiagnostic(level, settlement, villager, "home", homePos.get(), reason);
+	}
+
+	private static void logEveningReturnDiagnostic(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager villager,
+		String targetKind,
+		BlockPos targetPos,
+		String reason
+	) {
+		long tick = level.getServer().getTickCount();
+		String key = settlement.id() + "|" + villager.getUUID() + "|" + targetKind + "|" + reason;
+		long previousTick = RETURN_DIAGNOSTIC_TICKS.getOrDefault(key, Long.MIN_VALUE);
+		if (previousTick != Long.MIN_VALUE && tick - previousTick < RETURN_DIAGNOSTIC_INTERVAL_TICKS) {
+			return;
+		}
+
+		RETURN_DIAGNOSTIC_TICKS.put(key, tick);
+		HostileDiagnostic hostiles = nearbyReturnHostiles(level, villager);
+		double distance = Math.sqrt(villager.blockPosition().distSqr(targetPos));
+		LiveVillages.LOGGER.warn(
+			"Evening return diagnostic: settlement={} villager={} role={} target={} targetPos={} pos={} distance={} reason={} visibleHostiles={} nearbyHostiles={}",
+			settlement.id(),
+			villager.getUUID(),
+			displayProfessionKey(villager),
+			targetKind,
+			targetPos,
+			villager.blockPosition(),
+			Math.round(distance * 10.0D) / 10.0D,
+			reason,
+			hostiles.visibleCount(),
+			hostiles.nearbyCount()
+		);
+	}
+
+	private static HostileDiagnostic nearbyReturnHostiles(ServerLevel level, Villager villager) {
+		AABB bounds = new AABB(villager.blockPosition()).inflate(RETURN_DIAGNOSTIC_HOSTILE_RADIUS_BLOCKS);
+		int nearbyCount = 0;
+		int visibleCount = 0;
+
+		for (Monster monster : level.getEntitiesOfClass(Monster.class, bounds, monster -> monster.isAlive() && !monster.isRemoved())) {
+			nearbyCount++;
+
+			if (villager.hasLineOfSight(monster)) {
+				visibleCount++;
+			}
+		}
+
+		return new HostileDiagnostic(nearbyCount, visibleCount);
+	}
+
+	private static long ticksSinceDayTime(ServerLevel level, long startTick) {
+		long dayTime = Math.floorMod(level.getOverworldClockTime(), 24_000L);
+		return Math.floorMod(dayTime - startTick, 24_000L);
 	}
 
 	private static boolean canBecomeTrademaster(Villager villager) {
@@ -2533,6 +2761,24 @@ public final class SettlementVillagers {
 		};
 	}
 
+	private static int professionSearchRadiusBlocks(SettlementState settlement, ProfessionDemandType type) {
+		return professionWorkRadiusBlocks(settlement, roleKeyForProfessionDemand(type));
+	}
+
+	private static String roleKeyForProfessionDemand(ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER -> SettlementRoleKeys.TRADEMASTER;
+			case CARPENTER -> SettlementRoleKeys.CARPENTER;
+			case BAKER -> SettlementRoleKeys.BAKER;
+			case ROADWRIGHT -> SettlementRoleKeys.ROADWRIGHT;
+			case FORESTER -> SettlementRoleKeys.FORESTER;
+			case MINER -> SettlementRoleKeys.MINER;
+			case PORTMASTER -> SettlementRoleKeys.PORTMASTER;
+			case FLETCHER -> SettlementRoleKeys.FLETCHER;
+			case FISHERMAN -> SettlementRoleKeys.FISHERMAN;
+		};
+	}
+
 	private static boolean canReachProfessionJobSite(ServerLevel level, Villager villager, ProfessionDemandType type) {
 		return switch (type) {
 			case TRADEMASTER -> heldTrademasterJobSite(level, villager).isPresent() || findReachableTrademasterJobSite(level, villager).isPresent();
@@ -2566,7 +2812,7 @@ public final class SettlementVillagers {
 			poiType -> poiType.is(PoiTypes.FISHERMAN),
 			pos -> true,
 			settlement.center(),
-			villagerRadius(settlement),
+			professionSearchRadiusBlocks(settlement, ProfessionDemandType.FISHERMAN),
 			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
 			.map(com.mojang.datafixers.util.Pair::getSecond)
@@ -2588,7 +2834,7 @@ public final class SettlementVillagers {
 			jobSitePoiPredicate(type),
 			pos -> true,
 			settlement.center(),
-			villagerRadius(settlement),
+			professionSearchRadiusBlocks(settlement, type),
 			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
 			.map(com.mojang.datafixers.util.Pair::getSecond)
@@ -2650,7 +2896,7 @@ public final class SettlementVillagers {
 	) {
 		int count = 0;
 
-		for (Villager villager : nearbyVillagers(level, settlement.center(), villagerRadius(settlement))) {
+		for (Villager villager : settlementVillagers(level, settlement, professionSearchRadiusBlocks(settlement, type))) {
 			if (currentProfessionType(villager) != type) {
 				continue;
 			}
@@ -2690,8 +2936,22 @@ public final class SettlementVillagers {
 	}
 
 	private static Optional<SettlementState> owningSettlementFor(ServerLevel level, Villager villager) {
-		return LiveVillagesSavedData.get(level.getServer())
-			.findSettlementForPosition(level.dimension(), villager.blockPosition(), SettlementVillagers::usesActualVillagers);
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<String> assignedSettlementId = savedData.villagerSettlement(villager.getUUID());
+
+		if (assignedSettlementId.isPresent()) {
+			Optional<SettlementState> assignedSettlement = savedData.getSettlement(assignedSettlementId.get())
+				.filter(settlement -> settlement.dimension().equals(level.dimension()))
+				.filter(SettlementVillagers::usesActualVillagers);
+
+			if (assignedSettlement.isPresent()) {
+				return assignedSettlement;
+			}
+
+			savedData.clearVillagerSettlement(villager.getUUID());
+		}
+
+		return savedData.findSettlementForPosition(level.dimension(), villager.blockPosition(), SettlementVillagers::usesActualVillagers);
 	}
 
 	private static List<BlockPos> builtWorkstationHomeBeds(ServerLevel level, SettlementBuildSite buildSite) {
@@ -2748,7 +3008,7 @@ public final class SettlementVillagers {
 			poiType -> poiType.is(LiveVillagesVillagerProfessions.PORTMASTER_POI),
 			pos -> true,
 			settlement.center(),
-			villagerRadius(settlement),
+			professionSearchRadiusBlocks(settlement, ProfessionDemandType.PORTMASTER),
 			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
 			.map(com.mojang.datafixers.util.Pair::getSecond)
@@ -2763,7 +3023,7 @@ public final class SettlementVillagers {
 			poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI),
 			pos -> true,
 			settlement.center(),
-			villagerRadius(settlement),
+			professionSearchRadiusBlocks(settlement, ProfessionDemandType.MINER),
 			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
 		)
 			.map(com.mojang.datafixers.util.Pair::getSecond)
@@ -2926,6 +3186,7 @@ public final class SettlementVillagers {
 			case "cataloging_books" -> "cataloging books";
 			case "community_care" -> "community care";
 			case "collecting_forest_drops" -> "collecting forest drops";
+			case "closing_monster_tunnel" -> "closing monster tunnel";
 			case "crafting_golden_apples" -> "crafting golden apples";
 			case "cutting_stone" -> "cutting stone";
 			case "cutting_trees" -> "cutting trees";
@@ -2944,9 +3205,12 @@ public final class SettlementVillagers {
 			case "lighting_lighthouse" -> "lighting lighthouse";
 			case "lighting_cave" -> "lighting cave";
 			case "lighting_mine_shaft" -> "lighting mine shaft";
+			case "lighting_primary_tunnel" -> "lighting primary tunnel";
+			case "lighting_secondary_tunnel" -> "lighting secondary tunnel";
 			case "inspecting_docks" -> "inspecting docks";
 			case "checking_lighthouse" -> "checking lighthouse";
 			case "extinguishing_lighthouse" -> "extinguishing lighthouse";
+			case "marking_underground_discovery" -> "marking underground discovery";
 			case "mining_ore_vein" -> "mining ore vein";
 			case "maintaining_tools" -> "maintaining tools";
 			case "maintaining_workshop" -> "maintaining workshop";
@@ -2965,6 +3229,7 @@ public final class SettlementVillagers {
 			case "seeking_bed" -> "seeking bed";
 			case "sleeping" -> "sleeping";
 			case "sleeping_in_bed" -> "sleeping in bed";
+			case "placing_bedrock_safety_ladders" -> "placing bedrock safety ladders";
 			case "placing_shaft_ladders" -> "placing shaft ladders";
 			case "warning_harbor" -> "warning harbor";
 			case "stonework" -> "stonework";
@@ -3025,6 +3290,9 @@ public final class SettlementVillagers {
 	}
 
 	private record BuildSiteRelativePos(int right, int forward, int up) {
+	}
+
+	private record HostileDiagnostic(int nearbyCount, int visibleCount) {
 	}
 
 	private enum ProfessionDemandType {

@@ -32,7 +32,6 @@ import net.minecraft.world.phys.AABB;
 public final class SettlementForesterWork {
 	private static final double FORESTRY_WORK_REACH_DISTANCE_SQUARED = 9.0D;
 	private static final double FORESTRY_WALK_SPEED = 0.75D;
-	private static final int FORESTRY_EXTRA_RADIUS_BLOCKS = 64;
 	private static final int FORESTRY_ITEM_SCAN_RADIUS_BLOCKS = 24;
 	private static final int TREE_SCAN_STEP_BLOCKS = 2;
 	private static final int PLANT_SCAN_STEP_BLOCKS = 4;
@@ -63,6 +62,15 @@ public final class SettlementForesterWork {
 		long entityScanTime = System.nanoTime() - methodStart;
 		if (entityScanTime > 2_000_000) { // >2ms
 			LiveVillages.LOGGER.warn("ForesterWork: entity scan took {} ms for {} foresters", Math.round(entityScanTime / 1_000_000.0D), foresters.size());
+		}
+
+		if (SettlementVillagerWorkSchedule.shouldYieldForVillageSchedule(level)) {
+			for (Villager forester : foresters) {
+				forester.getNavigation().stop();
+				ACTIVE_TASKS.remove(forester.getUUID().toString());
+			}
+
+			return false;
 		}
 
 		for (Villager forester : foresters) {
@@ -650,11 +658,11 @@ public final class SettlementForesterWork {
 
 	private static boolean isWithinForestryRange(SettlementState settlement, BlockPos pos) {
 		int radius = workRadius(settlement);
-		return pos.distSqr(settlement.center()) <= radius * radius;
+		return horizontalDistanceSqr(pos, settlement.center()) <= radius * radius;
 	}
 
 	private static boolean isPreferredPlantingArea(SettlementState settlement, BlockPos pos) {
-		double distanceSquared = pos.distSqr(settlement.center());
+		double distanceSquared = horizontalDistanceSqr(pos, settlement.center());
 		int villageRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
 		double innerRadius = villageRadius * 0.65D;
 		return distanceSquared >= innerRadius * innerRadius && distanceSquared <= workRadius(settlement) * workRadius(settlement);
@@ -728,16 +736,22 @@ public final class SettlementForesterWork {
 
 	private static int preserveTreeCount(SettlementState settlement, BlockPos pos) {
 		int villageRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
-		return pos.distSqr(settlement.center()) <= villageRadius * villageRadius ? 5 : 2;
+		return horizontalDistanceSqr(pos, settlement.center()) <= villageRadius * villageRadius ? 5 : 2;
 	}
 
 	private static int preferredTreeDensity(SettlementState settlement, BlockPos pos) {
 		int villageRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
-		return pos.distSqr(settlement.center()) <= villageRadius * villageRadius ? 3 : 7;
+		return horizontalDistanceSqr(pos, settlement.center()) <= villageRadius * villageRadius ? 3 : 7;
 	}
 
 	private static int workRadius(SettlementState settlement) {
-		return SettlementVillagers.settlementRadiusBlocks(settlement) + FORESTRY_EXTRA_RADIUS_BLOCKS;
+		return SettlementVillagers.professionWorkRadiusBlocks(settlement, SettlementRoleKeys.FORESTER);
+	}
+
+	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
+		double dx = (first.getX() + 0.5D) - (second.getX() + 0.5D);
+		double dz = (first.getZ() + 0.5D) - (second.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
 	}
 
 	private static BlockPos foresterSearchOrigin(ServerLevel level, SettlementState settlement, Villager forester) {

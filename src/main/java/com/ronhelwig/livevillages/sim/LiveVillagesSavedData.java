@@ -58,6 +58,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
+		Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("villager_settlements", Map.of()).forGetter(data -> data.villagerSettlements),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
 		Codec.INT.optionalFieldOf("next_region_cursor", 0).forGetter(data -> data.nextRegionCursor),
@@ -80,6 +81,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
 	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
+	private final LinkedHashMap<String, String> villagerSettlements;
 	private final LinkedHashMap<String, Long> preferredVillagerHomes;
 	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
 	private int nextRegionCursor;
@@ -106,7 +108,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -119,6 +121,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
 		Map<String, Map<String, Integer>> bakeryFreebiesOwed,
+		Map<String, String> villagerSettlements,
 		Map<String, Long> preferredVillagerHomes,
 		Map<String, Long> loadedRoadworkCatchupTicks,
 		int nextRegionCursor,
@@ -136,6 +139,7 @@ public class LiveVillagesSavedData extends SavedData {
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
 		this.bakeryFreebiesOwed = new LinkedHashMap<>();
 		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
+		this.villagerSettlements = new LinkedHashMap<>(villagerSettlements);
 		this.preferredVillagerHomes = new LinkedHashMap<>(preferredVillagerHomes);
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
 		this.nextRegionCursor = nextRegionCursor;
@@ -244,7 +248,7 @@ public class LiveVillagesSavedData extends SavedData {
 				continue;
 			}
 
-			double distanceSquared = settlement.center().distSqr(position);
+			double distanceSquared = horizontalDistanceSqr(settlement.center(), position);
 
 			if (distanceSquared > nearestDistanceSquared) {
 				continue;
@@ -266,7 +270,7 @@ public class LiveVillagesSavedData extends SavedData {
 				continue;
 			}
 
-			double distanceSquared = settlement.center().distSqr(position);
+			double distanceSquared = horizontalDistanceSqr(settlement.center(), position);
 			int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement);
 
 			if (distanceSquared > (double) settlementRadius * settlementRadius || distanceSquared >= nearestDistanceSquared) {
@@ -278,6 +282,12 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		return Optional.ofNullable(nearestSettlement);
+	}
+
+	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
+		double dx = (first.getX() + 0.5D) - (second.getX() + 0.5D);
+		double dz = (first.getZ() + 0.5D) - (second.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
 	}
 
 	public int settlementCount() {
@@ -352,6 +362,42 @@ public class LiveVillagesSavedData extends SavedData {
 
 		Long home = preferredVillagerHomes.get(villagerId.toString());
 		return home == null ? Optional.empty() : Optional.of(BlockPos.of(home));
+	}
+
+	public Optional<String> villagerSettlement(UUID villagerId) {
+		if (villagerId == null) {
+			return Optional.empty();
+		}
+
+		String settlementId = villagerSettlements.get(villagerId.toString());
+		return settlementId == null || settlementId.isBlank() ? Optional.empty() : Optional.of(settlementId);
+	}
+
+	public boolean setVillagerSettlement(UUID villagerId, String settlementId) {
+		if (villagerId == null || settlementId == null || settlementId.isBlank()) {
+			return false;
+		}
+
+		String previous = villagerSettlements.put(villagerId.toString(), settlementId);
+		if (settlementId.equals(previous)) {
+			return false;
+		}
+
+		setDirty();
+		return true;
+	}
+
+	public boolean clearVillagerSettlement(UUID villagerId) {
+		if (villagerId == null) {
+			return false;
+		}
+
+		if (villagerSettlements.remove(villagerId.toString()) == null) {
+			return false;
+		}
+
+		setDirty();
+		return true;
 	}
 
 	public boolean setPreferredVillagerHome(UUID villagerId, BlockPos homePos) {
@@ -917,6 +963,7 @@ public class LiveVillagesSavedData extends SavedData {
 			long homesStart = System.nanoTime();
 			changed |= SettlementVillagers.ensureVillagerHomes(level, workingSettlement);
 			changed |= SettlementVillagers.ensureVillagerGatheringPoint(level, workingSettlement);
+			SettlementVillagers.logEveningReturnDiagnostics(level, workingSettlement);
 			long homesTime = System.nanoTime() - homesStart;
 			if (homesTime > 100_000_000) { // >100ms
 				LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());

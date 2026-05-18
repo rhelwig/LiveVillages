@@ -43,7 +43,6 @@ public final class SettlementRoadwrightWork {
 	private static final double ROADWORK_REACH_DISTANCE_SQUARED = 9.0D;
 	private static final double ROADWORK_SPEED = 0.75D;
 	private static final int INTERNAL_TARGET_RADIUS_BLOCKS = 80;
-	private static final int EXTERNAL_TARGET_RADIUS_BLOCKS = 512;
 	private static final int MILEPOST_TARGET_RADIUS_BLOCKS = 512;
 	private static final int INTERNAL_POI_SCAN_RADIUS_BLOCKS = 96;
 	private static final int INTERNAL_POI_SCAN_Y_RANGE_BLOCKS = 24;
@@ -112,6 +111,15 @@ public final class SettlementRoadwrightWork {
 		boolean worldChanged = false;
 		boolean plannedThisPass = false;
 		long tick = level.getServer().getTickCount();
+
+		if (SettlementVillagerWorkSchedule.shouldYieldForVillageSchedule(level)) {
+			for (Villager roadwright : roadWorkers) {
+				roadwright.getNavigation().stop();
+				ROADWORK_TASK_CACHE.remove(roadworkTaskCacheKey(settlement, roadwright.getUUID().toString()));
+			}
+
+			return RoadworkResult.unchanged();
+		}
 
 		for (Villager roadwright : roadWorkers) {
 			String roadwrightId = roadwright.getUUID().toString();
@@ -901,7 +909,11 @@ public final class SettlementRoadwrightWork {
 			return cachedTargets.positions();
 		}
 
-		List<BlockPos> targets = nearbyMileposts(level, settlement.center(), MILEPOST_TARGET_RADIUS_BLOCKS);
+		List<BlockPos> targets = nearbyMileposts(
+			level,
+			settlement.center(),
+			Math.min(MILEPOST_TARGET_RADIUS_BLOCKS, roadwrightWorkRadius(settlement))
+		);
 		MILEPOST_TARGET_CACHE.put(cacheKey, new CachedMilepostTargets(currentTick, targets));
 		return targets;
 	}
@@ -1079,7 +1091,8 @@ public final class SettlementRoadwrightWork {
 				continue;
 			}
 
-			if (candidate.center().distSqr(settlement.center()) <= EXTERNAL_TARGET_RADIUS_BLOCKS * EXTERNAL_TARGET_RADIUS_BLOCKS) {
+			int roadwrightWorkRadius = roadwrightWorkRadius(settlement);
+			if (horizontalDistanceSqr(candidate.center(), settlement.center()) <= roadwrightWorkRadius * roadwrightWorkRadius) {
 				targets.add(new PathTarget(candidate.center(), false));
 			}
 		}
@@ -1864,7 +1877,17 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static Optional<BlockPos> furthestEstablishedExternalAnchor(ServerLevel level, SettlementState settlement, BlockPos targetPos) {
-		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, EXTERNAL_TARGET_RADIUS_BLOCKS, EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
+		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, roadwrightWorkRadius(settlement), EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
+	}
+
+	private static int roadwrightWorkRadius(SettlementState settlement) {
+		return SettlementVillagers.professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT);
+	}
+
+	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
+		double dx = (first.getX() + 0.5D) - (second.getX() + 0.5D);
+		double dz = (first.getZ() + 0.5D) - (second.getZ() + 0.5D);
+		return (dx * dx) + (dz * dz);
 	}
 
 	private static Optional<BlockPos> furthestEstablishedRouteAnchor(
