@@ -43,6 +43,8 @@
   "item.live-villages.simple_housing_shelter": "Simple Housing Shelter",
   "item.live-villages.surveyor_table": "Surveyor's Table",
   "item.live-villages.trade_board": "Trade Board",
+  "gamerule.live-villages.surveyor_map_fog": "Surveyor Map Fog",
+  "gamerule.live-villages.surveyor_map_fog.description": "Whether the Surveyor's Table map hides unexplored areas under fog of war.",
   "key.live-villages.capture_structure_blueprint": "Capture Structure Blueprint",
   "key.categories.live-villages.controls": "Live Villages",
   "key.live-villages.toggle_build_site_preview": "Toggle Build Preview",

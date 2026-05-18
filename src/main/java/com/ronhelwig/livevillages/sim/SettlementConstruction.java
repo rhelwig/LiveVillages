@@ -3028,10 +3028,22 @@ public final class SettlementConstruction {
 	}
 
 	private static boolean shouldIgnorePlacementProperty(BlockState currentState, BlockState plannedState, Property<?> property) {
-		if ((currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock)
-			|| (currentState.getBlock() instanceof FenceGateBlock && plannedState.getBlock() instanceof FenceGateBlock)) {
-			String name = property.getName();
-			return "open".equals(name) || "powered".equals(name);
+		String name = property.getName();
+
+		if ("waterlogged".equals(name)) {
+			return true;
+		}
+
+		if (currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock) {
+			return "open".equals(name) || "powered".equals(name) || "hinge".equals(name);
+		}
+
+		if (currentState.getBlock() instanceof FenceGateBlock && plannedState.getBlock() instanceof FenceGateBlock) {
+			return "open".equals(name) || "powered".equals(name) || "in_wall".equals(name);
+		}
+
+		if (currentState.getBlock() instanceof StairBlock && plannedState.getBlock() instanceof StairBlock) {
+			return "shape".equals(name);
 		}
 
 		return false;
