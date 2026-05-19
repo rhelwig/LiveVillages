@@ -16,6 +16,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
+
 public final class RouteNetworkSimulator {
 	private static final long MIN_ROUTE_UPDATE_TICKS = 2_000L;
 	private static final double MAX_TRADE_INTERVAL_DAYS = 7.0D;
@@ -47,7 +49,7 @@ public final class RouteNetworkSimulator {
 		SettlementTradeRange.TradeRangeProfile fromRange = tradeProfileForRoute(level, route, from);
 		SettlementTradeRange.TradeRangeProfile toRange = tradeProfileForRoute(level, route, to);
 		RouteState surveyedRoute = surveyRoute(level, route, from, to, currentTick, fromRange, toRange);
-		TradeAdvanceResult tradeResult = advanceTrade(surveyedRoute, from, to, fromBuildSites, toBuildSites, currentTick, fromRange, toRange);
+		TradeAdvanceResult tradeResult = advanceTrade(level, surveyedRoute, from, to, fromBuildSites, toBuildSites, currentTick, fromRange, toRange);
 		return new RouteAdvanceResult(tradeResult.route(), tradeResult.fromSettlement(), tradeResult.toSettlement());
 	}
 
@@ -182,6 +184,7 @@ public final class RouteNetworkSimulator {
 	}
 
 	private static TradeAdvanceResult advanceTrade(
+		ServerLevel level,
 		RouteState route,
 		SettlementState from,
 		SettlementState to,
@@ -218,7 +221,8 @@ public final class RouteNetworkSimulator {
 				break;
 			}
 
-			int transferAmount = Math.min(remainingBudget, Math.min(demand.availableToSend(), demand.neededAtDestination()));
+			int tradeWeight = routeTransferWeight(level, demand.goodsKey());
+			int transferAmount = Math.min(remainingBudget / tradeWeight, Math.min(demand.availableToSend(), demand.neededAtDestination()));
 
 			if (transferAmount <= 0) {
 				continue;
@@ -229,7 +233,7 @@ public final class RouteNetworkSimulator {
 			sourceStock.put(demand.goodsKey(), sourceStock.getOrDefault(demand.goodsKey(), 0) - transferAmount);
 			destinationStock.merge(demand.goodsKey(), transferAmount, Integer::sum);
 			shipments.add(new Shipment(demand.goodsKey(), transferAmount, demand.fromSettlementId(), demand.toSettlementId()));
-			remainingBudget -= transferAmount;
+			remainingBudget -= transferAmount * tradeWeight;
 		}
 
 		cleanMap(fromStock);
@@ -341,6 +345,15 @@ public final class RouteNetworkSimulator {
 		}
 
 		return Math.max(1, (int) Math.round(throughput));
+	}
+
+	private static int routeTransferWeight(ServerLevel level, String goodsKey) {
+		int valuePoints = TradeBoardTradeRules.itemValuePoints(level, goodsKey, 100);
+		if (valuePoints <= 0) {
+			return 1;
+		}
+
+		return Math.max(1, Math.min(16, (valuePoints + 39) / 40));
 	}
 
 	private static long computeTradeIntervalTicks(

@@ -449,6 +449,7 @@ public final class LiveVillagesNetworking {
 		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
 		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		TradeBoardSettlementView view = TradeBoardLogic.createSettlementView(
+			(ServerLevel) player.level(),
 			settlement,
 			routes,
 			settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),

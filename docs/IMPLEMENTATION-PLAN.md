@@ -47,6 +47,7 @@ Already solid enough to plan from:
 - bakery display restocking should treat the structure's `Baker's Counter` and `Glass Display Case` blocks as one shared display pool: top off matching stacks first, then prefer the least-filled display so goods spread visibly across the storefront instead of piling into the first case
 - donated bakery ingredients should be recognized from bakery display slots and workstation sale slots, then swept into the bakery's internal chest so they stay bakery-available without leaking into the settlement's general stock; equivalent ingredient variants such as modded egg items should still satisfy the matching bakery ingredient key when appropriate, and the sweep should apply to any bakery recipe ingredient rather than only ingredients for the currently unlocked tier
 - bakery ingredient donations should reconcile promptly on player interaction instead of waiting for a later bakery work tick to clear out of visible display stock
+- bakery ingredient barter should use recipe-aware price floors with a modest default profit, a better capped-bulk rate, surplus discounts down to cost, and shortage pressure that raises bakery-side prices without making trades unreachable
 - workstation staffing should use a shared settlement-wide hiring pass instead of fixed `ensure...` call order, so scarce unemployed adults are steered toward the highest-priority reachable open jobs and profession pickup happens on the short loaded-maintenance cadence rather than only on long economy cycles
 - a first-pass `Baker's Counter` workstation exists as a wood-framed open-backed bakery display counter; it starts or resumes `Bakery` build sites, carries its own sale inventory even as a standalone block, and anchors the first-pass `Baker` profession
 - the first-pass `Bakery` blueprint now exists as a `Trading Post`-derived copy with `Glass Display Case` runs in place of the original fence-only market openings
@@ -73,6 +74,7 @@ Focus:
 - keep Trade Board inventory rows aggregated by exact item type so duplicate stacks do not crowd the list, while still letting village stock retain the abstract recognized-goods model where that supports settlement simulation
 - keep Trade Board player-row refreshes authoritative after donations and trades so aggregated exact-item rows update counts immediately and do not break when the first contributing stack is exhausted
 - keep Trade Board transaction refreshes recomputing build-site material demand immediately so `Give 1`, `Bundle`, `All`, and village-side trades always leave `Need` counts and stored stock in sync
+- keep shared settlement trade valuation recipe-manager-aware, so produced goods from vanilla, data-pack, modded, baker, carpenter, fletcher, mason, smelting/refining, and later workstation paths do not sell below known input cost even when surplus pricing discounts them; reserve hardcoded fallbacks for settlement-only abstractions that have no recipe data
 - keep miner-facing support and extraction goods legible in the Trade Board: `dirt`, `ladder`, `raw iron`, and `raw copper` should be known early, while `redstone` and `diamond` unlock as known board goods at settlement `Tier 2`
 - keep non-empty carried containers such as `Bundle` separate from aggregated rows, preview their contents on hover, and donate their contents into settlement stock without trading away the still-useful empty container
 - keep Trade Board shortage/surplus output accurate when construction blockers, protected reserves, or build-site demand are involved
@@ -84,6 +86,7 @@ Focus:
 - push Roadwrights toward external settlement corridors and `Mileposts` once core local path connectors are already in place, instead of overbuilding low-value internal spurs
 - let trade demand support limited brokered wants for downstream partner shortages so multi-hop trade networks can emerge
 - unblock recipe/data-driven content so new recipes are dependable before more professions are added
+- keep route trade capacity value-aware, so costly produced goods consume more route throughput without becoming impossible to move on reasonable routes
 - keep emerald accumulation and trade incentives compatible with future settlement-tier unlock thresholds
 
 ### 2. Settlement Advancement And Tiers

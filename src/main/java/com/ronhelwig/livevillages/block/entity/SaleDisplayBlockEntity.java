@@ -75,7 +75,8 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 		return new GlassDisplayCaseOpenData(
 			worldPosition.immutable(),
 			SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
-			SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition)
+			SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition),
+			SettlementBakerWork.bakeryBarterPricesAt(serverLevel, worldPosition)
 		);
 	}
 
@@ -90,7 +91,8 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 			new GlassDisplayCaseOpenData(
 				worldPosition.immutable(),
 				SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
-				SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition)
+				SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition),
+				SettlementBakerWork.bakeryBarterPricesAt(serverLevel, worldPosition)
 			)
 		);
 	}

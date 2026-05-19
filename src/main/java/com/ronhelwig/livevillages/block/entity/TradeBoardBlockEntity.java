@@ -204,6 +204,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		return new TradeBoardOpenData(
 			worldPosition.immutable(),
 			TradeBoardLogic.createSettlementView(
+				serverLevel,
 				settlement,
 				savedData.getRoutesForSettlement(settlement.id()),
 				settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),

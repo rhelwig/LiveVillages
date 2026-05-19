@@ -32,6 +32,7 @@ import net.minecraft.world.phys.AABB;
 
 import com.ronhelwig.livevillages.block.entity.SaleDisplayBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.menu.BakeryBarterPriceView;
 import com.ronhelwig.livevillages.menu.BakeryBountyView;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
@@ -140,6 +141,56 @@ public final class SettlementBakerWork {
 				return bakeryBounties(pantry, settlementTier);
 			})
 			.orElse(List.of());
+	}
+
+	public static List<BakeryBarterPriceView> bakeryBarterPricesAt(ServerLevel level, BlockPos pos) {
+		return resolveBakeryContext(level, pos)
+			.map(context -> {
+				int settlementTier = SettlementTiers.unlockedTier(context.settlement());
+				List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, context.bakeryBuildSites());
+				List<Container> ingredientContainers = bakeryIngredientContainers(level, context.bakeryBuildSites());
+				Map<String, Integer> pantry = bakeryPantrySnapshot(
+					context.settlement().stock(),
+					ingredientContainers,
+					displayInventories
+				);
+				return RECIPES.stream()
+					.filter(recipe -> settlementTier >= recipe.minTier())
+					.map(recipe -> {
+						String paymentGoodsKey = preferredBakeryPaymentGoods(recipe.outputGoodsKey());
+						if (paymentGoodsKey == null) {
+							return null;
+						}
+
+						int current = pantry.getOrDefault(recipe.outputGoodsKey(), 0);
+						int target = SettlementEconomyRules.targetForGoods(context.settlement(), recipe.outputGoodsKey());
+						int pricePressurePercent = SettlementEconomyRules.tradePricePercent(current, target);
+						return new BakeryBarterPriceView(recipe.outputGoodsKey(), paymentGoodsKey, pricePressurePercent);
+					})
+					.filter(java.util.Objects::nonNull)
+					.toList();
+			})
+			.orElse(List.of());
+	}
+
+	public static String preferredBakeryPaymentGoods(String soldGoodsKey) {
+		if (soldGoodsKey == null) {
+			return null;
+		}
+
+		return switch (soldGoodsKey) {
+			case "bread" -> "wheat";
+			case "baked_potato" -> "potato";
+			case "cookie" -> "wheat";
+			case "pumpkin_pie" -> "pumpkin";
+			case "cake" -> "milk_bucket";
+			case "golden_apple" -> "gold_ingot";
+			default -> null;
+		};
+	}
+
+	public static int bakeryRecipePaymentCostAmount(ServerLevel level, String soldGoodsKey, int soldCount, String paymentGoodsKey) {
+		return TradeBoardTradeRules.productionCostPaymentAmount(level, soldGoodsKey, soldCount, paymentGoodsKey);
 	}
 
 	public static void recordBakerySale(ServerLevel level, BlockPos pos, String paymentGoodsKey, int paymentAmount) {

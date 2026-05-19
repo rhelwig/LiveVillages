@@ -731,6 +731,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			entry.wantedAmount(),
 			entry.bundleSize(),
 			entry.tradePricePercent(),
+			TradeBoardTradeRules.bundleValuePoints(entry.tradeGoodsKey(), entry.tradePricePercent()),
+			TradeBoardTradeRules.itemValuePoints(entry.tradeGoodsKey(), entry.tradePricePercent()),
 			entry.wanted(),
 			entry.canOfferBundle()
 		);

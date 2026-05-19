@@ -28,6 +28,10 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	private static final Component BUY_LABEL = Component.literal("Buy");
 	private static final Component FREE_LABEL = Component.literal("Free");
 	private static final int BULK_PURCHASE_LIMIT = 12;
+	private static final int SINGLE_BARTER_MARGIN_PERCENT = 125;
+	private static final int BULK_BARTER_MARGIN_PERCENT = 110;
+	private static final int SINGLE_BARTER_MIN_PERCENT = 110;
+	private static final int BULK_BARTER_MIN_PERCENT = 100;
 	public static final int STACK_BARTER_BUTTON_ID_BASE = 100;
 	public static final int SINGLE_BARTER_BUTTON_ID_BASE = 200;
 	public static final int FREE_CLAIM_BUTTON_ID_BASE = 300;
@@ -47,6 +51,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	private final UUID viewerId;
 	private final boolean bakeryContext;
 	private final List<BakeryBountyView> bakeryBounties;
+	private final List<BakeryBarterPriceView> bakeryBarterPrices;
 	private final List<ToggleableSlot> caseSlots = new ArrayList<>();
 	private final List<ToggleableSlot> playerSlots = new ArrayList<>();
 	private final DataSlot freeClaimCount = new DataSlot() {
@@ -92,6 +97,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		this.viewerId = inventory.player.getUUID();
 		this.bakeryContext = openData.bakeryContext();
 		this.bakeryBounties = List.copyOf(openData.bakeryBounties());
+		this.bakeryBarterPrices = List.copyOf(openData.bakeryBarterPrices());
 		checkContainerSize(caseInventory, CASE_SLOT_COUNT);
 		caseInventory.startOpen(inventory.player);
 
@@ -476,34 +482,22 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		return TradeBoardTradeRules.removePlayerGoods(inventory, goodsKey, amount);
 	}
 
-	private static int requiredBakeryPaymentAmount(String soldGoodsKey, int soldCount, String paymentGoodsKey) {
+	private int requiredBakeryPaymentAmount(String soldGoodsKey, int soldCount, String paymentGoodsKey) {
 		if (soldGoodsKey == null || paymentGoodsKey == null || soldCount <= 0) {
 			return 0;
 		}
 
-		int saleItemValue = TradeBoardTradeRules.itemValuePoints(soldGoodsKey, 100);
-		if (saleItemValue <= 0) {
-			return 0;
-		}
-
-		int totalValue = saleItemValue * soldCount;
-		return TradeBoardTradeRules.requiredItemsForValue(paymentGoodsKey, 100, totalValue);
+		int fallbackAmount = TradeBoardTradeRules.productionCostPaymentAmount(soldGoodsKey, soldCount, paymentGoodsKey);
+		return access.evaluate(
+			(level, pos) -> level instanceof ServerLevel serverLevel
+				? SettlementBakerWork.bakeryRecipePaymentCostAmount(serverLevel, soldGoodsKey, soldCount, paymentGoodsKey)
+				: fallbackAmount,
+			fallbackAmount
+		);
 	}
 
 	private static String preferredBakeryPaymentGoods(String soldGoodsKey) {
-		if (soldGoodsKey == null) {
-			return null;
-		}
-
-		return switch (soldGoodsKey) {
-			case "bread" -> "wheat";
-			case "baked_potato" -> "potato";
-			case "cookie" -> "wheat";
-			case "pumpkin_pie" -> "pumpkin";
-			case "cake" -> "wheat";
-			case "golden_apple" -> "apple";
-			default -> null;
-		};
+		return SettlementBakerWork.preferredBakeryPaymentGoods(soldGoodsKey);
 	}
 
 	private static String humanizeGoodsLabel(String goodsKey) {
@@ -533,7 +527,30 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 			return null;
 		}
 
-		return new BakeryTradeOffer(paymentGoodsKey, requiredAmount, soldCount);
+		int marginPercent = singleItem ? SINGLE_BARTER_MARGIN_PERCENT : BULK_BARTER_MARGIN_PERCENT;
+		int minPercent = singleItem ? SINGLE_BARTER_MIN_PERCENT : BULK_BARTER_MIN_PERCENT;
+		int pressurePercent = bakeryPricePressurePercent(soldGoodsKey, paymentGoodsKey);
+		int effectivePercent = Math.max(minPercent, Math.round(marginPercent * (pressurePercent / 100.0F)));
+		int adjustedAmount = Math.max(requiredAmount, divideRoundUp(requiredAmount * effectivePercent, 100));
+		return new BakeryTradeOffer(paymentGoodsKey, adjustedAmount, soldCount);
+	}
+
+	private int bakeryPricePressurePercent(String soldGoodsKey, String paymentGoodsKey) {
+		for (BakeryBarterPriceView price : bakeryBarterPrices) {
+			if (price.goodsKey().equals(soldGoodsKey) && price.paymentGoodsKey().equals(paymentGoodsKey)) {
+				return price.pricePressurePercent();
+			}
+		}
+
+		return 100;
+	}
+
+	private static int divideRoundUp(int value, int divisor) {
+		if (value <= 0 || divisor <= 0) {
+			return 0;
+		}
+
+		return (value + divisor - 1) / divisor;
 	}
 
 	public record BakeryTradeOffer(String paymentGoodsKey, int amount, int soldCount) {

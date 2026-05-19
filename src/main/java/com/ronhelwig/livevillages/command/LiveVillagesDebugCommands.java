@@ -100,6 +100,7 @@ public final class LiveVillagesDebugCommands {
 		List<com.ronhelwig.livevillages.sim.RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
 		List<com.ronhelwig.livevillages.sim.SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		TradeBoardSettlementView view = TradeBoardLogic.createSettlementView(
+			source.getLevel(),
 			settlement,
 			routes,
 			settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),

@@ -8,6 +8,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
+import net.minecraft.server.level.ServerLevel;
+
 import com.ronhelwig.livevillages.sim.RouteState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockStatus;
@@ -94,6 +96,32 @@ public final class TradeBoardLogic {
 		Map<String, Integer> constructionDemand,
 		List<SettlementBuildSite> buildSites
 	) {
+		return createSettlementView(
+			null,
+			settlement,
+			routes,
+			settlementNameResolver,
+			maxStockRows,
+			maxRouteRows,
+			maxProjectRows,
+			rolePopulation,
+			constructionDemand,
+			buildSites
+		);
+	}
+
+	public static TradeBoardSettlementView createSettlementView(
+		ServerLevel level,
+		SettlementState settlement,
+		List<RouteState> routes,
+		Function<String, String> settlementNameResolver,
+		int maxStockRows,
+		int maxRouteRows,
+		int maxProjectRows,
+		Map<String, Integer> rolePopulation,
+		Map<String, Integer> constructionDemand,
+		List<SettlementBuildSite> buildSites
+	) {
 		int population = Math.max(1, settlement.totalPopulation());
 		List<TradeBoardGoodsView> shortages = new ArrayList<>();
 		List<TradeBoardGoodsView> surpluses = new ArrayList<>();
@@ -111,7 +139,15 @@ public final class TradeBoardLogic {
 			int current = effectiveCurrentForDisplay(settlement, targetRule.goodsKey());
 			int tradePricePercent = SettlementEconomyRules.tradePricePercent(current, target);
 			int tradeBundleSize = TradeBoardTradeRules.bundleSize(targetRule.goodsKey());
-			int tradePriceEmeralds = TradeBoardTradeRules.bundlePriceEmeralds(targetRule.goodsKey(), tradePricePercent);
+			int tradePriceEmeralds = level == null
+				? TradeBoardTradeRules.bundlePriceEmeralds(targetRule.goodsKey(), tradePricePercent)
+				: TradeBoardTradeRules.bundlePriceEmeralds(level, targetRule.goodsKey(), tradePricePercent);
+			int tradeBundleValuePoints = level == null
+				? TradeBoardTradeRules.bundleValuePoints(targetRule.goodsKey(), tradePricePercent)
+				: TradeBoardTradeRules.bundleValuePoints(level, targetRule.goodsKey(), tradePricePercent);
+			int tradeItemValuePoints = level == null
+				? TradeBoardTradeRules.itemValuePoints(targetRule.goodsKey(), tradePricePercent)
+				: TradeBoardTradeRules.itemValuePoints(level, targetRule.goodsKey(), tradePricePercent);
 
 			if (current < target) {
 				shortages.add(new TradeBoardGoodsView(
@@ -121,7 +157,9 @@ public final class TradeBoardLogic {
 					target,
 					tradePricePercent,
 					tradeBundleSize,
-					tradePriceEmeralds
+					tradePriceEmeralds,
+					tradeBundleValuePoints,
+					tradeItemValuePoints
 				));
 			} else if (current > target * 2 && (tradeBundleSize <= 0 || current >= tradeBundleSize)) {
 				surpluses.add(new TradeBoardGoodsView(
@@ -131,12 +169,14 @@ public final class TradeBoardLogic {
 					target,
 					tradePricePercent,
 					tradeBundleSize,
-					tradePriceEmeralds
+					tradePriceEmeralds,
+					tradeBundleValuePoints,
+					tradeItemValuePoints
 				));
 			}
 		}
 
-		addConstructionDemandShortages(shortages, settlement, constructionDemand);
+		addConstructionDemandShortages(level, shortages, settlement, constructionDemand);
 		surpluses.removeIf(surplus -> indexOfGoods(shortages, surplus.goodsKey()) >= 0);
 		shortages.sort(Comparator.comparingInt((TradeBoardGoodsView entry) ->
 			shortagePriority(settlement, constructionDemand, entry)
@@ -146,15 +186,7 @@ public final class TradeBoardLogic {
 		List<TradeBoardGoodsView> stock = settlement.stock().entrySet().stream()
 			.filter(entry -> entry.getValue() > 0)
 			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-			.map(entry -> new TradeBoardGoodsView(
-				entry.getKey(),
-				TradeBoardTradeRules.displayLabel(entry.getKey(), humanizeKey(entry.getKey())),
-				entry.getValue(),
-				0,
-				100,
-				0,
-				0
-			))
+			.map(entry -> stockGoodsView(level, entry.getKey(), entry.getValue()))
 			.toList();
 		List<TradeBoardRoleView> roleCounts = createRoleCounts(rolePopulation);
 		List<TradeBoardRouteView> routeViews = routes.stream()
@@ -232,6 +264,7 @@ public final class TradeBoardLogic {
 	}
 
 	private static void addConstructionDemandShortages(
+		ServerLevel level,
 		List<TradeBoardGoodsView> shortages,
 		SettlementState settlement,
 		Map<String, Integer> constructionDemand
@@ -263,15 +296,24 @@ public final class TradeBoardLogic {
 			}
 
 			if (existingIndex >= 0) {
-				shortages.set(existingIndex, goodsView(goodsKey, current, target));
+				shortages.set(existingIndex, goodsView(level, goodsKey, current, target));
 			} else {
-				shortages.add(goodsView(goodsKey, current, target));
+				shortages.add(goodsView(level, goodsKey, current, target));
 			}
 		}
 	}
 
-	private static TradeBoardGoodsView goodsView(String goodsKey, int current, int target) {
+	private static TradeBoardGoodsView goodsView(ServerLevel level, String goodsKey, int current, int target) {
 		int tradePricePercent = SettlementEconomyRules.tradePricePercent(current, target);
+		int tradePriceEmeralds = level == null
+			? TradeBoardTradeRules.bundlePriceEmeralds(goodsKey, tradePricePercent)
+			: TradeBoardTradeRules.bundlePriceEmeralds(level, goodsKey, tradePricePercent);
+		int tradeBundleValuePoints = level == null
+			? TradeBoardTradeRules.bundleValuePoints(goodsKey, tradePricePercent)
+			: TradeBoardTradeRules.bundleValuePoints(level, goodsKey, tradePricePercent);
+		int tradeItemValuePoints = level == null
+			? TradeBoardTradeRules.itemValuePoints(goodsKey, tradePricePercent)
+			: TradeBoardTradeRules.itemValuePoints(level, goodsKey, tradePricePercent);
 		return new TradeBoardGoodsView(
 			goodsKey,
 			humanizeKey(goodsKey),
@@ -279,7 +321,33 @@ public final class TradeBoardLogic {
 			target,
 			tradePricePercent,
 			TradeBoardTradeRules.bundleSize(goodsKey),
-			TradeBoardTradeRules.bundlePriceEmeralds(goodsKey, tradePricePercent)
+			tradePriceEmeralds,
+			tradeBundleValuePoints,
+			tradeItemValuePoints
+		);
+	}
+
+	private static TradeBoardGoodsView stockGoodsView(ServerLevel level, String goodsKey, int current) {
+		int bundleSize = TradeBoardTradeRules.bundleSize(goodsKey);
+		int tradePriceEmeralds = level == null
+			? TradeBoardTradeRules.bundlePriceEmeralds(goodsKey, 100)
+			: TradeBoardTradeRules.bundlePriceEmeralds(level, goodsKey, 100);
+		int tradeBundleValuePoints = level == null
+			? TradeBoardTradeRules.bundleValuePoints(goodsKey, 100)
+			: TradeBoardTradeRules.bundleValuePoints(level, goodsKey, 100);
+		int tradeItemValuePoints = level == null
+			? TradeBoardTradeRules.itemValuePoints(goodsKey, 100)
+			: TradeBoardTradeRules.itemValuePoints(level, goodsKey, 100);
+		return new TradeBoardGoodsView(
+			goodsKey,
+			TradeBoardTradeRules.displayLabel(goodsKey, humanizeKey(goodsKey)),
+			current,
+			0,
+			100,
+			bundleSize,
+			tradePriceEmeralds,
+			tradeBundleValuePoints,
+			tradeItemValuePoints
 		);
 	}
 

@@ -200,7 +200,7 @@ public final class TradeBoardTrading {
 				continue;
 			}
 
-			int bundleSize = TradeBoardTradeRules.bundleSize(stockEntry.goodsKey());
+			int bundleSize = stockEntry.tradeBundleSize();
 			if (bundleSize <= 0 || stockEntry.current() < bundleSize) {
 				continue;
 			}
@@ -212,7 +212,9 @@ public final class TradeBoardTrading {
 				0,
 				100,
 				bundleSize,
-				TradeBoardTradeRules.bundlePriceEmeralds(stockEntry.goodsKey(), 100)
+				stockEntry.tradePriceEmeralds(),
+				stockEntry.tradeBundleValuePoints(),
+				stockEntry.tradeItemValuePoints()
 			));
 		}
 
@@ -229,7 +231,7 @@ public final class TradeBoardTrading {
 			return List.of();
 		}
 
-		int offeredValuePoints = TradeBoardTradeRules.bundleValuePoints(playerGoods.goodsKey(), playerGoods.tradePricePercent());
+		int offeredValuePoints = playerGoods.tradeBundleValuePoints();
 		if (offeredValuePoints <= 0) {
 			return List.of();
 		}
@@ -254,7 +256,7 @@ public final class TradeBoardTrading {
 			return List.of();
 		}
 
-		int requiredValuePoints = TradeBoardTradeRules.bundleValuePoints(villageGoods.goodsKey(), villageGoods.tradePricePercent());
+		int requiredValuePoints = villageGoods.tradeBundleValuePoints();
 		if (requiredValuePoints <= 0) {
 			return List.of();
 		}
@@ -266,12 +268,12 @@ public final class TradeBoardTrading {
 				continue;
 			}
 
-			int itemValuePoints = TradeBoardTradeRules.itemValuePoints(shortage.goodsKey(), shortage.tradePricePercent());
+			int itemValuePoints = shortage.tradeItemValuePoints();
 			if (itemValuePoints <= 0) {
 				continue;
 			}
 
-			int requiredAmount = TradeBoardTradeRules.requiredItemsForValue(shortage.goodsKey(), shortage.tradePricePercent(), requiredValuePoints);
+			int requiredAmount = itemValuePoints <= 0 ? 0 : (requiredValuePoints + itemValuePoints - 1) / itemValuePoints;
 			int availableAmount = countPlayerGoods(playerGoods, shortage.goodsKey());
 			if (requiredAmount <= 0 || availableAmount < requiredAmount) {
 				continue;
@@ -533,7 +535,7 @@ public final class TradeBoardTrading {
 
 		List<GoodsTradeOption> paymentOptions = paymentOptionsForVillageGoods(requestedGoods, player.getInventory(), view);
 		if (paymentIndex < 0 || paymentIndex >= paymentOptions.size()) {
-			return TradeResult.failure(describePaymentNeeds(view.shortages(), TradeBoardTradeRules.bundleValuePoints(requestedGoods.goodsKey(), requestedGoods.tradePricePercent())));
+			return TradeResult.failure(describePaymentNeeds(view.shortages(), requestedGoods.tradeBundleValuePoints()));
 		}
 
 		GoodsTradeOption payment = paymentOptions.get(paymentIndex);
@@ -562,6 +564,7 @@ public final class TradeBoardTrading {
 		List<RouteState> routes = savedData.getRoutesForSettlement(settlement.id());
 		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		return TradeBoardLogic.createSettlementView(
+			serverLevel,
 			settlement,
 			routes,
 			settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),
@@ -590,6 +593,8 @@ public final class TradeBoardTrading {
 				0,
 				tradeBundleSize,
 				100,
+				TradeBoardTradeRules.bundleValuePoints(goodsKey, 100),
+				TradeBoardTradeRules.itemValuePoints(goodsKey, 100),
 				false,
 				playerAmount >= tradeBundleSize
 			);
@@ -602,6 +607,8 @@ public final class TradeBoardTrading {
 			Math.max(0, shortage.target() - shortage.current()),
 			shortage.tradeBundleSize(),
 			shortage.tradePricePercent(),
+			shortage.tradeBundleValuePoints(),
+			shortage.tradeItemValuePoints(),
 			true,
 			playerAmount >= shortage.tradeBundleSize()
 		);
@@ -616,7 +623,7 @@ public final class TradeBoardTrading {
 			}
 
 			int availableAmount = availableSettlementGoodsForTrade(surplus);
-			int itemValuePoints = TradeBoardTradeRules.itemValuePoints(surplus.goodsKey(), surplus.tradePricePercent());
+			int itemValuePoints = surplus.tradeItemValuePoints();
 			if (availableAmount <= 0 || itemValuePoints <= 0) {
 				continue;
 			}
@@ -698,10 +705,10 @@ public final class TradeBoardTrading {
 
 	private static String describePaymentNeeds(List<TradeBoardGoodsView> shortages, int requiredValuePoints) {
 		List<String> options = shortages.stream()
-			.filter(shortage -> TradeBoardTradeRules.itemValuePoints(shortage.goodsKey(), shortage.tradePricePercent()) > 0)
+			.filter(shortage -> shortage.tradeItemValuePoints() > 0)
 			.limit(3)
 			.map(shortage -> "%d %s".formatted(
-				TradeBoardTradeRules.requiredItemsForValue(shortage.goodsKey(), shortage.tradePricePercent(), requiredValuePoints),
+				(requiredValuePoints + shortage.tradeItemValuePoints() - 1) / shortage.tradeItemValuePoints(),
 				shortage.label().toLowerCase(Locale.ROOT)
 			))
 			.collect(Collectors.toList());
@@ -811,6 +818,12 @@ public final class TradeBoardTrading {
 			? TradeBoardTradeRules.bundleSize(row.tradeGoodsKey())
 			: aggregatedOption.tradeBundleSize();
 		int tradePricePercent = aggregatedOption == null ? 100 : aggregatedOption.tradePricePercent();
+		int tradeBundleValuePoints = aggregatedOption == null
+			? TradeBoardTradeRules.bundleValuePoints(row.tradeGoodsKey(), tradePricePercent)
+			: aggregatedOption.tradeBundleValuePoints();
+		int tradeItemValuePoints = aggregatedOption == null
+			? TradeBoardTradeRules.itemValuePoints(row.tradeGoodsKey(), tradePricePercent)
+			: aggregatedOption.tradeItemValuePoints();
 		int wantedAmount = aggregatedOption == null ? 0 : aggregatedOption.wantedAmount();
 		boolean wanted = aggregatedOption != null && aggregatedOption.wanted();
 
@@ -821,6 +834,8 @@ public final class TradeBoardTrading {
 			wantedAmount,
 			bundleSize,
 			tradePricePercent,
+			tradeBundleValuePoints,
+			tradeItemValuePoints,
 			wanted,
 			row.totalCount() >= Math.max(1, bundleSize)
 		);
@@ -833,6 +848,8 @@ public final class TradeBoardTrading {
 		int wantedAmount,
 		int tradeBundleSize,
 		int tradePricePercent,
+		int tradeBundleValuePoints,
+		int tradeItemValuePoints,
 		boolean wanted,
 		boolean canOfferBundle
 	) {

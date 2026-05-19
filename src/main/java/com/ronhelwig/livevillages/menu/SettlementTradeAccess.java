@@ -63,6 +63,7 @@ public final class SettlementTradeAccess {
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
 		List<com.ronhelwig.livevillages.sim.SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
 		return TradeBoardLogic.createSettlementView(
+			level,
 			settlement,
 			savedData.getRoutesForSettlement(settlement.id()),
 			settlementId -> savedData.getSettlement(settlementId).map(SettlementState::name).orElse("Unknown"),
