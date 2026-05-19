@@ -1,9 +1,8 @@
 package com.ronhelwig.livevillages.menu;
 
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
@@ -27,12 +26,15 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.SingleItemRecipe;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 
 public final class TradeBoardTradeRules {
 	private static final int VALUE_POINTS_PER_EMERALD = 240;
 	private static final String ITEM_KEY_PREFIX = "item:";
+	private static RecipeManager cachedRecipeManager;
+	private static RecipeCostIndex cachedRecipeCostIndex = RecipeCostIndex.EMPTY;
 	private static final List<String> TRADEABLE_GOODS_KEYS = List.of(
 		"bread",
 		"baked_potato",
@@ -248,16 +250,12 @@ public final class TradeBoardTradeRules {
 	}
 
 	public static int itemValuePoints(ServerLevel level, String goodsKey, int tradePricePercent) {
-		return itemValuePoints(level, goodsKey, tradePricePercent, new HashSet<>());
-	}
-
-	private static int itemValuePoints(ServerLevel level, String goodsKey, int tradePricePercent, Set<String> resolvingGoodsKeys) {
 		int baseItemValuePoints = baseItemValuePoints(goodsKey, tradePricePercent);
 		if (baseItemValuePoints <= 0) {
 			return 0;
 		}
 
-		return Math.max(baseItemValuePoints, productionCostItemValuePoints(level, goodsKey, resolvingGoodsKeys));
+		return Math.max(baseItemValuePoints, productionCostItemValuePoints(level, goodsKey));
 	}
 
 	public static int requiredItemsForValue(String goodsKey, int tradePricePercent, int requiredValuePoints) {
@@ -310,26 +308,14 @@ public final class TradeBoardTradeRules {
 			return 0;
 		}
 
-		int bestAmount = 0;
-		for (RecipeHolder<?> holder : level.getServer().getRecipeManager().getRecipes()) {
-			ResolvedProductionRecipe recipe = resolveProductionRecipe(level, outputGoodsKey, holder.value(), new HashSet<>());
-			if (recipe == null) {
-				continue;
-			}
-
-			int valueCost = divideRoundUp(recipe.costValuePoints() * outputAmount, recipe.outputAmount() * paymentValue);
-			int directIngredientCost = divideRoundUp(recipe.matchingIngredientCount(paymentGoodsKey) * outputAmount, recipe.outputAmount());
-			int amount = Math.max(valueCost, directIngredientCost);
-			if (amount > 0 && (bestAmount <= 0 || amount < bestAmount)) {
-				bestAmount = amount;
-			}
-		}
-
+		int productionCost = productionCostItemValuePoints(level, outputGoodsKey);
 		int fallbackAmount = productionCostPaymentAmount(outputGoodsKey, outputAmount, paymentGoodsKey);
-		if (bestAmount <= 0) {
+		if (productionCost <= 0) {
 			return fallbackAmount;
 		}
-		return bestAmount;
+
+		int recipeAmount = divideRoundUp(productionCost * outputAmount, paymentValue);
+		return recipeAmount > 0 ? recipeAmount : fallbackAmount;
 	}
 
 	public static int productionCostItemValuePoints(String goodsKey) {
@@ -342,7 +328,12 @@ public final class TradeBoardTradeRules {
 	}
 
 	public static int productionCostItemValuePoints(ServerLevel level, String goodsKey) {
-		return productionCostItemValuePoints(level, goodsKey, new HashSet<>());
+		if (level == null || goodsKey == null) {
+			return productionCostItemValuePoints(goodsKey);
+		}
+
+		int recipeCost = recipeCostIndex(level).costValuePoints(goodsKey);
+		return recipeCost > 0 ? recipeCost : productionCostItemValuePoints(goodsKey);
 	}
 
 	public static int countPlayerGoods(Inventory inventory, String goodsKey) {
@@ -647,40 +638,41 @@ public final class TradeBoardTradeRules {
 		return cost;
 	}
 
-	private static int productionCostItemValuePoints(ServerLevel level, String goodsKey, Set<String> resolvingGoodsKeys) {
-		if (level == null || goodsKey == null || !resolvingGoodsKeys.add(goodsKey)) {
-			return productionCostItemValuePoints(goodsKey);
+	private static RecipeCostIndex recipeCostIndex(ServerLevel level) {
+		RecipeManager recipeManager = level.getServer().getRecipeManager();
+		if (recipeManager == cachedRecipeManager) {
+			return cachedRecipeCostIndex;
 		}
 
-		int bestCost = 0;
-		for (RecipeHolder<?> holder : level.getServer().getRecipeManager().getRecipes()) {
-			ResolvedProductionRecipe recipe = resolveProductionRecipe(level, goodsKey, holder.value(), resolvingGoodsKeys);
-			if (recipe == null || recipe.outputAmount() <= 0 || recipe.costValuePoints() <= 0) {
+		RecipeCostIndex recipeCostIndex = buildRecipeCostIndex(recipeManager);
+		cachedRecipeManager = recipeManager;
+		cachedRecipeCostIndex = recipeCostIndex;
+		return recipeCostIndex;
+	}
+
+	private static RecipeCostIndex buildRecipeCostIndex(RecipeManager recipeManager) {
+		Map<String, Integer> itemCostByGoodsKey = new LinkedHashMap<>();
+		for (RecipeHolder<?> holder : recipeManager.getRecipes()) {
+			ResolvedProductionRecipe recipe = resolveProductionRecipe(holder.value());
+			if (recipe == null || recipe.outputGoodsKey() == null || recipe.outputAmount() <= 0 || recipe.costValuePoints() <= 0) {
 				continue;
 			}
 
 			int itemCost = divideRoundUp(recipe.costValuePoints(), recipe.outputAmount());
-			if (bestCost <= 0 || itemCost < bestCost) {
-				bestCost = itemCost;
-			}
+			itemCostByGoodsKey.merge(recipe.outputGoodsKey(), itemCost, Math::min);
 		}
 
-		resolvingGoodsKeys.remove(goodsKey);
-		return bestCost > 0 ? bestCost : productionCostItemValuePoints(goodsKey);
+		return new RecipeCostIndex(Map.copyOf(itemCostByGoodsKey));
 	}
 
-	private static ResolvedProductionRecipe resolveProductionRecipe(
-		ServerLevel level,
-		String outputGoodsKey,
-		Recipe<?> recipe,
-		Set<String> resolvingGoodsKeys
-	) {
+	private static ResolvedProductionRecipe resolveProductionRecipe(Recipe<?> recipe) {
 		if (recipe == null || recipe.isSpecial()) {
 			return null;
 		}
 
 		ItemStack result = recipeResultStack(recipe);
-		if (result.isEmpty() || !matchesGoodsOrExactKey(outputGoodsKey, result)) {
+		String outputGoodsKey = stockKeyForStack(result);
+		if (result.isEmpty() || outputGoodsKey == null) {
 			return null;
 		}
 
@@ -690,22 +682,16 @@ public final class TradeBoardTradeRules {
 		}
 
 		int cost = 0;
-		Map<String, Integer> matchingIngredientCounts = new java.util.LinkedHashMap<>();
 		for (Ingredient ingredient : ingredients) {
-			int ingredientValue = ingredientValuePoints(level, ingredient, resolvingGoodsKeys);
+			int ingredientValue = ingredientBaseValuePoints(ingredient);
 			if (ingredientValue <= 0) {
 				return null;
 			}
 
 			cost += ingredientValue;
-			for (String goodsKey : tradeableGoodsKeys()) {
-				if (ingredientAcceptsGoods(ingredient, goodsKey)) {
-					matchingIngredientCounts.merge(goodsKey, 1, Integer::sum);
-				}
-			}
 		}
 
-		return new ResolvedProductionRecipe(result.getCount(), cost, matchingIngredientCounts);
+		return new ResolvedProductionRecipe(outputGoodsKey, result.getCount(), cost);
 	}
 
 	private static ItemStack recipeResultStack(Recipe<?> recipe) {
@@ -725,7 +711,7 @@ public final class TradeBoardTradeRules {
 		return ItemStack.EMPTY;
 	}
 
-	private static int ingredientValuePoints(ServerLevel level, Ingredient ingredient, Set<String> resolvingGoodsKeys) {
+	private static int ingredientBaseValuePoints(Ingredient ingredient) {
 		int bestValue = 0;
 
 		for (Holder<Item> item : ingredient.items().toList()) {
@@ -735,7 +721,7 @@ public final class TradeBoardTradeRules {
 				continue;
 			}
 
-			int value = itemValuePoints(level, stockKey, 100, resolvingGoodsKeys);
+			int value = baseItemValuePoints(stockKey, 100);
 			if (value > 0 && (bestValue <= 0 || value < bestValue)) {
 				bestValue = value;
 			}
@@ -744,24 +730,11 @@ public final class TradeBoardTradeRules {
 		return bestValue;
 	}
 
-	private static boolean ingredientAcceptsGoods(Ingredient ingredient, String goodsKey) {
-		ItemStack stack = createGoodsStack(goodsKey, 1);
-		return !stack.isEmpty() && ingredient.test(stack);
-	}
-
 	private static ItemStack firstIngredientStack(Ingredient ingredient) {
 		return ingredient.items()
 			.findFirst()
 			.map(item -> new ItemStack(item, 1))
 			.orElse(ItemStack.EMPTY);
-	}
-
-	private static boolean matchesGoodsOrExactKey(String goodsKey, ItemStack stack) {
-		if (isExactItemKey(goodsKey)) {
-			return matchesExactItemKey(goodsKey, stack);
-		}
-
-		return matchesGoods(goodsKey, stack);
 	}
 
 	private static ProductionRecipe fallbackProductionRecipeForGoods(String goodsKey) {
@@ -840,10 +813,15 @@ public final class TradeBoardTradeRules {
 	private record ProductionRecipe(String outputGoodsKey, int outputAmount, Map<String, Integer> ingredients) {
 	}
 
-	private record ResolvedProductionRecipe(int outputAmount, int costValuePoints, Map<String, Integer> matchingIngredientCounts) {
-		private int matchingIngredientCount(String goodsKey) {
-			return matchingIngredientCounts.getOrDefault(goodsKey, 0);
+	private record RecipeCostIndex(Map<String, Integer> costValuePointsByGoodsKey) {
+		private static final RecipeCostIndex EMPTY = new RecipeCostIndex(Map.of());
+
+		private int costValuePoints(String goodsKey) {
+			return costValuePointsByGoodsKey.getOrDefault(goodsKey, 0);
 		}
+	}
+
+	private record ResolvedProductionRecipe(String outputGoodsKey, int outputAmount, int costValuePoints) {
 	}
 
 	private static int exactItemBundleSize(Item item) {
