@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +42,14 @@ public final class SettlementMinerWork {
 	private static final long VILLAGE_REST_START_TICK = 12_000L;
 	private static final double MINING_WORK_REACH_DISTANCE_SQUARED = 6.25D;
 	private static final double SHAFT_ENTRY_SNAP_DISTANCE_SQUARED = 25.0D;
+	private static final double SURFACE_RETURN_RESCUE_SNAP_DISTANCE_SQUARED = 3_600.0D;
 	private static final double MINING_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 320L;
-	private static final long MINING_DECIDE_INTERVAL_TICKS = 80L;
+	private static final long FAILED_MINER_TASK_COOLDOWN_TICKS = 600L;
+	private static final long MINING_DECIDE_INTERVAL_TICKS = 40L;
+	private static final int MAX_MINER_TASKS_PER_PASS = 8;
+	private static final int ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS = 3;
+	private static final int MAX_MINER_COMPLETED_TASKS_PER_DAY = SettlementEconomyRules.scaledWorkerDailyUnits(48);
 	private static final int MAX_SHAFT_DEPTH_BLOCKS = 96;
 	private static final int SHAFT_LIGHT_SPACING_LEVELS = 8;
 	private static final int MAX_CAVE_SCAN_RADIUS_BLOCKS = 10;
@@ -60,11 +66,25 @@ public final class SettlementMinerWork {
 	private static final int SECONDARY_TUNNEL_LIGHT_SPACING_BLOCKS = 9;
 	private static final int TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS = 10;
 	private static final int SURFACE_RETURN_STEPS_PER_PASS = 8;
+	private static final int EVENING_SHAFT_ASCENT_STEPS_PER_PASS = 24;
 	private static final int SURFACE_RETURN_PATH_SEARCH_BLOCKS = 28;
 	private static final int SURFACE_RETURN_PATH_SEARCH_NODES = 512;
+	private static final int EVENING_SURFACE_RETURN_STEPS_PER_PASS = 16;
+	private static final int EVENING_SURFACE_PATH_SEARCH_BLOCKS = 48;
+	private static final int EVENING_SURFACE_PATH_SEARCH_NODES = 768;
+	private static final int STRANDED_BELOW_SHAFT_TOLERANCE_BLOCKS = 4;
+	private static final int MINE_ESCAPE_HORIZONTAL_RADIUS_BLOCKS = 48;
+	private static final int REACHABLE_RESOURCE_SEARCH_BLOCKS = 72;
+	private static final int REACHABLE_RESOURCE_SEARCH_NODES = 768;
+	private static final int SAFE_CAVE_BELOW_SHAFT_TOLERANCE_BLOCKS = 2;
 	private static final long SURFACE_RETURN_DIAGNOSTIC_INTERVAL_TICKS = 200L;
+	private static final int MINE_MOUTH_CLEARANCE_HORIZONTAL_BLOCKS = 4;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
+	private static final Map<String, ActiveMinerWork> ACTIVE_ASSIGNMENTS = new HashMap<>();
+	private static final Map<String, Long> BLOCKED_MINER_TASKS = new HashMap<>();
 	private static final Map<String, Long> SURFACE_RETURN_DIAGNOSTICS = new HashMap<>();
+	private static final Map<String, Integer> DAILY_COMPLETED_TASKS = new HashMap<>();
+	private static final Set<String> CLEARED_MINE_MOUTH_VILLAGERS = new HashSet<>();
 
 	private SettlementMinerWork() {
 	}
@@ -78,6 +98,7 @@ public final class SettlementMinerWork {
 		List<Villager> miners = SettlementVillagers.nearbyMiners(level, settlement);
 
 		if (miners.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "no_miners", "");
 			return false;
 		}
 
@@ -87,6 +108,13 @@ public final class SettlementMinerWork {
 			.toList();
 
 		if (mineEntrances.isEmpty()) {
+			SettlementProfessionDiagnostics.log(
+				level,
+				settlement,
+				SettlementRoleKeys.MINER,
+				"no_operational_mine_entrance",
+				"mineBuildSites=" + buildSites.stream().filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.MINE_ENTRANCE).count()
+			);
 			if (isVillageGatheringTime(level) || isVillageRestTime(level)) {
 				for (Villager miner : miners) {
 					logSurfaceReturnDiagnostic(level, settlement, miner, null, "no_operational_mine_entrance");
@@ -98,51 +126,129 @@ public final class SettlementMinerWork {
 
 		boolean changed = false;
 		long tick = level.getServer().getTickCount();
+		pruneOldMinerDailyActions(level);
+		pruneExpiredMinerTaskBlocks(tick);
+		changed |= rescueTrappedVillagersFromMines(level, settlement, stock, mineEntrances, miners);
 
 		for (Villager miner : miners) {
+			String minerId = miner.getUUID().toString();
 			Optional<MineSite> mineSite = mineSiteFor(level, miner, mineEntrances);
 
 			if (mineSite.isEmpty()) {
-				ACTIVE_TASKS.remove(miner.getUUID().toString());
+				clearMinerAssignment(minerId);
+				SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "no_matching_mine_site", "villager=" + miner.getUUID() + " mineEntrances=" + mineEntrances.size());
 				if (isVillageGatheringTime(level) || isVillageRestTime(level)) {
 					logSurfaceReturnDiagnostic(level, settlement, miner, null, "no_matching_mine_site");
 				}
 				continue;
 			}
 
+			MineSite activeMineSite = mineSite.get();
+
 			if (isVillageGatheringTime(level) || isVillageRestTime(level)) {
-				ACTIVE_TASKS.remove(miner.getUUID().toString());
-				changed |= moveMinerTowardSurface(level, settlement, stock, miner, mineSite.get());
+				clearMinerAssignment(minerId);
+				refreshMineMouthClearance(level, miner, activeMineSite);
+
+				if (needsMineMouthExit(level, miner, activeMineSite)) {
+					changed |= moveMinerTowardSurface(
+						level,
+						settlement,
+						stock,
+						miner,
+						activeMineSite,
+						EVENING_SHAFT_ASCENT_STEPS_PER_PASS
+					);
+				} else if (miner.blockPosition().getY() < surfaceLadderY(activeMineSite) - 2) {
+					changed |= moveMinerTowardSurface(
+						level,
+						settlement,
+						stock,
+						miner,
+						activeMineSite,
+						EVENING_SHAFT_ASCENT_STEPS_PER_PASS
+					);
+				}
+
+				if (!SettlementVillagers.isNearSettlementEveningTarget(level, settlement, miner)
+					&& isMinerEligibleForEveningWalk(level, miner, activeMineSite)) {
+					changed |= moveMinerTowardEveningTarget(level, settlement, miner, activeMineSite);
+				}
 				continue;
 			}
 
-			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, miner, "mining", MINING_DECIDE_INTERVAL_TICKS)) {
+			CLEARED_MINE_MOUTH_VILLAGERS.remove(minerId);
+
+			if (isStrandedBelowPlannedShaft(level, miner, activeMineSite)) {
+				ACTIVE_TASKS.put(minerId, new TimedTask("returning_to_mine_shaft", tick));
+				changed |= moveMinerTowardSurface(level, settlement, stock, miner, activeMineSite);
+				SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "rescuing_below_planned_shaft", minerWorkSummary(level, settlement, stock, miner, activeMineSite));
+				continue;
+			}
+
+			ActiveMinerWork activeWork = activeMinerWork(minerId, tick);
+			boolean decideTurn = SettlementVillagerWorkSchedule.shouldStartNewWork(level, miner, "mining", MINING_DECIDE_INTERVAL_TICKS);
+
+			if (!decideTurn && activeWork == null) {
 				if (SettlementVillagerWorkSchedule.isTakingBreak(level, miner)) {
-					changed |= moveMinerTowardSurface(level, settlement, stock, miner, mineSite.get());
+					changed |= moveMinerTowardSurface(level, settlement, stock, miner, activeMineSite);
 				}
 
 				continue;
 			}
 
-			Optional<MinerTask> task = chooseTask(level, settlement, stock, miner, mineSite.get());
+			int tasksThisPass = 0;
+			while (tasksThisPass < MAX_MINER_TASKS_PER_PASS && completedMinerActionsToday(level, miner) < MAX_MINER_COMPLETED_TASKS_PER_DAY) {
+				if (activeWork == null) {
+					if (!decideTurn) {
+						break;
+					}
 
-			if (task.isEmpty()) {
-				ACTIVE_TASKS.remove(miner.getUUID().toString());
-				continue;
-			}
+					Optional<MinerTask> task = chooseTask(level, settlement, stock, miner, activeMineSite);
+					if (task.isEmpty()) {
+						SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "no_task", minerWorkSummary(level, settlement, stock, miner, activeMineSite));
+						break;
+					}
 
-			MinerTask minerTask = task.get();
-			showMinerTool(miner, minerTask.action());
-			moveMinerTowardTask(level, miner, mineSite.get(), minerTask);
-			ACTIVE_TASKS.put(miner.getUUID().toString(), new TimedTask(minerTask.taskKey(), tick));
+					activeWork = rememberMinerWork(minerId, task.get(), tick);
+				}
 
-			if (!isWithinWorkReach(miner, minerTask.targetPos())) {
-				continue;
-			}
+				MinerTask minerTask = activeWork.task();
+				showMinerTool(miner, minerTask.action());
+				moveMinerTowardTask(level, miner, activeMineSite, minerTask);
+				ACTIVE_TASKS.put(minerId, new TimedTask(minerTask.taskKey(), tick));
 
-			if (performTask(level, stock, mineSite.get(), minerTask)) {
+				if (!canMinerReachTask(miner, minerTask)) {
+					SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "moving_to_work", minerTaskSummary(level, miner, activeMineSite, minerTask));
+					break;
+				}
+
+				if (!performTask(level, settlement, stock, miner, activeMineSite, minerTask)) {
+					rememberBlockedMinerTask(minerId, minerTask, tick);
+					clearMinerAssignment(minerId);
+					SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "task_failed", minerTaskSummary(level, miner, activeMineSite, minerTask));
+					break;
+				}
+
+				recordCompletedMinerAction(level, miner);
 				miner.swing(InteractionHand.MAIN_HAND);
+				tasksThisPass++;
 				changed = true;
+
+				if (isOreMiningAction(minerTask.action())) {
+					int bottomUp = deepestCompleteShaftUp(level, activeMineSite);
+					Optional<MinerTask> veinFollowUp = chooseAdjacentOreTask(level, settlement, stock, miner, activeMineSite, bottomUp);
+					if (veinFollowUp.isPresent()) {
+						activeWork = rememberMinerWork(minerId, veinFollowUp.get(), tick);
+						continue;
+					}
+				}
+
+				clearMinerAssignment(minerId);
+				activeWork = null;
+			}
+
+			if (completedMinerActionsToday(level, miner) >= MAX_MINER_COMPLETED_TASKS_PER_DAY) {
+				SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "daily_cap_reached", "villager=" + miner.getUUID() + " completed=" + completedMinerActionsToday(level, miner));
 			}
 		}
 
@@ -157,6 +263,154 @@ public final class SettlementMinerWork {
 		}
 
 		return Optional.of(task.taskKey());
+	}
+
+	public static boolean moveSurfaceWorkerAwayFromLoadedMine(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager villager,
+		String roleKey
+	) {
+		List<SettlementBuildSite> mineEntrances = LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id()).stream()
+			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.MINE_ENTRANCE)
+			.filter(buildSite -> isOperationalMineEntrance(level, buildSite))
+			.toList();
+
+		if (mineEntrances.isEmpty()) {
+			return false;
+		}
+
+		return moveNonMinerOutOfLoadedMine(level, settlement, stock, villager, roleKey, mineEntrances);
+	}
+
+	private static boolean rescueTrappedVillagersFromMines(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> mineEntrances,
+		List<Villager> miners
+	) {
+		Set<String> minerIds = miners.stream()
+			.map(villager -> villager.getUUID().toString())
+			.collect(java.util.stream.Collectors.toSet());
+		boolean changed = false;
+
+		for (Villager villager : SettlementVillagers.nearbyAdultVillagers(level, settlement, SettlementVillagers.settlementRadiusBlocks(settlement))) {
+			if (minerIds.contains(villager.getUUID().toString()) || villager.isSleeping()) {
+				continue;
+			}
+
+			String roleKey = SettlementVillagers.reportProfessionKey(villager);
+			changed |= moveNonMinerOutOfLoadedMine(level, settlement, stock, villager, roleKey, mineEntrances);
+		}
+
+		return changed;
+	}
+
+	private static boolean moveNonMinerOutOfLoadedMine(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager villager,
+		String roleKey,
+		List<SettlementBuildSite> mineEntrances
+	) {
+		Optional<MineSite> mineSite = nearestMineSiteFor(level, villager.blockPosition(), mineEntrances);
+		if (mineSite.isEmpty()) {
+			return false;
+		}
+
+		boolean mouthHazard = isMineMouthShaftColumn(mineSite.get(), villager.blockPosition());
+		boolean trapped = isTrappedNearMine(level, villager, mineSite.get());
+		if (!mouthHazard && !trapped) {
+			return false;
+		}
+
+		boolean changed = moveMinerTowardSurface(level, settlement, stock, villager, mineSite.get());
+		SettlementProfessionDiagnostics.log(
+			level,
+			settlement,
+			roleKey,
+			mouthHazard ? "mine_mouth_avoidance" : "mine_escape",
+			"villager=" + villager.getUUID()
+				+ " role=" + roleKey
+				+ " pos=" + villager.blockPosition().toShortString()
+				+ " mine=" + mineSite.get().buildSite().workstationPos().toShortString()
+				+ " mouthHazard=" + mouthHazard
+				+ " trapped=" + trapped
+		);
+		return changed;
+	}
+
+	private static Optional<MineSite> nearestMineSiteFor(ServerLevel level, BlockPos pos, List<SettlementBuildSite> mineEntrances) {
+		MineSite bestSite = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (SettlementBuildSite buildSite : mineEntrances) {
+			Optional<MineSite> mineSite = createMineSite(level, buildSite);
+			if (mineSite.isEmpty()) {
+				continue;
+			}
+
+			double distanceSquared = horizontalDistanceSqr(buildSite.workstationPos(), pos);
+			if (bestSite == null || distanceSquared < bestDistanceSquared) {
+				bestSite = mineSite.get();
+				bestDistanceSquared = distanceSquared;
+			}
+		}
+
+		return Optional.ofNullable(bestSite);
+	}
+
+	private static int completedMinerActionsToday(ServerLevel level, Villager miner) {
+		return DAILY_COMPLETED_TASKS.getOrDefault(minerDailyActionKey(level, miner), 0);
+	}
+
+	private static void recordCompletedMinerAction(ServerLevel level, Villager miner) {
+		DAILY_COMPLETED_TASKS.merge(minerDailyActionKey(level, miner), 1, Integer::sum);
+	}
+
+	private static String minerDailyActionKey(ServerLevel level, Villager miner) {
+		long dayIndex = Math.floorDiv(level.getOverworldClockTime(), DAY_TICKS);
+		return dayIndex + "|" + miner.getUUID();
+	}
+
+	private static void pruneOldMinerDailyActions(ServerLevel level) {
+		long currentDayIndex = Math.floorDiv(level.getOverworldClockTime(), DAY_TICKS);
+		String currentPrefix = currentDayIndex + "|";
+		String previousPrefix = (currentDayIndex - 1L) + "|";
+		DAILY_COMPLETED_TASKS.keySet().removeIf(key -> !key.startsWith(currentPrefix) && !key.startsWith(previousPrefix));
+	}
+
+	private static boolean isStrandedBelowPlannedShaft(ServerLevel level, Villager villager, MineSite mineSite) {
+		if (currentLadderPos(level, mineSite, villager.blockPosition()).isPresent()) {
+			return false;
+		}
+
+		int bottomUp = deepestCompleteShaftUp(level, mineSite);
+		int bottomY = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), bottomUp).getY();
+		return villager.blockPosition().getY() < bottomY - STRANDED_BELOW_SHAFT_TOLERANCE_BLOCKS
+			&& nearestExistingLadderPos(level, mineSite, villager.blockPosition()).isPresent();
+	}
+
+	private static boolean isTrappedNearMine(ServerLevel level, Villager villager, MineSite mineSite) {
+		BlockPos pos = villager.blockPosition();
+
+		if (currentLadderPos(level, mineSite, pos).isPresent() || isSurfaceLadderColumn(mineSite, pos)) {
+			return true;
+		}
+
+		if (pos.getY() >= surfaceLadderY(mineSite) - 4) {
+			return false;
+		}
+
+		if (horizontalDistanceSqr(pos, mineSite.buildSite().workstationPos()) > (double) MINE_ESCAPE_HORIZONTAL_RADIUS_BLOCKS * MINE_ESCAPE_HORIZONTAL_RADIUS_BLOCKS) {
+			return false;
+		}
+
+		return nearestExistingLadderPos(level, mineSite, pos).isPresent()
+			|| returnPathStepTowardLadder(level, mineSite, pos).isPresent();
 	}
 
 	private static Optional<MineSite> mineSiteFor(ServerLevel level, Villager miner, List<SettlementBuildSite> mineEntrances) {
@@ -189,7 +443,13 @@ public final class SettlementMinerWork {
 
 		BlockPos sampleLadderPos = worldPos(buildSite, layout.ladderColumns().getFirst(), -1);
 		BlockState ladderState = findTemplateLadderState(level, buildSite, layout);
-		Direction supportDirection = supportDirectionFor(level, sampleLadderPos, ladderState);
+		Optional<Direction> intendedSupportDirection = intendedShaftSupportDirection(buildSite, layout);
+		Direction supportDirection = intendedSupportDirection.isPresent()
+			? intendedSupportDirection.get()
+			: supportDirectionFor(level, sampleLadderPos, ladderState);
+		if (supportDirection != null && ladderState.hasProperty(LadderBlock.FACING)) {
+			ladderState = ladderState.setValue(LadderBlock.FACING, supportDirection.getOpposite());
+		}
 		return supportDirection == null
 			? Optional.empty()
 			: Optional.of(new MineSite(buildSite, layout, ladderState, supportDirection));
@@ -228,10 +488,37 @@ public final class SettlementMinerWork {
 	private static Optional<MinerTask> chooseTask(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, Villager miner, MineSite mineSite) {
 		int bottomUp = deepestCompleteShaftUp(level, mineSite);
 		List<BlockPos> frontierCells = shaftFrontierCells(mineSite, bottomUp);
-		Optional<MinerTask> caveTask = chooseCaveTask(level, stock, mineSite, frontierCells, bottomUp);
+		Optional<CavePocket> shaftBreachCave = scanNearbyCave(level, mineSite, frontierCells);
+		boolean shaftCavernQuarantined = isShaftCavernQuarantined(level, mineSite, bottomUp);
+		boolean hostileShaftBreach = shaftBreachCave
+			.map(pocket -> hostilesPresentNearAirCells(level, pocket.airCells()))
+				.orElse(false);
 
-		if (caveTask.isPresent()) {
-			return caveTask;
+		Optional<MinerTask> starterShaftRepairTask = availableMinerTask(
+			level,
+			miner,
+			chooseStarterShaftRepairTask(level, stock, mineSite)
+		);
+		if (starterShaftRepairTask.isPresent()) {
+			return starterShaftRepairTask;
+		}
+
+		Optional<MinerTask> adjacentOreTask = availableMinerTask(
+			level,
+			miner,
+			chooseAdjacentOreTask(level, settlement, stock, miner, mineSite, bottomUp)
+		);
+		if (adjacentOreTask.isPresent()) {
+			return adjacentOreTask;
+		}
+
+		Optional<MinerTask> reachableResourceTask = availableMinerTask(
+			level,
+			miner,
+			chooseReachableUndergroundResourceTask(level, stock, mineSite, bottomUp, miner.blockPosition())
+		);
+		if (reachableResourceTask.isPresent()) {
+			return reachableResourceTask;
 		}
 
 		Optional<BlockPos> lightPos = desiredLightPos(level, mineSite, bottomUp);
@@ -241,45 +528,114 @@ public final class SettlementMinerWork {
 			return Optional.empty();
 		}
 
-		if (lightPos.isPresent()) {
-			BlockState lightState = preferredShaftLightState(stock, mineSite);
-
-			if (lightState != null) {
-				return Optional.of(new MinerTask(MinerAction.PLACE_LIGHT, lightPos.get(), lightState, standPos.get(), "lighting_mine_shaft"));
+		if (!shaftCavernQuarantined && hostileShaftBreach && shaftBreachCave.isPresent()) {
+			Optional<MinerTask> shaftClosureTask = availableMinerTask(
+				level,
+				miner,
+				chooseShaftCavernClosureTask(level, mineSite, bottomUp, standPos.get(), shaftBreachCave.get().airCells())
+			);
+			if (shaftClosureTask.isPresent()) {
+				return shaftClosureTask;
 			}
 		}
 
-		Optional<BlockPos> stoneTarget = findExposedStoneTarget(level, mineSite, frontierCells);
-		Optional<BlockPos> oreTarget = findExposedOreTarget(level, mineSite, frontierCells);
+		if (shaftCavernQuarantined || hostileShaftBreach) {
+			Optional<MinerTask> tunnelTask = choosePrimaryTunnelTask(level, settlement, stock, miner, mineSite, bottomUp);
+			if (tunnelTask.isPresent()) {
+				return tunnelTask;
+			}
+
+			return chooseReachableShaftWallMiningTask(level, mineSite, bottomUp);
+		}
+
+		if (lightPos.isPresent()) {
+			BlockState lightState = preferredShaftLightState(level, stock, mineSite, lightPos.get());
+
+			if (lightState != null) {
+				Optional<MinerTask> lightTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.PLACE_LIGHT, lightPos.get(), lightState, standPos.get(), "lighting_mine_shaft")
+				);
+				if (lightTask.isPresent()) {
+					return lightTask;
+				}
+			}
+		}
+
+		Optional<BlockPos> stoneTarget = findExposedStoneTarget(level, mineSite, frontierCells, standPos.get());
+		Optional<BlockPos> oreTarget = findExposedOreTarget(level, mineSite, frontierCells, standPos.get());
 
 		if (oreTarget.isPresent()) {
 			BlockPos targetPos = oreTarget.get();
 			BlockState replacementState = null;
+			boolean canMineOreTarget = true;
 
-			if (requiresLadderSupportReplacement(targetPos, mineSite, bottomUp)) {
-				replacementState = supportReplacementMaterial(stock);
+				if (requiresShaftStructureReplacement(targetPos, mineSite, bottomUp)) {
+					replacementState = supportReplacementMaterial(stock);
 
-				if (replacementState == null) {
-					return stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"));
+					if (replacementState == null) {
+						Optional<MinerTask> stoneTask = availableMinerTask(
+						level,
+						miner,
+						stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"))
+					);
+					if (stoneTask.isPresent()) {
+						return stoneTask;
+					}
+					canMineOreTarget = false;
 				}
 			}
 
-			return Optional.of(new MinerTask(MinerAction.MINE_ORE, targetPos, replacementState, standPos.get(), "mining_ore_vein"));
+			if (canMineOreTarget) {
+				Optional<MinerTask> oreTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.MINE_ORE, targetPos, replacementState, standPos.get(), "mining_ore_vein")
+				);
+				if (oreTask.isPresent()) {
+					return oreTask;
+				}
+			}
+		}
+
+		Optional<MinerTask> tunnelTask = choosePrimaryTunnelTask(level, settlement, stock, miner, mineSite, bottomUp);
+		if (tunnelTask.isPresent()) {
+			return tunnelTask;
+		}
+
+		Optional<MinerTask> caveTask = chooseCaveTask(level, stock, mineSite, frontierCells, bottomUp, miner);
+
+		Optional<MinerTask> availableCaveTask = availableMinerTask(level, miner, caveTask);
+		if (availableCaveTask.isPresent()) {
+			return availableCaveTask;
 		}
 
 		int nextUp = bottomUp - 1;
 
 		if (shouldStopShaftBeforeLevel(level, mineSite, nextUp)) {
 			Optional<MinerTask> safetyLadderTask = chooseBedrockSafetyLadderTask(level, stock, mineSite, bottomUp, standPos.get());
-			if (safetyLadderTask.isPresent()) {
-				return safetyLadderTask;
+			Optional<MinerTask> availableSafetyLadderTask = availableMinerTask(level, miner, safetyLadderTask);
+			if (availableSafetyLadderTask.isPresent()) {
+				return availableSafetyLadderTask;
 			}
 
-			return choosePrimaryTunnelTask(level, settlement, stock, miner, mineSite, bottomUp);
+			return chooseReachableShaftWallMiningTask(level, mineSite, bottomUp);
 		}
 
 		if (!canSupplyNextLadderLevel(stock)) {
-			return stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"));
+			if (stoneTarget.isPresent()) {
+				Optional<MinerTask> stoneTask = availableMinerTask(
+					level,
+					miner,
+					stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"))
+				);
+				if (stoneTask.isPresent()) {
+					return stoneTask;
+				}
+			}
+
+			return chooseReachableShaftWallMiningTask(level, mineSite, bottomUp);
 		}
 
 		for (ShaftColumn column : mineSite.layout().ladderColumns()) {
@@ -290,10 +646,25 @@ public final class SettlementMinerWork {
 				BlockState replacementMaterial = supportReplacementMaterial(stock);
 
 				if (replacementMaterial == null) {
-					return stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"));
+					Optional<MinerTask> stoneTask = availableMinerTask(
+						level,
+						miner,
+						stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"))
+					);
+					if (stoneTask.isPresent()) {
+						return stoneTask;
+					}
+					continue;
 				}
 
-				return Optional.of(new MinerTask(MinerAction.PLACE_SUPPORT, supportPos, replacementMaterial, standPos.get(), "reinforcing_shaft_support"));
+				Optional<MinerTask> supportTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.PLACE_SUPPORT, supportPos, replacementMaterial, standPos.get(), "reinforcing_shaft_support")
+				);
+				if (supportTask.isPresent()) {
+					return supportTask;
+				}
 			}
 		}
 
@@ -302,7 +673,14 @@ public final class SettlementMinerWork {
 			BlockState targetState = level.getBlockState(targetPos);
 
 			if (!targetState.isAir() && !targetState.is(Blocks.LADDER)) {
-				return Optional.of(new MinerTask(MinerAction.DIG_SHAFT, targetPos, null, standPos.get(), "digging_mine_shaft"));
+				Optional<MinerTask> digTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.DIG_SHAFT, targetPos, null, standPos.get(), "digging_mine_shaft")
+				);
+				if (digTask.isPresent()) {
+					return digTask;
+				}
 			}
 		}
 
@@ -311,7 +689,14 @@ public final class SettlementMinerWork {
 			BlockState targetState = level.getBlockState(targetPos);
 
 			if (!targetState.is(Blocks.LADDER)) {
-				return Optional.of(new MinerTask(MinerAction.PLACE_LADDER, targetPos, mineSite.ladderStateTemplate(), standPos.get(), "placing_shaft_ladders"));
+				Optional<MinerTask> ladderTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.PLACE_LADDER, targetPos, mineSite.ladderStateTemplate(), standPos.get(), "placing_shaft_ladders")
+				);
+				if (ladderTask.isPresent()) {
+					return ladderTask;
+				}
 			}
 		}
 
@@ -320,11 +705,373 @@ public final class SettlementMinerWork {
 			BlockState targetState = level.getBlockState(targetPos);
 
 			if (!isClearOpenShaftCell(targetState)) {
-				return Optional.of(new MinerTask(MinerAction.DIG_SHAFT, targetPos, null, standPos.get(), "digging_mine_shaft"));
+				Optional<MinerTask> digTask = availableMinerTask(
+					level,
+					miner,
+					new MinerTask(MinerAction.DIG_SHAFT, targetPos, null, standPos.get(), "digging_mine_shaft")
+				);
+				if (digTask.isPresent()) {
+					return digTask;
+				}
 			}
 		}
 
-		return stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"));
+		if (stoneTarget.isPresent()) {
+			Optional<MinerTask> stoneTask = availableMinerTask(
+				level,
+				miner,
+				stoneTarget.map(pos -> new MinerTask(MinerAction.MINE_STONE, pos, null, standPos.get(), "mining_shaft_stone"))
+			);
+			if (stoneTask.isPresent()) {
+				return stoneTask;
+			}
+		}
+
+		return chooseReachableShaftWallMiningTask(level, mineSite, bottomUp);
+	}
+
+	private static Optional<MinerTask> chooseStarterShaftRepairTask(ServerLevel level, Map<String, Integer> stock, MineSite mineSite) {
+		for (int up = -1; up >= mineSite.layout().starterMinUp(); up--) {
+			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
+				BlockPos supportPos = worldPos(mineSite.buildSite(), ladderColumn, up).relative(mineSite.supportDirection());
+				BlockState supportState = level.getBlockState(supportPos);
+
+				if (!isStableLadderSupport(supportState)) {
+					BlockState replacementMaterial = supportReplacementMaterial(stock);
+					if (replacementMaterial != null) {
+						return Optional.of(new MinerTask(
+							MinerAction.PLACE_SUPPORT,
+							supportPos,
+							replacementMaterial,
+							shaftLevelStandPos(mineSite, up, supportPos),
+							"repairing_shaft_support"
+						));
+					}
+				}
+			}
+		}
+
+		for (int up = -1; up >= mineSite.layout().starterMinUp(); up--) {
+			for (BlockPos wallPos : starterShaftWallPositions(mineSite, up)) {
+				if (!isStableLadderSupport(level.getBlockState(wallPos))) {
+					BlockState replacementMaterial = supportReplacementMaterial(stock);
+					if (replacementMaterial != null) {
+						return Optional.of(new MinerTask(
+							MinerAction.PLACE_SUPPORT,
+							wallPos,
+							replacementMaterial,
+							shaftLevelStandPos(mineSite, up, wallPos),
+							"repairing_shaft_wall"
+						));
+					}
+				}
+			}
+		}
+
+		for (int up = -1; up >= mineSite.layout().starterMinUp(); up--) {
+			for (ShaftColumn column : mineSite.layout().ladderColumns()) {
+				BlockPos ladderPos = worldPos(mineSite.buildSite(), column, up);
+				BlockState ladderState = level.getBlockState(ladderPos);
+
+				if (!ladderState.isAir() && !ladderState.is(Blocks.LADDER)) {
+					return Optional.of(new MinerTask(
+						MinerAction.DIG_SHAFT,
+						ladderPos,
+						null,
+						shaftLevelStandPos(mineSite, up, ladderPos),
+						"clearing_starter_shaft_ladder_cell"
+					));
+				}
+
+				if (!ladderState.is(Blocks.LADDER) && canSupplySingleLadder(stock)) {
+					return Optional.of(new MinerTask(
+						MinerAction.PLACE_LADDER,
+						ladderPos,
+						mineSite.ladderStateTemplate(),
+						shaftLevelStandPos(mineSite, up, ladderPos),
+						"repairing_starter_shaft_ladder"
+					));
+				}
+			}
+		}
+
+		for (int up = -1; up >= mineSite.layout().starterMinUp(); up--) {
+			for (ShaftColumn column : mineSite.layout().openColumns()) {
+				BlockPos openPos = worldPos(mineSite.buildSite(), column, up);
+				BlockState openState = level.getBlockState(openPos);
+
+				if (!isClearOpenShaftCell(openState) || !isValidShaftOpenCell(level, mineSite, openPos, openState)) {
+					return Optional.of(new MinerTask(
+						MinerAction.DIG_SHAFT,
+						openPos,
+						null,
+						shaftLevelStandPos(mineSite, up, openPos),
+						"clearing_starter_shaft_open_cell"
+					));
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<MinerTask> chooseReachableShaftWallMiningTask(ServerLevel level, MineSite mineSite, int bottomUp) {
+		for (int up = bottomUp; up <= -1; up++) {
+			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
+				BlockPos standPos = worldPos(mineSite.buildSite(), ladderColumn, up);
+				if (!level.getBlockState(standPos).is(Blocks.LADDER)) {
+					continue;
+				}
+
+					for (Direction direction : Direction.Plane.HORIZONTAL) {
+						BlockPos targetPos = standPos.relative(direction);
+						if (isRequiredLadderSupport(targetPos, mineSite) || isProtectedStarterShaftWall(targetPos, mineSite)) {
+							continue;
+						}
+
+						if (isUsefulOre(level.getBlockState(targetPos))) {
+							return Optional.of(new MinerTask(MinerAction.MINE_ORE, targetPos, null, standPos, "mining_reachable_shaft_ore"));
+					}
+
+					if (isUsefulStone(level.getBlockState(targetPos))) {
+						return Optional.of(new MinerTask(MinerAction.MINE_STONE, targetPos, null, standPos, "mining_reachable_shaft_stone"));
+					}
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<MinerTask> chooseReachableUndergroundResourceTask(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		MineSite mineSite,
+		int bottomUp,
+		BlockPos minerPos
+	) {
+		Set<BlockPos> visited = new HashSet<>();
+		ArrayDeque<BlockPos> frontier = new ArrayDeque<>();
+		BlockPos origin = mineSite.buildSite().workstationPos();
+
+		if (isWithinReachableResourceSearch(origin, minerPos) && isStandableTunnelCell(level, minerPos) && visited.add(minerPos.immutable())) {
+			frontier.addFirst(minerPos.immutable());
+		}
+
+		for (BlockPos ladderPos : existingMineLadderPositions(level, mineSite)) {
+			if (Math.abs(ladderPos.getY() - surfaceLadderY(mineSite)) < 4) {
+				continue;
+			}
+
+			if (visited.add(ladderPos)) {
+				frontier.addLast(ladderPos);
+			}
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos standPos = ladderPos.relative(direction);
+				if (isWithinReachableResourceSearch(origin, standPos) && isStandableTunnelCell(level, standPos) && visited.add(standPos.immutable())) {
+					frontier.addLast(standPos.immutable());
+				}
+			}
+		}
+
+		BlockPos bestTarget = null;
+		BlockPos bestStand = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		while (!frontier.isEmpty() && visited.size() <= REACHABLE_RESOURCE_SEARCH_NODES) {
+			BlockPos standPos = frontier.removeFirst();
+			Optional<OreWorkTarget> resourceTarget = reachableOreTargetFromStandPos(level, stock, mineSite, bottomUp, standPos);
+			if (resourceTarget.isPresent()) {
+				double distanceSquared = minerPos.distSqr(resourceTarget.get().targetPos());
+				if (bestTarget == null || distanceSquared < bestDistanceSquared) {
+					bestTarget = resourceTarget.get().targetPos();
+					bestStand = resourceTarget.get().standPos();
+					bestDistanceSquared = distanceSquared;
+				}
+			}
+
+			for (BlockPos next : reachableResourceNeighbors(level, mineSite, origin, standPos)) {
+				if (visited.add(next)) {
+					frontier.addLast(next);
+				}
+			}
+		}
+
+		if (bestTarget == null || bestStand == null) {
+			return Optional.empty();
+		}
+
+		BlockState targetState = level.getBlockState(bestTarget);
+		BlockState replacementState = null;
+			if (requiresShaftStructureReplacement(bestTarget, mineSite, bottomUp)) {
+				replacementState = supportReplacementMaterial(stock);
+				if (replacementState == null) {
+					return Optional.empty();
+				}
+			}
+
+		return Optional.of(new MinerTask(MinerAction.MINE_ORE, bestTarget, replacementState, bestStand, miningResourceTaskKey(targetState)));
+	}
+
+	private static Optional<OreWorkTarget> reachableOreTargetFromStandPos(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		MineSite mineSite,
+		int bottomUp,
+		BlockPos standPos
+	) {
+		BlockPos bestTarget = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (BlockPos inspectOrigin : List.of(standPos, standPos.above())) {
+			for (Direction direction : Direction.values()) {
+				BlockPos targetPos = inspectOrigin.relative(direction);
+				BlockState targetState = level.getBlockState(targetPos);
+
+				if (!isUsefulOre(targetState) || isRequiredLadderSupport(targetPos, mineSite)) {
+					continue;
+				}
+
+				if (requiresShaftStructureReplacement(targetPos, mineSite, bottomUp) && supportReplacementMaterial(stock) == null) {
+					continue;
+				}
+
+				double distanceSquared = standPos.distSqr(targetPos);
+				if (bestTarget == null || distanceSquared < bestDistanceSquared) {
+					bestTarget = targetPos.immutable();
+					bestDistanceSquared = distanceSquared;
+				}
+			}
+		}
+
+		return bestTarget == null ? Optional.empty() : Optional.of(new OreWorkTarget(bestTarget, standPos));
+	}
+
+	private static Optional<MinerTask> chooseAdjacentOreTask(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager miner,
+		MineSite mineSite,
+		int bottomUp
+	) {
+		BlockPos minerPos = miner.blockPosition();
+		BlockPos bestTarget = null;
+		BlockPos bestStand = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (int dx = -ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dx <= ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dx++) {
+			for (int dy = -ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dy <= ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dy++) {
+				for (int dz = -ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dz <= ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS; dz++) {
+					if (dx == 0 && dy == 0 && dz == 0) {
+						continue;
+					}
+
+					BlockPos targetPos = minerPos.offset(dx, dy, dz);
+					if (!isUsefulOre(level.getBlockState(targetPos)) || isRequiredLadderSupport(targetPos, mineSite)) {
+						continue;
+					}
+
+					Optional<BlockPos> standPos = resolveOreStandPos(level, mineSite, miner, targetPos);
+					if (standPos.isEmpty()) {
+						continue;
+					}
+
+					BlockState replacementState = null;
+				if (requiresShaftStructureReplacement(targetPos, mineSite, bottomUp)) {
+					replacementState = supportReplacementMaterial(stock);
+					if (replacementState == null) {
+						continue;
+					}
+					}
+
+					double distanceSquared = minerPos.distSqr(targetPos);
+					if (bestTarget == null || distanceSquared < bestDistanceSquared) {
+						bestTarget = targetPos.immutable();
+						bestStand = standPos.get();
+						bestDistanceSquared = distanceSquared;
+					}
+				}
+			}
+		}
+
+		if (bestTarget == null || bestStand == null) {
+			return Optional.empty();
+		}
+
+		BlockState replacementState = requiresShaftStructureReplacement(bestTarget, mineSite, bottomUp)
+			? supportReplacementMaterial(stock)
+			: null;
+		return Optional.of(new MinerTask(
+			MinerAction.MINE_ORE,
+			bestTarget,
+			replacementState,
+			bestStand,
+			miningResourceTaskKey(level.getBlockState(bestTarget))
+		));
+	}
+
+	private static Optional<BlockPos> resolveOreStandPos(ServerLevel level, MineSite mineSite, Villager miner, BlockPos targetPos) {
+		BlockPos minerPos = miner.blockPosition();
+		List<BlockPos> candidates = new ArrayList<>();
+		candidates.add(minerPos);
+		candidates.add(minerPos.above());
+		candidates.add(minerPos.below());
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos candidate = minerPos.relative(direction);
+			if (isStandableTunnelCell(level, candidate) || isExistingMineLadder(level, mineSite, candidate)) {
+				candidates.add(candidate.immutable());
+			}
+		}
+
+		return candidates.stream()
+			.filter(standPos -> standPos.distSqr(targetPos) <= MINING_WORK_REACH_DISTANCE_SQUARED)
+			.min(Comparator.comparingDouble(standPos -> standPos.distSqr(targetPos)))
+			.map(BlockPos::immutable);
+	}
+
+	private static boolean isOreMiningAction(MinerAction action) {
+		return action == MinerAction.MINE_ORE || action == MinerAction.MINE_STONE;
+	}
+
+	private static String miningResourceTaskKey(BlockState targetState) {
+		if (targetState.is(Blocks.AMETHYST_CLUSTER) || targetState.is(Blocks.AMETHYST_BLOCK) || targetState.is(Blocks.CALCITE)) {
+			return "mining_geode_resources";
+		}
+
+		return "mining_reachable_ore";
+	}
+
+	private static List<BlockPos> reachableResourceNeighbors(ServerLevel level, MineSite mineSite, BlockPos origin, BlockPos standPos) {
+		List<BlockPos> neighbors = new ArrayList<>(8);
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			for (int dy = -1; dy <= 1; dy++) {
+				BlockPos candidate = standPos.relative(direction).offset(0, dy, 0);
+				if (isWithinReachableResourceSearch(origin, candidate) && (isStandableTunnelCell(level, candidate) || isExistingMineLadder(level, mineSite, candidate))) {
+					neighbors.add(candidate.immutable());
+				}
+			}
+		}
+
+		if (isExistingMineLadder(level, mineSite, standPos)) {
+			for (Direction direction : List.of(Direction.UP, Direction.DOWN)) {
+				BlockPos candidate = standPos.relative(direction);
+				if (isWithinReachableResourceSearch(origin, candidate) && isExistingMineLadder(level, mineSite, candidate)) {
+					neighbors.add(candidate.immutable());
+				}
+			}
+		}
+
+		return neighbors;
+	}
+
+	private static boolean isWithinReachableResourceSearch(BlockPos origin, BlockPos candidate) {
+		return Math.abs(candidate.getX() - origin.getX()) <= REACHABLE_RESOURCE_SEARCH_BLOCKS
+			&& Math.abs(candidate.getY() - origin.getY()) <= MAX_SHAFT_DEPTH_BLOCKS + 8
+			&& Math.abs(candidate.getZ() - origin.getZ()) <= REACHABLE_RESOURCE_SEARCH_BLOCKS;
 	}
 
 	private static Optional<MinerTask> chooseCaveTask(
@@ -332,11 +1079,39 @@ public final class SettlementMinerWork {
 		Map<String, Integer> stock,
 		MineSite mineSite,
 		List<BlockPos> frontierCells,
-		int bottomUp
+		int bottomUp,
+		Villager miner
 	) {
 		Optional<CavePocket> cavePocket = scanNearbyCave(level, mineSite, frontierCells);
 
-		if (cavePocket.isEmpty()) {
+		if (cavePocket.isEmpty() || isShaftCavernQuarantined(level, mineSite, bottomUp)) {
+			return Optional.empty();
+		}
+
+		if (hostilesPresentNearAirCells(level, cavePocket.get().airCells())) {
+			Optional<BlockPos> standPos = standPosFor(miner, mineSite, bottomUp);
+			if (standPos.isPresent()) {
+				Optional<MinerTask> shaftClosureTask = chooseShaftCavernClosureTask(
+					level,
+					mineSite,
+					bottomUp,
+					standPos.get(),
+					cavePocket.get().airCells()
+				);
+				if (shaftClosureTask.isPresent()) {
+					return shaftClosureTask;
+				}
+			}
+
+			return Optional.empty();
+		}
+
+		List<BlockPos> reachableStandPositions = cavePocket.get().standPositions().stream()
+			.filter(standPos -> isMineReachableStandPos(level, mineSite, standPos))
+			.filter(standPos -> isSafeCaveStandPos(mineSite, bottomUp, standPos))
+			.toList();
+
+		if (reachableStandPositions.isEmpty()) {
 			return Optional.empty();
 		}
 
@@ -348,7 +1123,7 @@ public final class SettlementMinerWork {
 					continue;
 				}
 
-				Optional<BlockPos> standPos = adjacentCaveStandPos(targetPos, cavePocket.get().standPositions());
+				Optional<BlockPos> standPos = adjacentCaveStandPos(targetPos, reachableStandPositions);
 
 				if (standPos.isPresent()) {
 					return Optional.of(new MinerTask(MinerAction.PLACE_LIGHT, targetPos, caveLightState, standPos.get(), "lighting_cave"));
@@ -356,7 +1131,7 @@ public final class SettlementMinerWork {
 			}
 		}
 
-		for (BlockPos standPos : cavePocket.get().standPositions()) {
+		for (BlockPos standPos : reachableStandPositions) {
 			Optional<BlockPos> oreTarget = exposedOreFromStandPos(level, standPos, cavePocket.get().airCells());
 
 			if (oreTarget.isEmpty()) {
@@ -378,6 +1153,11 @@ public final class SettlementMinerWork {
 		}
 
 		return Optional.empty();
+	}
+
+	private static boolean isSafeCaveStandPos(MineSite mineSite, int bottomUp, BlockPos standPos) {
+		int bottomY = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), bottomUp).getY();
+		return standPos.getY() >= bottomY - SAFE_CAVE_BELOW_SHAFT_TOLERANCE_BLOCKS;
 	}
 
 	private static Optional<MinerTask> chooseBedrockSafetyLadderTask(
@@ -431,17 +1211,21 @@ public final class SettlementMinerWork {
 				continue;
 			}
 
-			Optional<MinerTask> discoveryTask = choosePrimaryTunnelDiscoveryTask(level, settlement, mineSite, branch);
+			Optional<MinerTask> discoveryTask = availableMinerTask(level, miner, choosePrimaryTunnelDiscoveryTask(level, settlement, mineSite, branch));
 			if (discoveryTask.isPresent()) {
 				return discoveryTask;
 			}
 
-			Optional<MinerTask> closureTask = chooseTunnelClosureTask(level, miner, mineSite, branch, primaryBranchOpenAirCells(level, settlement, mineSite, branch));
+			Optional<MinerTask> closureTask = availableMinerTask(
+				level,
+				miner,
+				chooseTunnelClosureTask(level, miner, mineSite, branch, primaryBranchOpenAirCells(level, settlement, mineSite, branch))
+			);
 			if (closureTask.isPresent()) {
 				return closureTask;
 			}
 
-			Optional<MinerTask> oreTask = choosePrimaryTunnelOreTask(level, settlement, stock, mineSite, branch, bottomUp);
+			Optional<MinerTask> oreTask = availableMinerTask(level, miner, choosePrimaryTunnelOreTask(level, settlement, stock, mineSite, branch, bottomUp));
 			if (oreTask.isPresent()) {
 				return oreTask;
 			}
@@ -452,7 +1236,7 @@ public final class SettlementMinerWork {
 				continue;
 			}
 
-			Optional<MinerTask> lightTask = choosePrimaryTunnelLightTask(level, settlement, stock, mineSite, branch);
+			Optional<MinerTask> lightTask = availableMinerTask(level, miner, choosePrimaryTunnelLightTask(level, settlement, stock, mineSite, branch));
 			if (lightTask.isPresent()) {
 				return lightTask;
 			}
@@ -463,13 +1247,13 @@ public final class SettlementMinerWork {
 				continue;
 			}
 
-			Optional<MinerTask> excavationTask = choosePrimaryTunnelExcavationTask(level, settlement, stock, mineSite, branch);
+			Optional<MinerTask> excavationTask = availableMinerTask(level, miner, choosePrimaryTunnelExcavationTask(level, settlement, stock, mineSite, branch));
 			if (excavationTask.isPresent()) {
 				return excavationTask;
 			}
 		}
 
-		Optional<MinerTask> secondaryTask = chooseSecondaryTunnelTask(level, settlement, stock, miner, mineSite, branches, bottomUp);
+		Optional<MinerTask> secondaryTask = availableMinerTask(level, miner, chooseSecondaryTunnelTask(level, settlement, stock, miner, mineSite, branches, bottomUp));
 		if (secondaryTask.isPresent()) {
 			return secondaryTask;
 		}
@@ -866,8 +1650,97 @@ public final class SettlementMinerWork {
 	}
 
 	private static boolean isPrimaryTunnelClosed(ServerLevel level, MineSite mineSite, PrimaryTunnelBranch branch) {
-		BlockState state = level.getBlockState(primaryTunnelClosureSignPos(mineSite, branch));
-		return state.getBlock() instanceof StandingSignBlock;
+		return isMonsterClosureSign(level, primaryTunnelClosureSignPos(mineSite, branch));
+	}
+
+	private static boolean isMonsterClosureSign(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+
+		if (!(state.getBlock() instanceof StandingSignBlock) && !(state.getBlock() instanceof WallSignBlock)) {
+			return false;
+		}
+
+		if (!(level.getBlockEntity(pos) instanceof SignBlockEntity signBlockEntity)) {
+			return true;
+		}
+
+		for (boolean front : List.of(true, false)) {
+			SignText text = signBlockEntity.getText(front);
+
+			for (int line = 0; line < 4; line++) {
+				String message = text.getMessage(line, false).getString().toLowerCase();
+
+				if (message.contains("monster")) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static List<BlockPos> shaftCavernClosureSignCandidates(MineSite mineSite, int bottomUp) {
+		return mineSite.layout().openColumns().stream()
+			.map(column -> worldPos(mineSite.buildSite(), column, bottomUp))
+			.toList();
+	}
+
+	private static boolean isShaftCavernQuarantined(ServerLevel level, MineSite mineSite, int bottomUp) {
+		return shaftCavernClosureSignCandidates(mineSite, bottomUp).stream()
+			.anyMatch(pos -> isMonsterClosureSign(level, pos));
+	}
+
+	private static Optional<MinerTask> chooseShaftCavernClosureTask(
+		ServerLevel level,
+		MineSite mineSite,
+		int bottomUp,
+		BlockPos standPos,
+		Set<BlockPos> caveAirCells
+	) {
+		if (caveAirCells.isEmpty() || isShaftCavernQuarantined(level, mineSite, bottomUp)) {
+			return Optional.empty();
+		}
+
+		if (!hostilesPresentNearAirCells(level, caveAirCells)) {
+			return Optional.empty();
+		}
+
+		Direction signFacing = mineSite.supportDirection().getOpposite();
+
+		for (BlockPos signPos : shaftCavernClosureSignCandidates(mineSite, bottomUp)) {
+			if (!canPlaceStandingSign(level, signPos)) {
+				continue;
+			}
+
+			BlockState signState = Blocks.OAK_SIGN.defaultBlockState()
+				.setValue(StandingSignBlock.ROTATION, signRotationForFacing(signFacing));
+			return Optional.of(new MinerTask(
+				MinerAction.PLACE_WARNING_SIGN,
+				signPos,
+				signState,
+				standPos,
+				"closing_monster_shaft_cavern",
+				List.of("Cavern closed", "due to", "monsters")
+			));
+		}
+
+		return Optional.empty();
+	}
+
+	private static boolean hostilesPresentNearAirCells(ServerLevel level, Set<BlockPos> airCells) {
+		if (airCells.isEmpty()) {
+			return false;
+		}
+
+		AABB bounds = airCells.stream()
+			.map(AABB::new)
+			.reduce(AABB::minmax)
+			.orElseGet(() -> new AABB(BlockPos.ZERO))
+			.inflate(TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS);
+		double radiusSquared = (double) TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS * TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS;
+
+		return level.getEntitiesOfClass(Monster.class, bounds, monster -> monster.isAlive() && !monster.isRemoved()).stream()
+			.anyMatch(monster -> airCells.stream().anyMatch(airCell -> monster.blockPosition().distSqr(airCell) <= radiusSquared));
 	}
 
 	private static Optional<MinerTask> chooseTunnelClosureTask(
@@ -881,7 +1754,7 @@ public final class SettlementMinerWork {
 			return Optional.empty();
 		}
 
-		if (visibleHostileNearTunnel(level, miner, tunnelAirCells).isEmpty()) {
+		if (!hostilesPresentNearAirCells(level, tunnelAirCells)) {
 			return Optional.empty();
 		}
 
@@ -901,20 +1774,6 @@ public final class SettlementMinerWork {
 			"closing_monster_tunnel",
 			List.of("Tunnel closed", "due to", "monsters")
 		));
-	}
-
-	private static Optional<Monster> visibleHostileNearTunnel(ServerLevel level, Villager miner, Set<BlockPos> tunnelAirCells) {
-		AABB bounds = tunnelAirCells.stream()
-			.map(AABB::new)
-			.reduce(AABB::minmax)
-			.orElse(new AABB(miner.blockPosition()))
-			.inflate(TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS);
-		double radiusSquared = (double) TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS * TUNNEL_HOSTILE_DETECTION_RADIUS_BLOCKS;
-
-		return level.getEntitiesOfClass(Monster.class, bounds, monster -> monster.isAlive() && !monster.isRemoved()).stream()
-			.filter(miner::hasLineOfSight)
-			.filter(monster -> tunnelAirCells.stream().anyMatch(airCell -> monster.blockPosition().distSqr(airCell) <= radiusSquared))
-			.min(Comparator.comparingDouble(monster -> monster.distanceToSqr(miner)));
 	}
 
 	private static Optional<MinerTask> chooseInterestingDiscoverySignTask(
@@ -1175,18 +2034,41 @@ public final class SettlementMinerWork {
 		return isStandableTunnelCell(level, previousFloorPos) ? Optional.of(previousFloorPos) : Optional.empty();
 	}
 
-	private static boolean performTask(ServerLevel level, Map<String, Integer> stock, MineSite mineSite, MinerTask task) {
-		return switch (task.action()) {
-			case DIG_SHAFT -> mineBlockIntoStock(level, stock, task.targetPos(), null);
-			case DIG_TUNNEL -> mineBlockIntoStock(level, stock, task.targetPos(), null);
-			case MINE_ORE -> mineBlockIntoStock(level, stock, task.targetPos(), task.replacementState());
-			case MINE_STONE -> mineBlockIntoStock(level, stock, task.targetPos(), null);
+	private static boolean performTask(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager miner,
+		MineSite mineSite,
+		MinerTask task
+	) {
+		Map<String, Integer> beforeStock = new HashMap<>(stock);
+		boolean completed = switch (task.action()) {
+			case DIG_SHAFT -> mineBlockIntoStock(level, settlement, stock, miner, task.targetPos(), null);
+			case DIG_TUNNEL -> mineBlockIntoStock(level, settlement, stock, miner, task.targetPos(), null);
+			case MINE_ORE -> mineBlockIntoStock(level, settlement, stock, miner, task.targetPos(), task.replacementState());
+			case MINE_STONE -> mineBlockIntoStock(level, settlement, stock, miner, task.targetPos(), null);
 			case PLACE_SUPPORT -> placeSupport(level, stock, task.targetPos(), task.replacementState());
 			case PLACE_LADDER -> placeLadder(level, stock, task.targetPos(), task.replacementState(), mineSite.supportDirection());
 			case PLACE_LIGHT -> placeLight(level, stock, task.targetPos(), task.replacementState());
 			case PLACE_WARNING_SIGN -> placeSign(level, task.targetPos(), task.replacementState(), task.signLines());
 			case PLACE_POI_SIGN -> placeSign(level, task.targetPos(), task.replacementState(), task.signLines());
 		};
+
+		if (completed) {
+			SettlementProfessionReports.recordStockDeltas(
+				level,
+				settlement,
+				SettlementRoleKeys.MINER,
+				miner,
+				beforeStock,
+				stock,
+				null
+			);
+			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.MINER, miner, task.taskKey().replace('_', ' '));
+		}
+
+		return completed;
 	}
 
 	private static boolean placeSign(ServerLevel level, BlockPos targetPos, BlockState signState, List<String> lines) {
@@ -1212,7 +2094,10 @@ public final class SettlementMinerWork {
 	}
 
 	private static boolean placeLight(ServerLevel level, Map<String, Integer> stock, BlockPos targetPos, BlockState lightState) {
-		if (lightState == null || !level.getBlockState(targetPos).isAir() || !consumeLightSource(stock, lightState)) {
+		if (lightState == null
+			|| !level.getBlockState(targetPos).isAir()
+			|| !lightState.canSurvive(level, targetPos)
+			|| !consumeLightSource(stock, lightState)) {
 			return false;
 		}
 
@@ -1244,20 +2129,35 @@ public final class SettlementMinerWork {
 		return true;
 	}
 
-	private static boolean mineBlockIntoStock(ServerLevel level, Map<String, Integer> stock, BlockPos targetPos, BlockState replacementState) {
+	private static boolean mineBlockIntoStock(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager miner,
+		BlockPos targetPos,
+		BlockState replacementState
+	) {
 		BlockState targetState = level.getBlockState(targetPos);
 
 		if (!canMine(targetState, level, targetPos)) {
 			return false;
 		}
 
+		if (replacementState != null && !consumeSupportMaterial(stock, replacementState)) {
+			return false;
+		}
+
+		Map<String, Integer> drops = new LinkedHashMap<>();
 		for (ItemStack drop : Block.getDrops(targetState, level, targetPos, null, null, new ItemStack(Items.IRON_PICKAXE))) {
 			String goodsKey = SettlementGoods.goodsKeyForItem(drop);
 
 			if (goodsKey != null) {
 				SettlementGoods.addGoods(stock, goodsKey, drop.getCount());
+				drops.merge(goodsKey, drop.getCount(), Integer::sum);
 			}
 		}
+
+		SettlementProfessionReports.recordMinedBlock(level, settlement, SettlementRoleKeys.MINER, miner, targetState, drops);
 
 		level.levelEvent(2001, targetPos, Block.getId(targetState));
 
@@ -1287,14 +2187,16 @@ public final class SettlementMinerWork {
 		return isStableLadderSupport(level.getBlockState(targetPos.relative(supportDirection)));
 	}
 
-	private static Optional<BlockPos> findExposedOreTarget(ServerLevel level, MineSite mineSite, List<BlockPos> frontierCells) {
+	private static Optional<BlockPos> findExposedOreTarget(ServerLevel level, MineSite mineSite, List<BlockPos> frontierCells, BlockPos standPos) {
 		Set<BlockPos> candidates = new LinkedHashSet<>();
 
 		for (BlockPos shaftPos : frontierCells) {
 			for (Direction direction : Direction.values()) {
 				BlockPos candidatePos = shaftPos.relative(direction);
 
-				if (frontierCells.contains(candidatePos) || !isUsefulOre(level.getBlockState(candidatePos))) {
+				if (frontierCells.contains(candidatePos)
+					|| standPos.distSqr(candidatePos) > MINING_WORK_REACH_DISTANCE_SQUARED
+					|| !isUsefulOre(level.getBlockState(candidatePos))) {
 					continue;
 				}
 
@@ -1307,7 +2209,7 @@ public final class SettlementMinerWork {
 			.findFirst();
 	}
 
-	private static Optional<BlockPos> findExposedStoneTarget(ServerLevel level, MineSite mineSite, List<BlockPos> frontierCells) {
+	private static Optional<BlockPos> findExposedStoneTarget(ServerLevel level, MineSite mineSite, List<BlockPos> frontierCells, BlockPos standPos) {
 		Set<BlockPos> candidates = new LinkedHashSet<>();
 
 		for (BlockPos shaftPos : frontierCells) {
@@ -1315,9 +2217,11 @@ public final class SettlementMinerWork {
 				BlockPos candidatePos = shaftPos.relative(direction);
 
 				if (frontierCells.contains(candidatePos)
+					|| standPos.distSqr(candidatePos) > MINING_WORK_REACH_DISTANCE_SQUARED
 					|| candidatePos.equals(mineSite.buildSite().workstationPos())
 					|| !isUsefulStone(level.getBlockState(candidatePos))
-					|| isRequiredLadderSupport(candidatePos, mineSite)) {
+					|| isRequiredLadderSupport(candidatePos, mineSite)
+					|| isProtectedStarterShaftWall(candidatePos, mineSite)) {
 					continue;
 				}
 
@@ -1466,7 +2370,7 @@ public final class SettlementMinerWork {
 	}
 
 	private static boolean requiresLadderSupportReplacement(BlockPos targetPos, MineSite mineSite, int bottomUp) {
-		for (int up = mineSite.layout().starterMinUp(); up <= bottomUp; up++) {
+		for (int up = mineSite.layout().starterMinUp(); up >= bottomUp; up--) {
 			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
 				BlockPos supportPos = worldPos(mineSite.buildSite(), ladderColumn, up).relative(mineSite.supportDirection());
 
@@ -1477,6 +2381,11 @@ public final class SettlementMinerWork {
 		}
 
 		return false;
+	}
+
+	private static boolean requiresShaftStructureReplacement(BlockPos targetPos, MineSite mineSite, int bottomUp) {
+		return requiresLadderSupportReplacement(targetPos, mineSite, bottomUp)
+			|| isProtectedStarterShaftWall(targetPos, mineSite);
 	}
 
 	private static boolean isRequiredLadderSupport(BlockPos targetPos, MineSite mineSite) {
@@ -1585,12 +2494,12 @@ public final class SettlementMinerWork {
 	}
 
 	private static BlockState supportReplacementMaterial(Map<String, Integer> stock) {
-		if (stock.getOrDefault("cobblestone", 0) > 0) {
-			return Blocks.COBBLESTONE.defaultBlockState();
-		}
-
 		if (stock.getOrDefault("dirt", 0) > 0) {
 			return Blocks.DIRT.defaultBlockState();
+		}
+
+		if (stock.getOrDefault("cobblestone", 0) > 0) {
+			return Blocks.COBBLESTONE.defaultBlockState();
 		}
 
 		return null;
@@ -1612,7 +2521,10 @@ public final class SettlementMinerWork {
 			|| state.is(Blocks.DIAMOND_ORE)
 			|| state.is(Blocks.DEEPSLATE_DIAMOND_ORE)
 			|| state.is(Blocks.EMERALD_ORE)
-			|| state.is(Blocks.DEEPSLATE_EMERALD_ORE);
+			|| state.is(Blocks.DEEPSLATE_EMERALD_ORE)
+			|| state.is(Blocks.AMETHYST_CLUSTER)
+			|| state.is(Blocks.AMETHYST_BLOCK)
+			|| state.is(Blocks.CALCITE);
 	}
 
 	private static boolean isUsefulStone(BlockState state) {
@@ -1641,12 +2553,32 @@ public final class SettlementMinerWork {
 		return state.isAir() || state.is(Blocks.LADDER) || isShaftLight(state);
 	}
 
+	private static boolean isValidShaftOpenCell(ServerLevel level, MineSite mineSite, BlockPos pos, BlockState state) {
+		return !isShaftLight(state) || shaftLightSupportDirection(level, mineSite, pos)
+			.map(supportDirection -> state.hasProperty(WallTorchBlock.FACING)
+				&& state.getValue(WallTorchBlock.FACING) == supportDirection.getOpposite()
+				&& state.canSurvive(level, pos))
+			.orElse(false);
+	}
+
 	private static boolean isClearTunnelCell(BlockState state) {
 		return state.isAir() || isCaveLight(state) || state.getBlock() instanceof WallSignBlock;
 	}
 
 	private static boolean isStableLadderSupport(BlockState state) {
 		return !state.isAir() && state.isSolid();
+	}
+
+	private static Optional<Direction> shaftLightSupportDirection(ServerLevel level, MineSite mineSite, BlockPos targetPos) {
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos supportPos = targetPos.relative(direction);
+			if (!isShaftColumnAt(mineSite, supportPos, targetPos.getY())
+				&& isStableLadderSupport(level.getBlockState(supportPos))) {
+				return Optional.of(direction);
+			}
+		}
+
+		return Optional.empty();
 	}
 
 	private static boolean isStandableCaveCell(ServerLevel level, BlockPos pos) {
@@ -1675,8 +2607,14 @@ public final class SettlementMinerWork {
 		return false;
 	}
 
-	private static BlockState preferredShaftLightState(Map<String, Integer> stock, MineSite mineSite) {
-		Direction torchFacing = mineSite.supportDirection();
+	private static BlockState preferredShaftLightState(ServerLevel level, Map<String, Integer> stock, MineSite mineSite, BlockPos targetPos) {
+		Optional<Direction> torchSupportDirection = shaftLightSupportDirection(level, mineSite, targetPos);
+
+		if (torchSupportDirection.isEmpty()) {
+			return null;
+		}
+
+		Direction torchFacing = torchSupportDirection.get().getOpposite();
 
 		if (canSupplyCopperTorch(stock)) {
 			return Blocks.COPPER_WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, torchFacing);
@@ -1774,7 +2712,16 @@ public final class SettlementMinerWork {
 			? task.standPos()
 			: shaftTravelStandPos(level, mineSite, task.standPos()).orElse(task.standPos());
 
-		if (tryAdvanceMinerDownShaft(level, miner, mineSite, shaftTravelPos)) {
+		boolean advancedInShaft = tryAdvanceMinerDownShaft(level, miner, mineSite, shaftTravelPos);
+		if (advancedInShaft && level.getBlockState(task.standPos()).is(Blocks.LADDER)) {
+			return;
+		}
+
+		if (advancedInShaft && !miner.blockPosition().equals(shaftTravelPos)) {
+			return;
+		}
+
+		if (tryStepMinerTowardMineStand(level, miner, mineSite, task.standPos())) {
 			return;
 		}
 
@@ -1784,6 +2731,85 @@ public final class SettlementMinerWork {
 			task.standPos().getZ() + 0.5D,
 			MINING_WALK_SPEED
 		);
+	}
+
+	private static boolean tryStepMinerTowardMineStand(ServerLevel level, Villager miner, MineSite mineSite, BlockPos targetStandPos) {
+		BlockPos currentPos = miner.blockPosition();
+
+		if (currentPos.equals(targetStandPos)) {
+			return true;
+		}
+
+		Optional<BlockPos> pathStep = minePathStepToward(level, mineSite, currentPos, targetStandPos);
+		if (pathStep.isEmpty()) {
+			return false;
+		}
+
+		miner.getNavigation().stop();
+		placeVillagerSafely(miner, pathStep.get());
+		return true;
+	}
+
+	private static Optional<BlockPos> minePathStepToward(ServerLevel level, MineSite mineSite, BlockPos startPos, BlockPos targetPos) {
+		ArrayDeque<BlockPos> frontier = new ArrayDeque<>();
+		Map<BlockPos, BlockPos> previousByPos = new HashMap<>();
+		Set<BlockPos> visited = new HashSet<>();
+
+		BlockPos start = startPos.immutable();
+		BlockPos target = targetPos.immutable();
+		frontier.add(start);
+		visited.add(start);
+
+		while (!frontier.isEmpty() && visited.size() <= SURFACE_RETURN_PATH_SEARCH_NODES) {
+			BlockPos current = frontier.removeFirst();
+
+			if (!current.equals(start) && current.equals(target)) {
+				BlockPos step = current;
+				BlockPos previous = previousByPos.get(step);
+
+				while (previous != null && !previous.equals(start)) {
+					step = previous;
+					previous = previousByPos.get(step);
+				}
+
+				return Optional.of(step.immutable());
+			}
+
+			for (BlockPos next : mineTravelNeighbors(level, mineSite, start, current)) {
+				if (!visited.add(next)) {
+					continue;
+				}
+
+				previousByPos.put(next, current);
+				frontier.addLast(next);
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static List<BlockPos> mineTravelNeighbors(ServerLevel level, MineSite mineSite, BlockPos startPos, BlockPos currentPos) {
+		List<BlockPos> neighbors = new ArrayList<>(8);
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			for (int dy = -1; dy <= 1; dy++) {
+				BlockPos candidate = currentPos.relative(direction).offset(0, dy, 0);
+				if (isWithinSurfaceReturnSearch(startPos, candidate) && isSurfaceReturnCell(level, mineSite, candidate)) {
+					neighbors.add(candidate.immutable());
+				}
+			}
+		}
+
+		if (isExistingMineLadder(level, mineSite, currentPos)) {
+			for (Direction direction : List.of(Direction.UP, Direction.DOWN)) {
+				BlockPos candidate = currentPos.relative(direction);
+				if (isWithinSurfaceReturnSearch(startPos, candidate) && isExistingMineLadder(level, mineSite, candidate)) {
+					neighbors.add(candidate.immutable());
+				}
+			}
+		}
+
+		return neighbors;
 	}
 
 	private static Optional<BlockPos> shaftTravelStandPos(ServerLevel level, MineSite mineSite, BlockPos targetStandPos) {
@@ -1819,11 +2845,29 @@ public final class SettlementMinerWork {
 		Villager miner,
 		MineSite mineSite
 	) {
+		return moveMinerTowardSurface(level, settlement, stock, miner, mineSite, SURFACE_RETURN_STEPS_PER_PASS);
+	}
+
+	private static boolean moveMinerTowardSurface(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager miner,
+		MineSite mineSite,
+		int maxSteps
+	) {
 		BlockPos startPos = miner.blockPosition();
+		refreshMineMouthClearance(level, miner, mineSite);
+
+		if (needsMineMouthExit(level, miner, mineSite) && tryExitTopOfMineLadder(level, miner, mineSite)) {
+			refreshMineMouthClearance(level, miner, mineSite);
+			return true;
+		}
+
 		boolean changed = placeSurfaceReturnRescueLadder(level, stock, miner, mineSite);
 		boolean moved = false;
 
-		for (int step = 0; step < SURFACE_RETURN_STEPS_PER_PASS; step++) {
+		for (int step = 0; step < maxSteps; step++) {
 			if (!moveMinerOneStepTowardSurface(level, miner, mineSite)) {
 				break;
 			}
@@ -1833,11 +2877,33 @@ public final class SettlementMinerWork {
 			}
 		}
 
-		if (!moved && startPos.equals(miner.blockPosition()) && startPos.getY() < surfaceLadderY(mineSite) - 2) {
-			logSurfaceReturnDiagnostic(level, settlement, miner, mineSite, "surface_return_blocked");
+		if (!moved && startPos.equals(miner.blockPosition())) {
+			if (needsMineMouthExit(level, miner, mineSite) && tryExitTopOfMineLadder(level, miner, mineSite)) {
+				refreshMineMouthClearance(level, miner, mineSite);
+				return true;
+			}
+
+			if (startPos.getY() < surfaceLadderY(mineSite) - 2) {
+				logSurfaceReturnDiagnostic(level, settlement, miner, mineSite, "surface_return_blocked");
+			} else {
+				logSurfaceReturnDiagnostic(level, settlement, miner, mineSite, "top_ladder_no_exit");
+			}
 		}
 
 		return changed || moved;
+	}
+
+	private static boolean isNearMineSurface(BlockPos pos, MineSite mineSite) {
+		int surfaceY = surfaceLadderY(mineSite);
+		if (pos.getY() < surfaceY - 4 || pos.getY() > surfaceY + 4) {
+			return false;
+		}
+
+		return allShaftColumns(mineSite).stream()
+			.anyMatch(column -> {
+				BlockPos shaftPos = worldPos(mineSite.buildSite(), column, -1);
+				return shaftPos.getX() == pos.getX() && shaftPos.getZ() == pos.getZ();
+			});
 	}
 
 	private static boolean placeSurfaceReturnRescueLadder(ServerLevel level, Map<String, Integer> stock, Villager miner, MineSite mineSite) {
@@ -1885,33 +2951,42 @@ public final class SettlementMinerWork {
 
 	private static boolean moveMinerOneStepTowardSurface(ServerLevel level, Villager miner, MineSite mineSite) {
 		BlockPos currentPos = miner.blockPosition();
-		BlockPos surfaceLadderPos = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), -1);
-		if (currentPos.getY() >= surfaceLadderPos.getY()) {
-			if (currentPos.getX() == surfaceLadderPos.getX() && currentPos.getZ() == surfaceLadderPos.getZ()) {
-				Optional<BlockPos> exitPos = surfaceExitPos(level, mineSite);
-
-				if (exitPos.isPresent()) {
-					miner.getNavigation().stop();
-					miner.setPos(exitPos.get().getX() + 0.5D, exitPos.get().getY(), exitPos.get().getZ() + 0.5D);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
 		Optional<BlockPos> currentLadderPos = currentLadderPos(level, mineSite, currentPos);
 
 		if (currentLadderPos.isPresent()) {
-			BlockPos topLadderPos = topLadderPosForTarget(mineSite, currentLadderPos.get());
+			Optional<BlockPos> topLadderPos = topExistingLadderPos(level, mineSite, currentLadderPos.get());
 
-			if (topLadderPos != null && currentLadderPos.get().getY() < topLadderPos.getY()) {
+			if (topLadderPos.isPresent() && currentLadderPos.get().getY() >= topLadderPos.get().getY() - 1) {
+				return tryExitTopOfMineLadder(level, miner, mineSite);
+			}
+
+			if (topLadderPos.isPresent() && currentLadderPos.get().getY() < topLadderPos.get().getY()) {
+				BlockPos topLadder = topLadderPos.get();
+				Optional<BlockPos> ladderPathExitPos = surfaceExitPos(level, mineSite);
+				if (ladderPathExitPos.isPresent() && hasContinuousLadderPath(level, currentLadderPos.get(), topLadder)) {
+					miner.getNavigation().stop();
+					placeVillagerSafely(miner, ladderPathExitPos.get());
+					return true;
+				}
+
 				BlockPos nextPos = currentLadderPos.get().above();
 
 				if (level.getBlockState(nextPos).is(Blocks.LADDER)) {
 					miner.getNavigation().stop();
-					miner.setPos(nextPos.getX() + 0.5D, nextPos.getY(), nextPos.getZ() + 0.5D);
+					placeVillagerSafely(miner, nextPos);
 					return true;
+				}
+
+				Optional<BlockPos> higherLadderPos = nearestHigherExistingLadderPos(level, mineSite, currentLadderPos.get());
+				if (higherLadderPos.isPresent()
+					&& higherLadderPos.get().distSqr(currentLadderPos.get()) <= SURFACE_RETURN_RESCUE_SNAP_DISTANCE_SQUARED) {
+					miner.getNavigation().stop();
+					placeVillagerSafely(miner, higherLadderPos.get());
+					return true;
+				}
+
+				if (currentLadderPos.get().distSqr(topLadder) <= SURFACE_RETURN_RESCUE_SNAP_DISTANCE_SQUARED) {
+					return tryExitTopOfMineLadder(level, miner, mineSite);
 				}
 			}
 
@@ -1924,7 +2999,7 @@ public final class SettlementMinerWork {
 			Optional<BlockPos> pathStep = returnPathStepTowardLadder(level, mineSite, currentPos);
 			if (pathStep.isPresent()) {
 				miner.getNavigation().stop();
-				miner.setPos(pathStep.get().getX() + 0.5D, pathStep.get().getY(), pathStep.get().getZ() + 0.5D);
+				placeVillagerSafely(miner, pathStep.get());
 				return true;
 			}
 
@@ -1932,13 +3007,14 @@ public final class SettlementMinerWork {
 				return true;
 			}
 
-			if (miner.distanceToSqr(
+			double nearestLadderDistanceSquared = miner.distanceToSqr(
 				nearestLadderPos.get().getX() + 0.5D,
 				nearestLadderPos.get().getY(),
 				nearestLadderPos.get().getZ() + 0.5D
-			) <= SHAFT_ENTRY_SNAP_DISTANCE_SQUARED) {
+			);
+			if (nearestLadderDistanceSquared <= SURFACE_RETURN_RESCUE_SNAP_DISTANCE_SQUARED) {
 				miner.getNavigation().stop();
-				miner.setPos(nearestLadderPos.get().getX() + 0.5D, nearestLadderPos.get().getY(), nearestLadderPos.get().getZ() + 0.5D);
+				placeVillagerSafely(miner, nearestLadderPos.get());
 				return true;
 			}
 
@@ -1955,6 +3031,37 @@ public final class SettlementMinerWork {
 
 	private static int surfaceLadderY(MineSite mineSite) {
 		return worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), -1).getY();
+	}
+
+	private static List<BlockPos> surfaceLadderPositions(MineSite mineSite) {
+		return mineSite.layout().ladderColumns().stream()
+			.map(column -> worldPos(mineSite.buildSite(), column, -1))
+			.toList();
+	}
+
+	private static Optional<BlockPos> surfaceLadderPosForColumn(MineSite mineSite, BlockPos pos) {
+		return surfaceLadderPositions(mineSite).stream()
+			.filter(ladderPos -> ladderPos.getX() == pos.getX() && ladderPos.getZ() == pos.getZ())
+			.findFirst();
+	}
+
+	private static boolean isSurfaceLadderColumn(MineSite mineSite, BlockPos pos) {
+		return surfaceLadderPosForColumn(mineSite, pos)
+			.map(ladderPos -> pos.getY() >= ladderPos.getY() - 4 && pos.getY() <= ladderPos.getY() + 4)
+			.orElse(false);
+	}
+
+	private static boolean isMineMouthShaftColumn(MineSite mineSite, BlockPos pos) {
+		int surfaceY = surfaceLadderY(mineSite);
+		if (pos.getY() < surfaceY - 4 || pos.getY() > surfaceY + 4) {
+			return false;
+		}
+
+		return allShaftColumns(mineSite).stream()
+			.anyMatch(column -> {
+				BlockPos shaftPos = worldPos(mineSite.buildSite(), column, -1);
+				return shaftPos.getX() == pos.getX() && shaftPos.getZ() == pos.getZ();
+			});
 	}
 
 	private static Optional<BlockPos> returnPathStepTowardLadder(ServerLevel level, MineSite mineSite, BlockPos startPos) {
@@ -2018,7 +3125,7 @@ public final class SettlementMinerWork {
 
 	private static boolean isWithinSurfaceReturnSearch(BlockPos startPos, BlockPos candidate) {
 		return Math.abs(candidate.getX() - startPos.getX()) <= SURFACE_RETURN_PATH_SEARCH_BLOCKS
-			&& Math.abs(candidate.getY() - startPos.getY()) <= 2
+			&& Math.abs(candidate.getY() - startPos.getY()) <= 16
 			&& Math.abs(candidate.getZ() - startPos.getZ()) <= SURFACE_RETURN_PATH_SEARCH_BLOCKS;
 	}
 
@@ -2073,7 +3180,7 @@ public final class SettlementMinerWork {
 			}
 
 			miner.getNavigation().stop();
-			miner.setPos(candidate.getX() + 0.5D, candidate.getY(), candidate.getZ() + 0.5D);
+			placeVillagerSafely(miner, candidate);
 			return true;
 		}
 
@@ -2095,7 +3202,11 @@ public final class SettlementMinerWork {
 			}
 
 			miner.getNavigation().stop();
-			miner.setPos(topLadderPos.getX() + 0.5D, topLadderPos.getY(), topLadderPos.getZ() + 0.5D);
+			if (hasContinuousLadderPath(level, topLadderPos, targetStandPos)) {
+				placeVillagerSafely(miner, targetStandPos);
+			} else {
+				placeVillagerSafely(miner, topLadderPos);
+			}
 			return true;
 		}
 
@@ -2103,7 +3214,25 @@ public final class SettlementMinerWork {
 			return false;
 		}
 
-		if (currentLadderPos.getY() <= targetStandPos.getY()) {
+		if (currentLadderPos.getY() == targetStandPos.getY()) {
+			return true;
+		}
+
+		if (currentLadderPos.getY() < targetStandPos.getY()) {
+			BlockPos nextPos = currentLadderPos.above();
+
+			if (!level.getBlockState(nextPos).is(Blocks.LADDER)) {
+				return false;
+			}
+
+			miner.getNavigation().stop();
+			placeVillagerSafely(miner, nextPos);
+			return true;
+		}
+
+		if (hasContinuousLadderPath(level, currentLadderPos, targetStandPos)) {
+			miner.getNavigation().stop();
+			placeVillagerSafely(miner, targetStandPos);
 			return true;
 		}
 
@@ -2114,7 +3243,23 @@ public final class SettlementMinerWork {
 		}
 
 		miner.getNavigation().stop();
-		miner.setPos(nextPos.getX() + 0.5D, nextPos.getY(), nextPos.getZ() + 0.5D);
+		placeVillagerSafely(miner, nextPos);
+		return true;
+	}
+
+	private static boolean hasContinuousLadderPath(ServerLevel level, BlockPos fromPos, BlockPos toPos) {
+		if (fromPos.getX() != toPos.getX() || fromPos.getZ() != toPos.getZ()) {
+			return false;
+		}
+
+		int minY = Math.min(fromPos.getY(), toPos.getY());
+		int maxY = Math.max(fromPos.getY(), toPos.getY());
+		for (int y = minY; y <= maxY; y++) {
+			if (!level.getBlockState(new BlockPos(fromPos.getX(), y, fromPos.getZ())).is(Blocks.LADDER)) {
+				return false;
+			}
+		}
+
 		return true;
 	}
 
@@ -2157,23 +3302,177 @@ public final class SettlementMinerWork {
 		return null;
 	}
 
+	private static Optional<BlockPos> topExistingLadderPos(ServerLevel level, MineSite mineSite, BlockPos columnReference) {
+		BlockPos bestPos = null;
+
+		for (BlockPos ladderPos : existingMineLadderPositions(level, mineSite)) {
+			if (ladderPos.getX() != columnReference.getX() || ladderPos.getZ() != columnReference.getZ()) {
+				continue;
+			}
+
+			if (bestPos == null || ladderPos.getY() > bestPos.getY()) {
+				bestPos = ladderPos.immutable();
+			}
+		}
+
+		return Optional.ofNullable(bestPos);
+	}
+
+	private static boolean tryExitTopOfMineLadder(ServerLevel level, Villager miner, MineSite mineSite) {
+		if (!needsMineMouthExit(level, miner, mineSite)) {
+			return false;
+		}
+
+		BlockPos currentPos = miner.blockPosition();
+		Optional<BlockPos> currentLadderPos = currentLadderPos(level, mineSite, currentPos);
+		BlockPos ladderPos = currentLadderPos.orElse(currentPos);
+		Optional<BlockPos> topLadderPos = topExistingLadderPos(level, mineSite, ladderPos);
+
+		for (BlockPos stepPos : topLadderExitStepCandidates(level, mineSite, topLadderPos.orElse(ladderPos), null)) {
+			if (stepPos.equals(currentPos)) {
+				continue;
+			}
+
+			miner.getNavigation().stop();
+			placeVillagerSafely(miner, stepPos);
+			refreshMineMouthClearance(level, miner, mineSite);
+			return true;
+		}
+
+		Optional<BlockPos> exitPos = surfaceExitPos(level, mineSite);
+		if (exitPos.isPresent() && !exitPos.get().equals(currentPos)) {
+			miner.getNavigation().stop();
+			placeVillagerSafely(miner, exitPos.get());
+			refreshMineMouthClearance(level, miner, mineSite);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static boolean needsMineMouthExit(ServerLevel level, Villager miner, MineSite mineSite) {
+		if (hasClearedMineMouth(miner)) {
+			return false;
+		}
+
+		BlockPos pos = miner.blockPosition();
+		if (pos.getY() < surfaceLadderY(mineSite) - 3) {
+			return true;
+		}
+
+		return isInsideMineShaftColumn(level, mineSite, pos) || currentLadderPos(level, mineSite, pos).isPresent();
+	}
+
+	private static boolean hasClearedMineMouth(Villager miner) {
+		return CLEARED_MINE_MOUTH_VILLAGERS.contains(miner.getUUID().toString());
+	}
+
+	private static void refreshMineMouthClearance(ServerLevel level, Villager miner, MineSite mineSite) {
+		BlockPos pos = miner.blockPosition();
+		String minerId = miner.getUUID().toString();
+
+		if (isInsideMineShaftColumn(level, mineSite, pos) || currentLadderPos(level, mineSite, pos).isPresent()) {
+			CLEARED_MINE_MOUTH_VILLAGERS.remove(minerId);
+			return;
+		}
+
+		if (!isNearMineSurface(pos, mineSite) || horizontalDistanceToNearestShaftColumn(pos, mineSite) >= MINE_MOUTH_CLEARANCE_HORIZONTAL_BLOCKS) {
+			CLEARED_MINE_MOUTH_VILLAGERS.add(minerId);
+		}
+	}
+
+	private static int horizontalDistanceToNearestShaftColumn(BlockPos pos, MineSite mineSite) {
+		int bestDistance = Integer.MAX_VALUE;
+
+		for (ShaftColumn column : allShaftColumns(mineSite)) {
+			BlockPos shaftPos = worldPos(mineSite.buildSite(), column, -1);
+			int distance = Math.max(Math.abs(pos.getX() - shaftPos.getX()), Math.abs(pos.getZ() - shaftPos.getZ()));
+			bestDistance = Math.min(bestDistance, distance);
+		}
+
+		return bestDistance;
+	}
+
+	private static List<BlockPos> topLadderExitStepCandidates(
+		ServerLevel level,
+		MineSite mineSite,
+		BlockPos ladderPos,
+		BlockPos sortTarget
+	) {
+		Set<BlockPos> candidates = new LinkedHashSet<>();
+
+		for (int dy = -1; dy <= 2; dy++) {
+			BlockPos origin = ladderPos.offset(0, dy, 0);
+			candidates.add(origin.above());
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				candidates.add(origin.relative(direction));
+				candidates.add(origin.relative(direction).above());
+			}
+		}
+
+		Comparator<BlockPos> ordering = sortTarget == null
+			? Comparator.<BlockPos>comparingDouble(candidate -> candidate.distSqr(mineSite.buildSite().workstationPos())).reversed()
+			: Comparator.comparingDouble(candidate -> candidate.distSqr(sortTarget));
+
+		return candidates.stream()
+			.filter(candidate -> !isNearMineSurface(candidate, mineSite))
+			.filter(candidate -> isWalkableSurfaceCell(level, candidate) || isStandableSurfaceCell(level, candidate))
+			.sorted(ordering)
+			.toList();
+	}
+
 	private static Optional<BlockPos> nearestExistingLadderPos(ServerLevel level, MineSite mineSite, BlockPos currentPos) {
 		BlockPos bestPos = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (BlockPos ladderPos : existingMineLadderPositions(level, mineSite)) {
+			double distanceSquared = ladderPos.distSqr(currentPos);
+
+			if (bestPos == null || distanceSquared < bestDistanceSquared) {
+				bestPos = ladderPos.immutable();
+				bestDistanceSquared = distanceSquared;
+			}
+		}
+
+		return Optional.ofNullable(bestPos);
+	}
+
+	private static List<BlockPos> existingMineLadderPositions(ServerLevel level, MineSite mineSite) {
+		List<BlockPos> ladderPositions = new ArrayList<>();
 
 		for (int up = mineSite.layout().starterMinUp() - MAX_SHAFT_DEPTH_BLOCKS; up <= -1; up++) {
 			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
 				BlockPos ladderPos = worldPos(mineSite.buildSite(), ladderColumn, up);
 
-				if (!level.getBlockState(ladderPos).is(Blocks.LADDER)) {
+				if (level.getBlockState(ladderPos).is(Blocks.LADDER)) {
+					ladderPositions.add(ladderPos.immutable());
+				}
+			}
+		}
+
+		return ladderPositions;
+	}
+
+	private static Optional<BlockPos> nearestHigherExistingLadderPos(ServerLevel level, MineSite mineSite, BlockPos currentLadderPos) {
+		BlockPos bestPos = null;
+		int bestVerticalDistance = Integer.MAX_VALUE;
+
+		for (int up = mineSite.layout().starterMinUp() - MAX_SHAFT_DEPTH_BLOCKS; up <= -1; up++) {
+			for (ShaftColumn ladderColumn : mineSite.layout().ladderColumns()) {
+				BlockPos ladderPos = worldPos(mineSite.buildSite(), ladderColumn, up);
+
+				if (ladderPos.getX() != currentLadderPos.getX()
+					|| ladderPos.getZ() != currentLadderPos.getZ()
+					|| ladderPos.getY() <= currentLadderPos.getY()
+					|| !level.getBlockState(ladderPos).is(Blocks.LADDER)) {
 					continue;
 				}
 
-				double distanceSquared = ladderPos.distSqr(currentPos);
-
-				if (bestPos == null || distanceSquared < bestDistanceSquared) {
+				int verticalDistance = ladderPos.getY() - currentLadderPos.getY();
+				if (bestPos == null || verticalDistance < bestVerticalDistance) {
 					bestPos = ladderPos.immutable();
-					bestDistanceSquared = distanceSquared;
+					bestVerticalDistance = verticalDistance;
 				}
 			}
 		}
@@ -2221,6 +3520,72 @@ public final class SettlementMinerWork {
 				.orElse("n/a"),
 			returnPathStep.map(BlockPos::toShortString).orElse("none")
 		);
+	}
+
+	private static String minerWorkSummary(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, Villager miner, MineSite mineSite) {
+		int bottomUp = deepestCompleteShaftUp(level, mineSite);
+		List<BlockPos> frontierCells = shaftFrontierCells(mineSite, bottomUp);
+		Optional<BlockPos> standPos = standPosFor(miner, mineSite, bottomUp);
+		return "villager=" + miner.getUUID()
+			+ " pos=" + miner.blockPosition().toShortString()
+			+ " mine=" + mineSite.buildSite().workstationPos().toShortString()
+			+ " bottomY=" + worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), bottomUp).getY()
+			+ " stand=" + standPos.map(BlockPos::toShortString).orElse("none")
+			+ " currentLadder=" + currentLadderPos(level, mineSite, miner.blockPosition()).map(BlockPos::toShortString).orElse("none")
+			+ " nearestLadder=" + nearestExistingLadderPos(level, mineSite, miner.blockPosition()).map(BlockPos::toShortString).orElse("none")
+			+ " frontier=" + frontierCells.size()
+			+ " primary=" + primaryTunnelProgressSummary(level, settlement, mineSite, bottomUp)
+			+ " ladders=" + stock.getOrDefault("ladder", 0)
+			+ " torches=" + stock.getOrDefault("torch", 0)
+			+ " copperTorches=" + stock.getOrDefault("copper_torch", 0)
+			+ " dirt=" + stock.getOrDefault("dirt", 0)
+			+ " cobble=" + stock.getOrDefault("cobblestone", 0);
+	}
+
+	private static String primaryTunnelProgressSummary(ServerLevel level, SettlementState settlement, MineSite mineSite, int bottomUp) {
+		List<PrimaryTunnelBranch> branches = plannedPrimaryTunnelBranches(mineSite, bottomUp);
+		int openRows = 0;
+		int plannedRows = 0;
+		int completeBranches = 0;
+
+		for (PrimaryTunnelBranch branch : branches) {
+			int length = primaryTunnelLengthBlocks(settlement, mineSite, branch);
+			plannedRows += length;
+			int branchOpenRows = 0;
+
+			for (int step = 0; step < length; step++) {
+				if (!isPrimaryTunnelRowOpen(level, mineSite, branch, step)) {
+					break;
+				}
+
+				branchOpenRows++;
+			}
+
+			openRows += branchOpenRows;
+			if (length > 0 && branchOpenRows >= length) {
+				completeBranches++;
+			}
+		}
+
+		return branches.size() + "branches/" + completeBranches + "complete/" + openRows + "of" + plannedRows + "rows";
+	}
+
+	private static String minerTaskSummary(ServerLevel level, Villager miner, MineSite mineSite, MinerTask task) {
+		return "villager=" + miner.getUUID()
+			+ " pos=" + miner.blockPosition().toShortString()
+			+ " action=" + task.action()
+			+ " task=" + task.taskKey()
+			+ " target=" + task.targetPos().toShortString()
+			+ " stand=" + task.standPos().toShortString()
+			+ " targetDistance=" + Math.round(Math.sqrt(miner.blockPosition().distSqr(task.targetPos())) * 10.0D) / 10.0D
+			+ " canReach=" + canMinerReachTask(miner, task)
+			+ " currentLadder=" + currentLadderPos(level, mineSite, miner.blockPosition()).map(BlockPos::toShortString).orElse("none")
+			+ " standReachable=" + isMineReachableStandPos(level, mineSite, task.standPos());
+	}
+
+	private static boolean isMineReachableStandPos(ServerLevel level, MineSite mineSite, BlockPos standPos) {
+		return isExistingMineLadder(level, mineSite, standPos)
+			|| returnPathStepTowardLadder(level, mineSite, standPos).isPresent();
 	}
 
 	private static Optional<BlockPos> adjacentCaveStandPos(BlockPos targetPos, List<BlockPos> standPositions) {
@@ -2290,12 +3655,15 @@ public final class SettlementMinerWork {
 	}
 
 	private static Optional<BlockPos> surfaceExitPos(ServerLevel level, MineSite mineSite) {
-		BlockPos surfaceLadderPos = worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), -1);
+		List<BlockPos> surfaceLadderPositions = surfaceLadderPositions(mineSite);
+		BlockPos firstSurfaceLadderPos = surfaceLadderPositions.getFirst();
 		List<BlockPos> candidates = new ArrayList<>();
 		BlockPos workstationPos = mineSite.buildSite().workstationPos();
 
-		for (Direction direction : Direction.Plane.HORIZONTAL) {
-			candidates.add(surfaceLadderPos.relative(direction));
+		for (BlockPos surfaceLadderPos : surfaceLadderPositions) {
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				candidates.add(surfaceLadderPos.relative(direction));
+			}
 		}
 
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
@@ -2304,18 +3672,45 @@ public final class SettlementMinerWork {
 
 		candidates.add(workstationPos.above());
 
+		for (int radius = 1; radius <= 8; radius++) {
+			for (int dx = -radius; dx <= radius; dx++) {
+				for (int dz = -radius; dz <= radius; dz++) {
+					if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+						continue;
+					}
+
+					for (int dy = -1; dy <= 5; dy++) {
+						for (BlockPos surfaceLadderPos : surfaceLadderPositions) {
+							candidates.add(surfaceLadderPos.offset(dx, dy, dz));
+						}
+						candidates.add(workstationPos.offset(dx, dy, dz));
+					}
+				}
+			}
+		}
+
 		return candidates.stream()
-			.filter(candidate -> candidate.getY() >= surfaceLadderPos.getY())
-			.filter(candidate -> isStandableSurfaceCell(level, candidate))
-			.sorted(Comparator.comparingDouble(candidate -> candidate.distSqr(workstationPos)))
+			.filter(candidate -> candidate.getY() >= firstSurfaceLadderPos.getY() - 1)
+			.filter(candidate -> !isNearMineSurface(candidate, mineSite))
+			.filter(candidate -> isWalkableSurfaceCell(level, candidate) || isStandableSurfaceCell(level, candidate))
+			.sorted(Comparator
+				.comparingDouble((BlockPos candidate) -> Math.abs(candidate.getY() - firstSurfaceLadderPos.getY()))
+				.thenComparingDouble(candidate -> candidate.distSqr(workstationPos)))
 			.findFirst()
 			.map(BlockPos::immutable);
 	}
 
 	private static boolean isStandableSurfaceCell(ServerLevel level, BlockPos pos) {
-		return level.getBlockState(pos).isAir()
+		return level.hasChunkAt(pos)
+			&& level.getBlockState(pos).isAir()
 			&& level.getBlockState(pos.above()).isAir()
 			&& level.getBlockState(pos.below()).isSolid();
+	}
+
+	private static void placeVillagerSafely(Villager villager, BlockPos pos) {
+		villager.setDeltaMovement(0.0D, 0.0D, 0.0D);
+		villager.fallDistance = 0.0F;
+		villager.setPos(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D);
 	}
 
 	private static BlockState findTemplateLadderState(ServerLevel level, SettlementBuildSite buildSite, ShaftLayout layout) {
@@ -2359,19 +3754,46 @@ public final class SettlementMinerWork {
 		return null;
 	}
 
+	private static Optional<Direction> intendedShaftSupportDirection(SettlementBuildSite buildSite, ShaftLayout layout) {
+		Set<ShaftColumn> openColumns = new HashSet<>(layout.openColumns());
+
+		for (RelativeDirection direction : RelativeDirection.values()) {
+			boolean openSide = layout.ladderColumns().stream()
+				.allMatch(ladderColumn -> openColumns.contains(new ShaftColumn(
+					ladderColumn.right() + direction.rightStep(),
+					ladderColumn.forward() + direction.forwardStep()
+				)));
+
+			if (openSide) {
+				return Optional.of(direction.worldDirection(buildSite.facing()).getOpposite());
+			}
+		}
+
+		return Optional.empty();
+	}
+
 	private static ShaftLayout shaftLayout(SettlementBuildSite buildSite) {
+		List<SettlementBuildBlockState> shaftBlocks = buildSite.blocks().stream()
+			.filter(block -> !block.blueprintSymbol().isBlank())
+			.filter(block -> {
+				char symbol = block.blueprintSymbol().charAt(0);
+				return symbol == 'R' || symbol == 'E';
+			})
+			.toList();
 		Set<ShaftColumn> ladderColumns = new LinkedHashSet<>();
 		Set<ShaftColumn> openColumns = new LinkedHashSet<>();
-		int starterMinUp = -1;
+		int starterMinUp = shaftBlocks.stream()
+			.map(SettlementBuildBlockState::position)
+			.map(SettlementMinerWork::parseRelativePos)
+			.filter(pos -> pos != null && pos.up() < 0)
+			.mapToInt(BuildRelativePos::up)
+			.min()
+			.orElse(-1);
 
-		for (SettlementBuildBlockState block : buildSite.blocks()) {
-			if (block.blueprintSymbol().isBlank()) {
-				continue;
-			}
-
+		for (SettlementBuildBlockState block : shaftBlocks) {
 			BuildRelativePos relativePos = parseRelativePos(block.position());
 
-			if (relativePos == null || relativePos.up() >= 0) {
+			if (relativePos == null || relativePos.up() != starterMinUp) {
 				continue;
 			}
 
@@ -2379,10 +3801,8 @@ public final class SettlementMinerWork {
 
 			if (symbol == 'R') {
 				ladderColumns.add(new ShaftColumn(relativePos.right(), relativePos.forward()));
-				starterMinUp = Math.min(starterMinUp, relativePos.up());
 			} else if (symbol == 'E') {
 				openColumns.add(new ShaftColumn(relativePos.right(), relativePos.forward()));
-				starterMinUp = Math.min(starterMinUp, relativePos.up());
 			}
 		}
 
@@ -2397,6 +3817,48 @@ public final class SettlementMinerWork {
 
 	private static BlockPos worldPos(SettlementBuildSite buildSite, ShaftColumn column, int up) {
 		return offset(buildSite.origin(), buildSite.facing(), column.right(), column.forward(), up);
+	}
+
+	private static BlockPos shaftLevelStandPos(MineSite mineSite, int up, BlockPos targetPos) {
+		return mineSite.layout().ladderColumns().stream()
+			.map(column -> worldPos(mineSite.buildSite(), column, up))
+			.min(Comparator.comparingDouble(candidate -> candidate.distSqr(targetPos)))
+			.orElseGet(() -> worldPos(mineSite.buildSite(), mineSite.layout().ladderColumns().getFirst(), up));
+	}
+
+	private static boolean isProtectedStarterShaftWall(BlockPos targetPos, MineSite mineSite) {
+		for (int up = -1; up >= mineSite.layout().starterMinUp(); up--) {
+			if (starterShaftWallPositions(mineSite, up).contains(targetPos)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static Set<BlockPos> starterShaftWallPositions(MineSite mineSite, int up) {
+		Set<BlockPos> wallPositions = new LinkedHashSet<>();
+		List<ShaftColumn> shaftColumns = allShaftColumns(mineSite);
+
+		for (ShaftColumn column : shaftColumns) {
+			BlockPos shaftPos = worldPos(mineSite.buildSite(), column, up);
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos wallPos = shaftPos.relative(direction);
+				if (!isShaftColumnAt(mineSite, wallPos, shaftPos.getY())) {
+					wallPositions.add(wallPos.immutable());
+				}
+			}
+		}
+
+		return wallPositions;
+	}
+
+	private static boolean isShaftColumnAt(MineSite mineSite, BlockPos pos, int y) {
+		return allShaftColumns(mineSite).stream().anyMatch(column -> {
+			BlockPos shaftPos = worldPos(mineSite.buildSite(), column, -1);
+			return shaftPos.getX() == pos.getX() && shaftPos.getZ() == pos.getZ() && pos.getY() == y;
+		});
 	}
 
 	private static BlockPos offset(BlockPos origin, Direction facing, int right, int forward, int up) {
@@ -2416,8 +3878,287 @@ public final class SettlementMinerWork {
 		);
 	}
 
+	private static ActiveMinerWork activeMinerWork(String minerId, long tick) {
+		ActiveMinerWork activeWork = ACTIVE_ASSIGNMENTS.get(minerId);
+
+		if (activeWork == null || tick - activeWork.assignedTick() > TASK_MEMORY_TICKS) {
+			if (activeWork != null) {
+				rememberBlockedMinerTask(minerId, activeWork.task(), tick);
+			}
+			clearMinerAssignment(minerId);
+			return null;
+		}
+
+		return activeWork;
+	}
+
+	private static Optional<MinerTask> availableMinerTask(ServerLevel level, Villager miner, Optional<MinerTask> task) {
+		if (task.isEmpty() || isMinerTaskBlocked(level, miner, task.get())) {
+			return Optional.empty();
+		}
+
+		return task;
+	}
+
+	private static Optional<MinerTask> availableMinerTask(ServerLevel level, Villager miner, MinerTask task) {
+		return availableMinerTask(level, miner, Optional.of(task));
+	}
+
+	private static boolean isMinerTaskBlocked(ServerLevel level, Villager miner, MinerTask task) {
+		String key = minerTaskBlockKey(miner.getUUID().toString(), task);
+		long blockedUntilTick = BLOCKED_MINER_TASKS.getOrDefault(key, Long.MIN_VALUE);
+
+		if (blockedUntilTick == Long.MIN_VALUE) {
+			return false;
+		}
+
+		long tick = level.getServer().getTickCount();
+		if (tick >= blockedUntilTick) {
+			BLOCKED_MINER_TASKS.remove(key);
+			return false;
+		}
+
+		return true;
+	}
+
+	private static void rememberBlockedMinerTask(String minerId, MinerTask task, long tick) {
+		BLOCKED_MINER_TASKS.put(minerTaskBlockKey(minerId, task), tick + FAILED_MINER_TASK_COOLDOWN_TICKS);
+	}
+
+	private static void pruneExpiredMinerTaskBlocks(long tick) {
+		BLOCKED_MINER_TASKS.entrySet().removeIf(entry -> entry.getValue() <= tick);
+	}
+
+	private static String minerTaskBlockKey(String minerId, MinerTask task) {
+		return minerId
+			+ "|" + task.action()
+			+ "|" + task.taskKey()
+			+ "|" + task.targetPos().toShortString()
+			+ "|" + task.standPos().toShortString();
+	}
+
+	private static ActiveMinerWork rememberMinerWork(String minerId, MinerTask task, long tick) {
+		ActiveMinerWork activeWork = new ActiveMinerWork(task, tick);
+		ACTIVE_ASSIGNMENTS.put(minerId, activeWork);
+		return activeWork;
+	}
+
+	private static void clearMinerAssignment(String minerId) {
+		ACTIVE_ASSIGNMENTS.remove(minerId);
+		ACTIVE_TASKS.remove(minerId);
+	}
+
+	private static boolean canMinerReachTask(Villager miner, MinerTask task) {
+		if (isWithinWorkReach(miner, task.targetPos())) {
+			return true;
+		}
+
+		BlockPos minerPos = miner.blockPosition();
+		BlockPos standPos = task.standPos();
+		return minerPos.distSqr(standPos) <= 2.25D && standPos.distSqr(task.targetPos()) <= MINING_WORK_REACH_DISTANCE_SQUARED;
+	}
+
 	private static boolean isWithinWorkReach(Villager miner, BlockPos workPos) {
-		return miner.distanceToSqr(workPos.getX() + 0.5D, workPos.getY() + 0.5D, workPos.getZ() + 0.5D) <= MINING_WORK_REACH_DISTANCE_SQUARED;
+		return miner.blockPosition().distSqr(workPos) <= MINING_WORK_REACH_DISTANCE_SQUARED;
+	}
+
+	private static boolean isMinerEligibleForEveningWalk(ServerLevel level, Villager miner, MineSite mineSite) {
+		BlockPos minerPos = miner.blockPosition();
+		int surfaceY = surfaceLadderY(mineSite);
+
+		if (minerPos.getY() < surfaceY - 8) {
+			return false;
+		}
+
+		return hasClearedMineMouth(miner)
+			|| (!isInsideMineShaftColumn(level, mineSite, minerPos) && horizontalDistanceToNearestShaftColumn(minerPos, mineSite) >= 2);
+	}
+
+	private static boolean isInsideMineShaftColumn(ServerLevel level, MineSite mineSite, BlockPos pos) {
+		int surfaceY = surfaceLadderY(mineSite);
+
+		if (pos.getY() > surfaceY + 2 || pos.getY() < surfaceY - 8) {
+			return false;
+		}
+
+		boolean inShaftColumn = allShaftColumns(mineSite).stream().anyMatch(column -> {
+			BlockPos shaftPos = worldPos(mineSite.buildSite(), column, -1);
+			return shaftPos.getX() == pos.getX() && shaftPos.getZ() == pos.getZ();
+		});
+
+		if (!inShaftColumn) {
+			return false;
+		}
+
+		return isExistingMineLadder(level, mineSite, pos)
+			|| isStandableTunnelCell(level, pos)
+			|| level.getBlockState(pos).is(Blocks.LADDER);
+	}
+
+	private static boolean moveMinerTowardEveningTarget(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager miner,
+		MineSite mineSite
+	) {
+		Optional<BlockPos> targetPos = SettlementVillagers.settlementEveningTargetPos(level, settlement, miner);
+		if (targetPos.isEmpty() || SettlementVillagers.isNearSettlementEveningTarget(level, miner, targetPos.get())) {
+			return false;
+		}
+
+		refreshMineMouthClearance(level, miner, mineSite);
+
+		if (needsMineMouthExit(level, miner, mineSite)) {
+			return tryExitTopOfMineLadder(level, miner, mineSite);
+		}
+
+		BlockPos target = targetPos.get();
+		miner.getNavigation().stop();
+		if (miner.getNavigation().moveTo(target.getX() + 0.5D, target.getY(), target.getZ() + 0.5D, MINING_WALK_SPEED)) {
+			return true;
+		}
+
+		boolean moved = false;
+		BlockPos startPos = miner.blockPosition();
+
+		for (int step = 0; step < EVENING_SURFACE_RETURN_STEPS_PER_PASS; step++) {
+			if (!moveMinerOneStepTowardOverworldTarget(level, miner, mineSite, target)) {
+				break;
+			}
+
+			if (!miner.blockPosition().equals(startPos)) {
+				moved = true;
+			}
+		}
+
+		refreshMineMouthClearance(level, miner, mineSite);
+		return moved;
+	}
+
+	private static boolean moveMinerOneStepTowardOverworldTarget(
+		ServerLevel level,
+		Villager miner,
+		MineSite mineSite,
+		BlockPos targetPos
+	) {
+		BlockPos currentPos = miner.blockPosition();
+		if (SettlementVillagers.isNearSettlementEveningTarget(level, miner, targetPos)) {
+			return false;
+		}
+
+		Optional<BlockPos> pathStep = overworldPathStepToward(level, mineSite, currentPos, targetPos);
+		if (pathStep.isPresent()) {
+			miner.getNavigation().stop();
+			placeVillagerSafely(miner, pathStep.get());
+			return true;
+		}
+
+		miner.getNavigation().moveTo(
+			targetPos.getX() + 0.5D,
+			targetPos.getY(),
+			targetPos.getZ() + 0.5D,
+			MINING_WALK_SPEED
+		);
+		return false;
+	}
+
+	private static Optional<BlockPos> overworldPathStepToward(
+		ServerLevel level,
+		MineSite mineSite,
+		BlockPos startPos,
+		BlockPos targetPos
+	) {
+		ArrayDeque<BlockPos> frontier = new ArrayDeque<>();
+		Map<BlockPos, BlockPos> previousByPos = new HashMap<>();
+		Set<BlockPos> visited = new HashSet<>();
+
+		BlockPos start = startPos.immutable();
+		BlockPos target = targetPos.immutable();
+		frontier.add(start);
+		visited.add(start);
+
+		while (!frontier.isEmpty() && visited.size() <= EVENING_SURFACE_PATH_SEARCH_NODES) {
+			BlockPos current = frontier.removeFirst();
+
+			if (!current.equals(start) && current.equals(target)) {
+				BlockPos step = current;
+				BlockPos previous = previousByPos.get(step);
+
+				while (previous != null && !previous.equals(start)) {
+					step = previous;
+					previous = previousByPos.get(step);
+				}
+
+				return Optional.of(step.immutable());
+			}
+
+			for (BlockPos next : overworldTravelNeighbors(level, mineSite, start, current)) {
+				if (!visited.add(next)) {
+					continue;
+				}
+
+				previousByPos.put(next, current);
+				frontier.addLast(next);
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static List<BlockPos> overworldTravelNeighbors(
+		ServerLevel level,
+		MineSite mineSite,
+		BlockPos startPos,
+		BlockPos currentPos
+	) {
+		List<BlockPos> neighbors = new ArrayList<>(8);
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos candidate = currentPos.relative(direction);
+			if (isEveningTravelCell(level, mineSite, startPos, candidate)) {
+				neighbors.add(candidate.immutable());
+			}
+		}
+
+		for (Direction direction : List.of(Direction.UP, Direction.DOWN)) {
+			BlockPos candidate = currentPos.relative(direction);
+			if (isEveningTravelCell(level, mineSite, startPos, candidate)) {
+				neighbors.add(candidate.immutable());
+			}
+		}
+
+		return neighbors;
+	}
+
+	private static boolean isEveningTravelCell(ServerLevel level, MineSite mineSite, BlockPos startPos, BlockPos candidate) {
+		return isWithinOverworldPathSearch(startPos, candidate)
+			&& isWalkableSurfaceCell(level, candidate)
+			&& !isBlockedMineMouthTravelCell(mineSite, candidate);
+	}
+
+	private static boolean isBlockedMineMouthTravelCell(MineSite mineSite, BlockPos candidate) {
+		return isNearMineSurface(candidate, mineSite) && candidate.getY() <= surfaceLadderY(mineSite) + 1;
+	}
+
+	private static boolean isWithinOverworldPathSearch(BlockPos startPos, BlockPos candidate) {
+		return Math.abs(candidate.getX() - startPos.getX()) <= EVENING_SURFACE_PATH_SEARCH_BLOCKS
+			&& Math.abs(candidate.getY() - startPos.getY()) <= 12
+			&& Math.abs(candidate.getZ() - startPos.getZ()) <= EVENING_SURFACE_PATH_SEARCH_BLOCKS;
+	}
+
+	private static boolean isWalkableSurfaceCell(ServerLevel level, BlockPos pos) {
+		if (!level.hasChunkAt(pos)) {
+			return false;
+		}
+
+		BlockState feetState = level.getBlockState(pos);
+		BlockState belowState = level.getBlockState(pos.below());
+
+		if (feetState.isAir() && belowState.isSolid() && level.getBlockState(pos.above()).isAir()) {
+			return true;
+		}
+
+		return feetState.isSolid() && level.getBlockState(pos.above()).isAir() && level.getBlockState(pos.above(2)).isAir();
 	}
 
 	private static BuildRelativePos parseRelativePos(String position) {
@@ -2449,6 +4190,9 @@ public final class SettlementMinerWork {
 	private record TimedTask(String taskKey, long tick) {
 	}
 
+	private record ActiveMinerWork(MinerTask task, long assignedTick) {
+	}
+
 	private record BuildRelativePos(int right, int forward, int up) {
 	}
 
@@ -2461,6 +4205,38 @@ public final class SettlementMinerWork {
 	private record SecondaryTunnelBranch(BlockPos originPos, Direction direction) {
 		private SecondaryTunnelBranch {
 			originPos = originPos.immutable();
+		}
+	}
+
+	private enum RelativeDirection {
+		FORWARD(0, 1),
+		BACKWARD(0, -1),
+		RIGHT(1, 0),
+		LEFT(-1, 0);
+
+		private final int rightStep;
+		private final int forwardStep;
+
+		RelativeDirection(int rightStep, int forwardStep) {
+			this.rightStep = rightStep;
+			this.forwardStep = forwardStep;
+		}
+
+		private int rightStep() {
+			return rightStep;
+		}
+
+		private int forwardStep() {
+			return forwardStep;
+		}
+
+		private Direction worldDirection(Direction facing) {
+			return switch (this) {
+				case FORWARD -> facing;
+				case BACKWARD -> facing.getOpposite();
+				case RIGHT -> facing.getClockWise();
+				case LEFT -> facing.getCounterClockWise();
+			};
 		}
 	}
 

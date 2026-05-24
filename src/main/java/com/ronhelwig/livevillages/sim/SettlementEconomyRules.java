@@ -99,8 +99,33 @@ public final class SettlementEconomyRules {
 		return Math.max(1, (int) Math.round(baseUnits * WORKER_PRODUCTIVITY_MULTIPLIER));
 	}
 
+	public static int scaledPeriodicAmount(String key, double dailyRate, long previousTick, long currentTick) {
+		if (key == null || key.isBlank() || dailyRate <= 0.0D || currentTick <= previousTick) {
+			return 0;
+		}
+
+		double phase = stableUnitPhase(key);
+		double previousProgress = (Math.max(0L, previousTick) / TICKS_PER_DAY * dailyRate) + phase;
+		double currentProgress = (Math.max(0L, currentTick) / TICKS_PER_DAY * dailyRate) + phase;
+		return Math.max(0, (int) Math.floor(currentProgress) - (int) Math.floor(previousProgress));
+	}
+
 	public static double scaledWorkerDailyRate(double baseRate) {
 		return baseRate <= 0.0D ? 0.0D : baseRate * WORKER_PRODUCTIVITY_MULTIPLIER;
+	}
+
+	private static double stableUnitPhase(String key) {
+		return stableModulo(key, 1_000_000L) / 1_000_000.0D;
+	}
+
+	private static long stableModulo(String key, long modulo) {
+		long hash = 1125899906842597L;
+
+		for (int i = 0; i < key.length(); i++) {
+			hash = (hash * 31L) + key.charAt(i);
+		}
+
+		return Math.floorMod(hash, modulo);
 	}
 
 	public static int targetForGoods(String goodsKey, int population) {

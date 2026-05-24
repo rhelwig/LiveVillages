@@ -221,6 +221,11 @@ public final class SettlementBakerWork {
 		List<SettlementBuildSite> bakeryBuildSites = buildSites.stream()
 			.filter(buildSite -> buildSite.blueprintId() == SettlementBuildSiteType.BAKERY)
 			.toList();
+		if (bakeryBuildSites.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "baker", "no_bakery_build_site", "");
+			return false;
+		}
+
 		List<SaleDisplayBlockEntity> displayInventories = bakeryDisplayInventories(level, bakeryBuildSites);
 		List<Container> ingredientContainers = bakeryIngredientContainers(level, bakeryBuildSites);
 		int settlementTier = SettlementTiers.unlockedTier(settlement);
@@ -232,6 +237,7 @@ public final class SettlementBakerWork {
 
 		List<Villager> bakers = SettlementVillagers.nearbyBakers(level, settlement);
 		if (bakers.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "baker", "no_bakers", "bakerySites=" + bakeryBuildSites.size() + " displays=" + displayInventories.size());
 			return stockChanged;
 		}
 
@@ -256,6 +262,9 @@ public final class SettlementBakerWork {
 
 			Map<String, Integer> pantry = bakeryPantrySnapshot(stock, ingredientContainers, displayInventories);
 			BakeryRecipe recipe = chooseRecipe(settlement, pantry, settlementTier);
+			if (recipe == null) {
+				SettlementProfessionDiagnostics.log(level, settlement, "baker", "no_recipe", bakeryPantrySummary(pantry));
+			}
 			BlockPos workPos = SettlementVillagers.bakerJobSite(level, baker)
 				.or(() -> bakeryBuildSites.stream()
 					.map(buildSite -> SettlementConstruction.currentPlacedWorkstationPos(level, buildSite))
@@ -268,11 +277,15 @@ public final class SettlementBakerWork {
 			ACTIVE_TASKS.put(baker.getUUID().toString(), new TimedTask(taskKey, tick));
 
 			if (recipe == null || !isWithinWorkReach(baker, workPos)) {
+				if (recipe != null) {
+					SettlementProfessionDiagnostics.log(level, settlement, "baker", "moving_to_work", "villager=" + baker.getUUID() + " recipe=" + recipe.outputGoodsKey() + " workPos=" + workPos.toShortString());
+				}
 				continue;
 			}
 
 			if (craftRecipe(stock, ingredientContainers, displayInventories, recipe)) {
 				baker.swing(InteractionHand.MAIN_HAND);
+				recordBakedRecipe(level, settlement, baker, recipe);
 				stockChanged = true;
 				stockChanged |= restockDisplayCases(level, settlement, stock, bakeryBuildSites);
 				syncBakeryDisplays(level, settlement, bakeryBuildSites);
@@ -282,7 +295,7 @@ public final class SettlementBakerWork {
 		return stockChanged;
 	}
 
-	public static void applyBakingProduction(SettlementState settlement, Map<String, Integer> stock, double elapsedDays, int bakerCount) {
+	public static void applyBakingProduction(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, double elapsedDays, int bakerCount) {
 		if (bakerCount <= 0 || elapsedDays <= 0.0D) {
 			return;
 		}
@@ -306,6 +319,28 @@ public final class SettlementBakerWork {
 		}
 
 		return Optional.of(task.taskKey());
+	}
+
+	private static void recordBakedRecipe(ServerLevel level, SettlementState settlement, Villager baker, BakeryRecipe recipe) {
+		for (Map.Entry<String, Integer> ingredient : recipe.ingredients().entrySet()) {
+			SettlementProfessionReports.recordConsumed(
+				level,
+				settlement,
+				SettlementRoleKeys.BAKER,
+				baker,
+				ingredient.getKey(),
+				ingredient.getValue()
+			);
+		}
+		SettlementProfessionReports.recordProduced(
+			level,
+			settlement,
+			SettlementRoleKeys.BAKER,
+			baker,
+			recipe.outputGoodsKey(),
+			recipe.outputAmount()
+		);
+		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BAKER, baker, recipe.taskKey().replace('_', ' '));
 	}
 
 	private static BakeryRecipe chooseRecipe(SettlementState settlement, Map<String, Integer> availableGoods, int settlementTier) {
@@ -948,14 +983,23 @@ public final class SettlementBakerWork {
 			}
 
 			int current = stock.getOrDefault(goodsKey, 0);
-			int target = SettlementEconomyRules.targetForGoods(settlement, goodsKey);
-			int surplus = current - target;
-			if (surplus > 0) {
-				availableSurplus.put(goodsKey, surplus);
+			if (current > 0) {
+				availableSurplus.put(goodsKey, current);
 			}
 		}
 
 		return availableSurplus;
+	}
+
+	private static String bakeryPantrySummary(Map<String, Integer> pantry) {
+		return "pantry="
+			+ "bread:" + pantry.getOrDefault("bread", 0)
+			+ " potato:" + pantry.getOrDefault("potato", 0)
+			+ " wheat:" + pantry.getOrDefault("wheat", 0)
+			+ " pumpkin:" + pantry.getOrDefault("pumpkin", 0)
+			+ " egg:" + pantry.getOrDefault("egg", 0)
+			+ " sugar:" + pantry.getOrDefault("sugar", 0)
+			+ " pumpkin_pie:" + pantry.getOrDefault("pumpkin_pie", 0);
 	}
 
 	private static boolean topOffMatchingDisplayStacks(

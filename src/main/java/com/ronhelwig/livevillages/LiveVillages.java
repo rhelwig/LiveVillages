@@ -17,6 +17,7 @@ import com.ronhelwig.livevillages.sim.BuildSiteAssistedPlacement;
 import com.ronhelwig.livevillages.sim.FletchingTableInteraction;
 import com.ronhelwig.livevillages.sim.LiveVillagesScheduler;
 import com.ronhelwig.livevillages.sim.SettlementDefenseWork;
+import com.ronhelwig.livevillages.sim.SettlementProfessionReports;
 import com.ronhelwig.livevillages.sim.VillageAutodetector;
 
 public class LiveVillages implements ModInitializer {
@@ -43,6 +44,7 @@ public class LiveVillages implements ModInitializer {
 		BuildSiteAssistedPlacement.register();
 		FletchingTableInteraction.register();
 		SettlementDefenseWork.register();
+		SettlementProfessionReports.register();
 		LiveVillagesDebugCommands.register();
 		LiveVillagesScheduler.register();
 		VillageAutodetector.register();

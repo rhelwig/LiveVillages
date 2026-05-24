@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.sim;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.sheep.Sheep;
@@ -296,8 +298,24 @@ public final class SettlementFarmerWork {
 
 			steerFarmerTowardTask(farmer, task.targetPos());
 
-			if (isWithinWorkReach(farmer, task.targetPos()) && performGardenTask(level, settlement, stock, garden, task)) {
-				changed = true;
+			if (isWithinWorkReach(farmer, task.targetPos())) {
+				Map<String, Integer> beforeStock = new HashMap<>(stock);
+				if (performGardenTask(level, settlement, stock, garden, task)) {
+					farmer.swing(InteractionHand.MAIN_HAND);
+					SettlementProfessionReports.recordStockDeltas(
+						level,
+						settlement,
+						SettlementRoleKeys.FARMER,
+						farmer,
+						beforeStock,
+						stock,
+						"produced"
+					);
+					SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FARMER, farmer, task.type().name().toLowerCase(java.util.Locale.ROOT).replace('_', ' '));
+					changed = true;
+				}
+			} else {
+				SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.FARMER, "moving_to_work", "villager=" + farmer.getUUID() + " task=" + task.type().name().toLowerCase(java.util.Locale.ROOT) + " target=" + task.targetPos().toShortString());
 			}
 		}
 

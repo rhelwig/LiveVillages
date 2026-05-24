@@ -19,6 +19,10 @@ public final class SettlementCarpenterWork {
 	private static final double CARPENTRY_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 40L;
 	private static final long CARPENTRY_DECIDE_INTERVAL_TICKS = 320L;
+	private static final int IDLE_STAIRS_TARGET = 24;
+	private static final int IDLE_SLAB_TARGET = 32;
+	private static final int IDLE_PLANKS_EXTRA_TARGET = 32;
+	private static final int IDLE_STICK_TARGET = 32;
 	private static final Map<String, Long> ACTIVE_CARPENTRY_TASKS = new HashMap<>();
 
 	private SettlementCarpenterWork() {
@@ -33,12 +37,14 @@ public final class SettlementCarpenterWork {
 		List<Villager> carpenters = SettlementVillagers.nearbyCarpenters(level, settlement);
 
 		if (carpenters.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "carpenter", "no_carpenters", "");
 			return false;
 		}
 
 		String outputKey = desiredWoodOutput(settlement, stock, buildSites);
 
 		if (outputKey == null) {
+			SettlementProfessionDiagnostics.log(level, settlement, "carpenter", "no_output_needed", carpentryStockSummary(settlement, stock));
 			return false;
 		}
 
@@ -61,11 +67,23 @@ public final class SettlementCarpenterWork {
 			ACTIVE_CARPENTRY_TASKS.put(carpenter.getUUID().toString(), tick);
 
 			if (!isWithinWorkReach(carpenter, workPos)) {
+				SettlementProfessionDiagnostics.log(level, settlement, "carpenter", "moving_to_work", "villager=" + carpenter.getUUID() + " output=" + outputKey + " workPos=" + workPos.toShortString());
 				continue;
 			}
 
 			if (craftWoodOutput(stock, outputKey)) {
 				carpenter.swing(InteractionHand.MAIN_HAND);
+				SettlementProfessionReports.recordConversion(
+					level,
+					settlement,
+					SettlementRoleKeys.CARPENTER,
+					carpenter,
+					"logs",
+					logCost(outputKey),
+					outputKey,
+					outputAmount(outputKey),
+					"crafted " + outputAmount(outputKey) + " " + outputKey + " from logs"
+				);
 				stockChanged = true;
 			}
 
@@ -73,6 +91,15 @@ public final class SettlementCarpenterWork {
 		}
 
 		return stockChanged;
+	}
+
+	private static String carpentryStockSummary(SettlementState settlement, Map<String, Integer> stock) {
+		return "logs=" + stock.getOrDefault("logs", 0)
+			+ " reserve=" + (SettlementEconomyRules.targetForGoods(settlement, "logs") + 8)
+			+ " planks=" + stock.getOrDefault("planks", 0)
+			+ " stairs=" + stock.getOrDefault("stairs", 0)
+			+ " slabs=" + stock.getOrDefault("slab", 0)
+			+ " sticks=" + stock.getOrDefault("stick", 0);
 	}
 
 	public static Optional<String> loadedCarpentryTaskKey(ServerLevel level, Villager villager) {
@@ -107,7 +134,23 @@ public final class SettlementCarpenterWork {
 			return "planks";
 		}
 
-		if (logs > logReserve + 16 && stock.getOrDefault("stick", 0) < 16) {
+		if (logs <= logReserve + 16) {
+			return null;
+		}
+
+		if (stock.getOrDefault("stairs", 0) < IDLE_STAIRS_TARGET) {
+			return "stairs";
+		}
+
+		if (stock.getOrDefault("slab", 0) < IDLE_SLAB_TARGET) {
+			return "slab";
+		}
+
+		if (stock.getOrDefault("planks", 0) < SettlementEconomyRules.targetForGoods(settlement, "planks") + IDLE_PLANKS_EXTRA_TARGET) {
+			return "planks";
+		}
+
+		if (stock.getOrDefault("stick", 0) < IDLE_STICK_TARGET) {
 			return "stick";
 		}
 
@@ -176,6 +219,18 @@ public final class SettlementCarpenterWork {
 				yield true;
 			}
 			default -> false;
+		};
+	}
+
+	private static int logCost(String outputKey) {
+		return outputKey.equals("stairs") ? 2 : 1;
+	}
+
+	private static int outputAmount(String outputKey) {
+		return switch (outputKey) {
+			case "planks", "stairs" -> 4;
+			case "slab", "stick" -> 8;
+			default -> 0;
 		};
 	}
 

@@ -43,7 +43,17 @@ public final class SettlementFletcherWork {
 	) {
 		List<Villager> fletchers = SettlementVillagers.nearbyFletchers(level, settlement);
 
-		if (fletchers.isEmpty() || hasNearbyThreat(level, settlement, fletchers) || !needsArrows(settlement, stock)) {
+		if (fletchers.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "fletcher", "no_fletchers", "");
+			return false;
+		}
+
+		if (hasNearbyThreat(level, settlement, fletchers)) {
+			return false;
+		}
+
+		if (!needsArrows(settlement, stock)) {
+			SettlementProfessionDiagnostics.log(level, settlement, "fletcher", "no_arrow_work", fletchingStockSummary(settlement, stock));
 			return false;
 		}
 
@@ -68,16 +78,30 @@ public final class SettlementFletcherWork {
 			ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("stocking_arrows", tick));
 
 			if (!isWithinWorkReach(fletcher, workPos)) {
+				SettlementProfessionDiagnostics.log(level, settlement, "fletcher", "moving_to_work", "villager=" + fletcher.getUUID() + " workPos=" + workPos.toShortString());
 				continue;
 			}
 
 			if (craftArrows(stock)) {
 				fletcher.swing(InteractionHand.MAIN_HAND);
+				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "stick", 1);
+				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "flint", 1);
+				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "feather", 1);
+				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "arrow", 4);
+				SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "stocked arrows");
 				stockChanged = true;
 			}
 		}
 
 		return stockChanged;
+	}
+
+	private static String fletchingStockSummary(SettlementState settlement, Map<String, Integer> stock) {
+		return "arrows=" + stock.getOrDefault("arrow", 0)
+			+ " target=" + SettlementEconomyRules.targetForGoods(settlement, "arrow")
+			+ " sticks=" + stock.getOrDefault("stick", 0)
+			+ " flint=" + stock.getOrDefault("flint", 0)
+			+ " feathers=" + stock.getOrDefault("feather", 0);
 	}
 
 	public static void maintainLoadedDefense(

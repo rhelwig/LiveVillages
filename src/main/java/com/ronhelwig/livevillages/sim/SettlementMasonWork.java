@@ -37,6 +37,7 @@ public final class SettlementMasonWork {
 		List<Villager> masons = SettlementVillagers.nearbyMasons(level, settlement);
 
 		if (masons.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "mason", "no_masons", "");
 			return false;
 		}
 
@@ -66,14 +67,33 @@ public final class SettlementMasonWork {
 			if (isWithinWorkReach(mason, assignment.targetPos())) {
 				mason.swing(InteractionHand.MAIN_HAND);
 
+				if (assignment.stockGoodsKey().isBlank() || assignment.stockAmount() <= 0) {
+					continue;
+				}
+
 				if (canProduceStockGoods(stock, assignment)) {
 					if (!assignment.inputGoodsKey().isBlank() && assignment.inputAmount() > 0) {
 						SettlementGoods.consumeGoods(stock, assignment.inputGoodsKey(), assignment.inputAmount());
 					}
 
 					stock.merge(assignment.stockGoodsKey(), assignment.stockAmount(), Integer::sum);
+					SettlementProfessionReports.recordConversion(
+						level,
+						settlement,
+						SettlementRoleKeys.MASON,
+						mason,
+						assignment.inputGoodsKey(),
+						assignment.inputAmount(),
+						assignment.stockGoodsKey(),
+						assignment.stockAmount(),
+						"completed " + assignment.taskKey().replace('_', ' ')
+					);
 					stockChanged = true;
+				} else {
+					SettlementProfessionDiagnostics.log(level, settlement, "mason", "missing_inputs", "task=" + assignment.taskKey() + " input=" + assignment.inputGoodsKey() + ":" + assignment.inputAmount());
 				}
+			} else {
+				SettlementProfessionDiagnostics.log(level, settlement, "mason", "moving_to_work", "villager=" + mason.getUUID() + " task=" + assignment.taskKey() + " target=" + assignment.targetPos().toShortString());
 			}
 		}
 

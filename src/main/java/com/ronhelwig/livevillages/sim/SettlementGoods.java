@@ -227,6 +227,18 @@ public final class SettlementGoods {
 			return "redstone";
 		}
 
+		if (stack.is(Items.AMETHYST_SHARD)) {
+			return "amethyst_shard";
+		}
+
+		if (stack.is(Items.AMETHYST_BLOCK)) {
+			return "amethyst";
+		}
+
+		if (stack.is(Items.CALCITE)) {
+			return "calcite";
+		}
+
 		if (stack.is(Items.LAPIS_LAZULI)) {
 			return "lapis";
 		}

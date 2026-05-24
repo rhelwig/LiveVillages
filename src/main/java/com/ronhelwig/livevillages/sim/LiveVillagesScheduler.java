@@ -31,6 +31,7 @@ public final class LiveVillagesScheduler {
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(server);
+		boolean economyCycleDue = (currentTick % TICKS_BETWEEN_CYCLES) == 0;
 
 		if ((currentTick % LOADED_MAINTENANCE_CHECK_INTERVAL) == 0) {
 			long start = System.nanoTime();
@@ -67,9 +68,11 @@ public final class LiveVillagesScheduler {
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Construction maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+
+			SettlementProfessionReports.writeLoadedDailyReports(server, savedData.getSettlements());
 		}
 
-		if ((currentTick % TICKS_BETWEEN_CYCLES) != 0) {
+		if (!economyCycleDue) {
 			return;
 		}
 
@@ -81,6 +84,7 @@ public final class LiveVillagesScheduler {
 		savedData.advanceRoundRobin(server, currentTick, REGIONS_PER_CYCLE);
 		VillageAutodetector.tick(server);
 		savedData.ensureCustomSettlementVillagers(server, currentTick);
+		SettlementProfessionReports.writeLoadedDailyReports(server, savedData.getSettlements());
 		
 		long cycleElapsed = System.nanoTime() - cycleStart;
 		LiveVillages.LOGGER.info("Economy cycle completed in {} ms", Math.round(cycleElapsed / 1_000_000.0D));

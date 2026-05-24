@@ -461,15 +461,15 @@ public final class SettlementConstruction {
 			{
 				"LMMMML",
 				"MMMMMM",
-				"MMRRMM",
+				"MERREM",
 				"MMEEMM",
 				"MMMMMM",
 				"LLMMLL"
 			},
 			{
 				"LMMMML",
-				"MEEEEM",
-				"MEEEEM",
+				"MEMMEM",
+				"MERREM",
 				"MEEEEM",
 				"MEEEEM",
 				"LLDDLL"

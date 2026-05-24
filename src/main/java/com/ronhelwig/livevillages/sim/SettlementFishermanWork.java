@@ -33,23 +33,27 @@ public final class SettlementFishermanWork {
 	private static final long VILLAGE_WAKEUP_END_TICK = 2_000L;
 	private static final long RETURN_TO_DOCK_START_TICK = 8_200L;
 	private static final long VILLAGE_GATHERING_START_TICK = 9_000L;
+	private static final long FISHING_CATCH_INTERVAL_TICKS = 1_200L;
 	private static final int DOCK_LENGTH_BLOCKS = 8;
 	private static final int BOAT_SCAN_RADIUS_BLOCKS = 10;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
+	private static final Map<String, Long> LAST_CATCH_TICKS = new HashMap<>();
 
 	private SettlementFishermanWork() {
 	}
 
-	public static void maintainLoadedFishing(ServerLevel level, SettlementState settlement) {
+	public static boolean maintainLoadedFishing(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		List<Villager> fishermen = SettlementVillagers.nearbyFishermen(level, settlement);
 
 		if (fishermen.isEmpty()) {
-			return;
+			SettlementProfessionDiagnostics.log(level, settlement, "fisherman", "no_fishermen", "");
+			return false;
 		}
 
 		List<BlockPos> docks = SettlementConstruction.findDockOrigins(level, settlement);
 		long tick = level.getServer().getTickCount();
 		long dayTime = Math.floorMod(level.getOverworldClockTime(), DAY_TICKS);
+		boolean stockChanged = false;
 
 		for (Villager fisherman : fishermen) {
 			if (shouldRecallForVillageSchedule(dayTime)) {
@@ -70,6 +74,7 @@ public final class SettlementFishermanWork {
 
 			if (task.isEmpty()) {
 				ACTIVE_TASKS.remove(fisherman.getUUID().toString());
+				SettlementProfessionDiagnostics.log(level, settlement, "fisherman", "no_fishing_spot", "docks=" + docks.size());
 				continue;
 			}
 
@@ -78,32 +83,38 @@ public final class SettlementFishermanWork {
 			showFishingTool(fisherman);
 
 			if (fishingTask.boat().isPresent()) {
-				maintainBoatFishingTask(fisherman, fishingTask);
+				stockChanged |= maintainBoatFishingTask(level, settlement, stock, fisherman, fishingTask, tick);
 			} else {
-				maintainShoreFishingTask(fisherman, fishingTask);
+				stockChanged |= maintainShoreFishingTask(level, settlement, stock, fisherman, fishingTask, tick);
 			}
 		}
+
+		return stockChanged;
 	}
 
 	public static void applyLoadedFishingWork(
 		ServerLevel level,
 		SettlementState settlement,
 		Map<String, Integer> stock,
-		double elapsedDays,
+		int fishermanCount,
+		long previousTick,
+		long currentTick,
 		SettlementConstruction.InfrastructureSurvey infrastructure
 	) {
-		int fishermen = Math.max(0, settlement.population().getOrDefault(SettlementRoleKeys.FISHERMAN, 0));
+		int fishermen = Math.max(0, fishermanCount);
 
-		if (fishermen <= 0 || elapsedDays <= 0.0D) {
+		if (fishermen <= 0 || currentTick <= previousTick) {
 			return;
 		}
 
 		int activeDockBoats = countActiveFishingBoats(level, settlement, SettlementConstruction.findDockOrigins(level, settlement));
-		SettlementGoods.addGoods(
-			stock,
-			"cod",
-			scaledAmount(dailyCatchRate(fishermen, infrastructure, activeDockBoats), elapsedDays)
+		int cod = SettlementEconomyRules.scaledPeriodicAmount(
+			settlement.id() + "|fisherman|cod",
+			SettlementEconomyRules.scaledWorkerDailyRate(dailyCatchRate(fishermen, infrastructure, activeDockBoats)),
+			previousTick,
+			currentTick
 		);
+		SettlementGoods.addGoods(stock, "cod", cod);
 	}
 
 	public static Optional<String> loadedFishermanTaskKey(ServerLevel level, Villager villager) {
@@ -179,12 +190,19 @@ public final class SettlementFishermanWork {
 			.map(spot -> new FishingTask("fishing_from_shore", spot.standPos(), spot.waterPos(), Optional.empty(), Optional.empty()));
 	}
 
-	private static void maintainBoatFishingTask(Villager fisherman, FishingTask task) {
+	private static boolean maintainBoatFishingTask(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager fisherman,
+		FishingTask task,
+		long tick
+	) {
 		DockFishingSpot dockSpot = task.dockSpot().orElse(null);
 		Boat boat = task.boat().orElse(null);
 
 		if (dockSpot == null || boat == null || !boat.isAlive() || boat.isRemoved()) {
-			return;
+			return false;
 		}
 
 		if (fisherman.getVehicle() != boat) {
@@ -201,7 +219,7 @@ public final class SettlementFishermanWork {
 				fisherman.startRiding(boat, true, true);
 			}
 
-			return;
+			return false;
 		}
 
 		fisherman.getNavigation().stop();
@@ -214,11 +232,21 @@ public final class SettlementFishermanWork {
 				releaseFishingBoat(fisherman, boat, dockSpot);
 			} else {
 				fisherman.swing(InteractionHand.MAIN_HAND);
+				return maybeCatchFish(level, settlement, stock, fisherman, tick, "fished from boat");
 			}
 		}
+
+		return false;
 	}
 
-	private static void maintainShoreFishingTask(Villager fisherman, FishingTask task) {
+	private static boolean maintainShoreFishingTask(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager fisherman,
+		FishingTask task,
+		long tick
+	) {
 		BlockPos standPos = task.standPos();
 		fisherman.getLookControl().setLookAt(task.lookPos().getX() + 0.5D, task.lookPos().getY() + 0.5D, task.lookPos().getZ() + 0.5D);
 		fisherman.getNavigation().moveTo(standPos.getX() + 0.5D, standPos.getY(), standPos.getZ() + 0.5D, FISHERMAN_WALK_SPEED);
@@ -226,7 +254,32 @@ public final class SettlementFishermanWork {
 		if (fisherman.blockPosition().distSqr(standPos) <= FISHING_REACH_DISTANCE_SQUARED) {
 			fisherman.getNavigation().stop();
 			fisherman.swing(InteractionHand.MAIN_HAND);
+			return maybeCatchFish(level, settlement, stock, fisherman, tick, "fished from " + ("fishing_from_dock".equals(task.taskKey()) ? "dock" : "shore"));
 		}
+
+		SettlementProfessionDiagnostics.log(level, settlement, "fisherman", "moving_to_work", "villager=" + fisherman.getUUID() + " target=" + standPos.toShortString());
+		return false;
+	}
+
+	private static boolean maybeCatchFish(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager fisherman,
+		long tick,
+		String accomplishment
+	) {
+		String key = fisherman.getUUID().toString();
+		long previousCatchTick = LAST_CATCH_TICKS.getOrDefault(key, Long.MIN_VALUE);
+		if (previousCatchTick != Long.MIN_VALUE && tick - previousCatchTick < FISHING_CATCH_INTERVAL_TICKS) {
+			return false;
+		}
+
+		LAST_CATCH_TICKS.put(key, tick);
+		SettlementGoods.addGoods(stock, "cod", 1);
+		SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.FISHERMAN, fisherman, "cod", 1);
+		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FISHERMAN, fisherman, accomplishment);
+		return true;
 	}
 
 	private static void recallFisherman(ServerLevel level, Villager fisherman, List<BlockPos> docks) {

@@ -73,7 +73,19 @@ public final class SettlementForesterWork {
 			return false;
 		}
 
+		if (foresters.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, "forester", "no_foresters", "radius=" + workRadius);
+			return false;
+		}
+
 		for (Villager forester : foresters) {
+			if (SettlementMinerWork.moveSurfaceWorkerAwayFromLoadedMine(level, settlement, stock, forester, SettlementRoleKeys.FORESTER)) {
+				forester.getNavigation().stop();
+				ACTIVE_TASKS.remove(forester.getUUID().toString());
+				worldChanged = true;
+				continue;
+			}
+
 			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, forester, "forestry", FORESTRY_DECIDE_INTERVAL_TICKS)) {
 				if (SettlementVillagerWorkSchedule.isTakingBreak(level, forester)) {
 					forester.getNavigation().stop();
@@ -86,6 +98,7 @@ public final class SettlementForesterWork {
 
 			if (task.isEmpty()) {
 				ACTIVE_TASKS.remove(forester.getUUID().toString());
+				SettlementProfessionDiagnostics.log(level, settlement, "forester", "no_task", forestryStockSummary(stock));
 				continue;
 			}
 
@@ -95,6 +108,7 @@ public final class SettlementForesterWork {
 			steerForesterTowardTask(forester, forestryTask.standPos());
 
 			if (!isWithinWorkReach(forester, forestryTask.workPos())) {
+				SettlementProfessionDiagnostics.log(level, settlement, "forester", "moving_to_work", forestryTaskSummary(level, forester, forestryTask));
 				continue;
 			}
 
@@ -110,6 +124,13 @@ public final class SettlementForesterWork {
 		}
 
 		return worldChanged;
+	}
+
+	private static String forestryStockSummary(Map<String, Integer> stock) {
+		return "logs=" + stock.getOrDefault("logs", 0)
+			+ " oak_sapling=" + stock.getOrDefault("oak_sapling", 0)
+			+ " spruce_sapling=" + stock.getOrDefault("spruce_sapling", 0)
+			+ " birch_sapling=" + stock.getOrDefault("birch_sapling", 0);
 	}
 
 	public static Optional<String> loadedForestryTaskKey(ServerLevel level, Villager villager) {
@@ -154,6 +175,10 @@ public final class SettlementForesterWork {
 	}
 
 	private static boolean isCachedForestryTaskStillUseful(ServerLevel level, Map<String, Integer> stock, ForestryTask task) {
+		if (!isSurfaceForestryStandPos(level, task.standPos())) {
+			return false;
+		}
+
 		return switch (task.action()) {
 			case COLLECT_DROP -> level.getEntity(task.entityId()) instanceof ItemEntity itemEntity && !itemEntity.isRemoved();
 			case PLANT_SEEDLING -> {
@@ -179,6 +204,10 @@ public final class SettlementForesterWork {
 			Optional<BlockPos> standPos = standableDropPickupPos(level, itemPos);
 
 			if (standPos.isEmpty()) {
+				continue;
+			}
+
+			if (!isSurfaceForestryStandPos(level, standPos.get())) {
 				continue;
 			}
 
@@ -335,11 +364,26 @@ public final class SettlementForesterWork {
 		Villager forester,
 		ForestryTask task
 	) {
-		return switch (task.action()) {
+		Map<String, Integer> beforeStock = new HashMap<>(stock);
+		boolean completed = switch (task.action()) {
 			case COLLECT_DROP -> collectDrop(level, forester, task.entityId());
-			case PLANT_SEEDLING -> plantSeedling(level, stock, task.workPos(), task.seedlingGoods());
-			case CHOP_TREE -> chopTree(level, settlement, stock, task.workPos(), task.seedlingGoods());
+			case PLANT_SEEDLING -> plantSeedling(level, settlement, stock, forester, task.workPos(), task.seedlingGoods());
+			case CHOP_TREE -> chopTree(level, settlement, stock, forester, task.workPos(), task.seedlingGoods());
 		};
+
+		if (completed) {
+			SettlementProfessionReports.recordConsumedDeltas(
+				level,
+				settlement,
+				SettlementRoleKeys.FORESTER,
+				forester,
+				beforeStock,
+				stock
+			);
+			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FORESTER, forester, task.taskKey().replace('_', ' '));
+		}
+
+		return completed;
 	}
 
 	private static boolean collectDrop(ServerLevel level, Villager forester, int entityId) {
@@ -350,7 +394,14 @@ public final class SettlementForesterWork {
 		return SettlementVillagerItemPickupWork.carryItemEntity(level, forester, itemEntity);
 	}
 
-	private static boolean plantSeedling(ServerLevel level, Map<String, Integer> stock, BlockPos plantPos, String seedlingGoods) {
+	private static boolean plantSeedling(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager forester,
+		BlockPos plantPos,
+		String seedlingGoods
+	) {
 		BlockState seedlingState = seedlingBlockState(seedlingGoods);
 
 		if (seedlingState == null || !canPlantSeedling(level, plantPos, seedlingState)) {
@@ -383,7 +434,14 @@ public final class SettlementForesterWork {
 		return true;
 	}
 
-	private static boolean chopTree(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos treeBase, String seedlingGoods) {
+	private static boolean chopTree(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager forester,
+		BlockPos treeBase,
+		String seedlingGoods
+	) {
 		if (!isCuttableTree(level, settlement, treeBase)) {
 			return false;
 		}
@@ -409,6 +467,14 @@ public final class SettlementForesterWork {
 			level.levelEvent(2001, logPos, Block.getId(logState));
 			level.setBlock(logPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
 			SettlementGoods.addGoods(stock, "logs", 1);
+			SettlementProfessionReports.recordHarvestedBlock(
+				level,
+				settlement,
+				SettlementRoleKeys.FORESTER,
+				forester,
+				logState,
+				Map.of("logs", 1)
+			);
 		}
 
 		if (!plantSeedlingAlreadyPaid(level, treeBase, seedlingGoods)) {
@@ -643,6 +709,22 @@ public final class SettlementForesterWork {
 		BlockState headState = level.getBlockState(pos.above());
 		BlockState belowState = level.getBlockState(pos.below());
 		return footState.isAir() && headState.isAir() && !belowState.isAir();
+	}
+
+	private static boolean isSurfaceForestryStandPos(ServerLevel level, BlockPos standPos) {
+		int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, standPos.getX(), standPos.getZ()) - 1;
+		return surfaceY < level.getMinY() || standPos.getY() >= surfaceY - 2;
+	}
+
+	private static String forestryTaskSummary(ServerLevel level, Villager forester, ForestryTask task) {
+		int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, task.standPos().getX(), task.standPos().getZ()) - 1;
+		return "villager=" + forester.getUUID()
+			+ " pos=" + forester.blockPosition().toShortString()
+			+ " task=" + task.taskKey()
+			+ " action=" + task.action()
+			+ " workPos=" + task.workPos().toShortString()
+			+ " stand=" + task.standPos().toShortString()
+			+ " standSurfaceY=" + surfaceY;
 	}
 
 	private static boolean isForestryDrop(ItemEntity entity) {

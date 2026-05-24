@@ -20,13 +20,14 @@ import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
 public final class RouteNetworkSimulator {
 	private static final long MIN_ROUTE_UPDATE_TICKS = 2_000L;
-	private static final double MAX_TRADE_INTERVAL_DAYS = 7.0D;
+	private static final double MAX_TRADE_INTERVAL_DAYS = 5.0D;
 	private static final double MIN_TRADE_INTERVAL_DAYS = 0.5D;
 	private static final int MIN_SURVEY_SAMPLES = 12;
 	private static final int MAX_SURVEY_SAMPLES = 48;
 	private static final int SURVEY_SAMPLE_RADIUS_BLOCKS = 2;
 	private static final double SOURCE_RESERVE_RATIO = 0.55D;
 	private static final double MIN_SHORTAGE_IMBALANCE_RATIO = 0.10D;
+	private static final double TRADE_BUFFER_RATIO = 0.35D;
 
 	private RouteNetworkSimulator() {
 	}
@@ -240,10 +241,25 @@ public final class RouteNetworkSimulator {
 		cleanMap(toStock);
 
 		if (shipments.isEmpty()) {
+			SettlementProfessionDiagnostics.log(
+				level,
+				from,
+				"trade",
+				"no_shipments",
+				"route=" + route.id() + " partner=" + to.name() + " candidates=" + transfers.size() + " budget=" + throughputBudget
+			);
+			SettlementProfessionDiagnostics.log(
+				level,
+				to,
+				"trade",
+				"no_shipments",
+				"route=" + route.id() + " partner=" + from.name() + " candidates=" + transfers.size() + " budget=" + throughputBudget
+			);
 			return new TradeAdvanceResult(attemptedRoute, from, to);
 		}
 
 		String summary = summarizeShipments(shipments, from, to);
+		SettlementProfessionReports.recordTradeBatch(level, from, to, reportShipments(shipments, from, to));
 
 		SettlementState updatedFrom = from.withSimulationState(
 			from.population(),
@@ -305,12 +321,16 @@ public final class RouteNetworkSimulator {
 			int sourceReserve = sourceTarget <= 0 ? 0 : Math.max(1, (int) Math.ceil(sourceTarget * SOURCE_RESERVE_RATIO));
 			int sourceAvailableToSend = Math.max(0, sourceCurrent - sourceReserve);
 			int destinationShortage = Math.max(0, destinationTarget - destinationCurrent);
+			int destinationTradeBuffer = destinationTarget <= 0 ? 0 : Math.max(1, (int) Math.ceil(destinationTarget * TRADE_BUFFER_RATIO));
+			int destinationBufferNeed = sourceSurplus <= 0 ? 0 : Math.max(0, destinationTarget + destinationTradeBuffer - destinationCurrent);
+			int destinationNeed = Math.max(destinationShortage, destinationBufferNeed);
+			int availableToSend = destinationShortage > 0 ? sourceAvailableToSend : sourceSurplus;
 
-			if (sourceAvailableToSend <= 0 || destinationShortage <= 0) {
+			if (availableToSend <= 0 || destinationNeed <= 0) {
 				continue;
 			}
 
-			if (sourceSurplus <= 0 && sourceTarget > 0 && destinationTarget > 0) {
+			if (destinationShortage > 0 && sourceSurplus <= 0 && sourceTarget > 0 && destinationTarget > 0) {
 				double sourceRatio = sourceCurrent / (double) Math.max(1, sourceTarget);
 				double destinationRatio = destinationCurrent / (double) Math.max(1, destinationTarget);
 
@@ -323,10 +343,12 @@ public final class RouteNetworkSimulator {
 				targetRule.goodsKey(),
 				source.id(),
 				destination.id(),
-				sourceAvailableToSend,
-				destinationShortage,
-				SettlementEconomyRules.shortagePriority(destination, destinationBuildSites, targetRule.goodsKey(), destinationCurrent, destinationTarget)
-					+ sourceAvailableToSend
+				availableToSend,
+				destinationNeed,
+				(destinationShortage > 0
+					? SettlementEconomyRules.shortagePriority(destination, destinationBuildSites, targetRule.goodsKey(), destinationCurrent, destinationTarget)
+					: Math.max(1, sourceSurplus / 2))
+					+ availableToSend
 					+ (sourceSurplus > 0 ? 100 : 0)
 			));
 		}
@@ -549,6 +571,35 @@ public final class RouteNetworkSimulator {
 		}
 
 		return String.join(", ", parts);
+	}
+
+	private static List<SettlementProfessionReports.TradeShipment> reportShipments(
+		List<Shipment> shipments,
+		SettlementState from,
+		SettlementState to
+	) {
+		return shipments.stream()
+			.map(shipment -> new SettlementProfessionReports.TradeShipment(
+				shipment.fromSettlementId(),
+				settlementNameFor(shipment.fromSettlementId(), from, to),
+				shipment.toSettlementId(),
+				settlementNameFor(shipment.toSettlementId(), from, to),
+				shipment.goodsKey(),
+				shipment.amount()
+			))
+			.toList();
+	}
+
+	private static String settlementNameFor(String settlementId, SettlementState from, SettlementState to) {
+		if (from.id().equals(settlementId)) {
+			return from.name();
+		}
+
+		if (to.id().equals(settlementId)) {
+			return to.name();
+		}
+
+		return settlementId;
 	}
 
 	private static String humanizeGoodsKey(String goodsKey) {

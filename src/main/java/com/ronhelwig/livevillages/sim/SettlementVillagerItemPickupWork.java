@@ -78,7 +78,7 @@ public final class SettlementVillagerItemPickupWork {
 
 			if (depositTime && carriedGoods != null && !carriedGoods.goods().isEmpty()) {
 				if (stockAccessPos.isEmpty()) {
-					depositIntoStock(stock, carriedGoods);
+					depositIntoStock(level, settlement, villager, stock, carriedGoods);
 					CARRIED_GOODS.remove(villagerId);
 					stockChanged = true;
 					continue;
@@ -88,7 +88,7 @@ public final class SettlementVillagerItemPickupWork {
 				steerVillagerTowardDeposit(villager, depositPos);
 
 				if (isWithinDepositReach(villager, depositPos)) {
-					depositIntoStock(stock, carriedGoods);
+					depositIntoStock(level, settlement, villager, stock, carriedGoods);
 					CARRIED_GOODS.remove(villagerId);
 					stockChanged = true;
 				}
@@ -213,9 +213,18 @@ public final class SettlementVillagerItemPickupWork {
 		}
 	}
 
-	private static void depositIntoStock(Map<String, Integer> stock, CarriedGoods carriedGoods) {
+	private static void depositIntoStock(ServerLevel level, SettlementState settlement, Villager villager, Map<String, Integer> stock, CarriedGoods carriedGoods) {
 		for (Map.Entry<String, Integer> entry : carriedGoods.goods().entrySet()) {
 			SettlementGoods.addGoods(stock, entry.getKey(), entry.getValue());
+			String roleKey = SettlementVillagers.reportProfessionKey(villager);
+			if (roleKey != null && !roleKey.isBlank()) {
+				SettlementProfessionReports.recordRecovered(level, settlement, roleKey, villager, entry.getKey(), entry.getValue());
+			}
+		}
+
+		String roleKey = SettlementVillagers.reportProfessionKey(villager);
+		if (roleKey != null && !roleKey.isBlank()) {
+			SettlementProfessionReports.recordAccomplished(level, settlement, roleKey, villager, "deposited recovered goods at settlement stock");
 		}
 	}
 

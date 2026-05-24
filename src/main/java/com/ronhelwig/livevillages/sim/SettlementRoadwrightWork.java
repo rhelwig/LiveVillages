@@ -102,6 +102,7 @@ public final class SettlementRoadwrightWork {
 		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
 
 		if (roadwrights.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.ROADWRIGHT, "no_roadwrights", "");
 			return RoadworkResult.unchanged();
 		}
 
@@ -162,6 +163,17 @@ public final class SettlementRoadwrightWork {
 			}
 
 			if (plan.isEmpty()) {
+				SettlementProfessionDiagnostics.log(
+					level,
+					settlement,
+					SettlementRoleKeys.ROADWRIGHT,
+					"no_plan",
+					"villager=" + roadwrightId
+						+ " coreTargets=" + coreInternalTargets.size()
+						+ " secondaryTargets=" + secondaryInternalTargets.size()
+						+ " milepostTargets=" + milepostTargets.size()
+						+ " externalTargets=" + externalTargets.size()
+				);
 				continue;
 			}
 
@@ -170,6 +182,13 @@ public final class SettlementRoadwrightWork {
 
 			if (!hasSuppliesForRoadwork(stock, task)) {
 				ROADWORK_TASK_CACHE.remove(roadworkTaskCacheKey(settlement, roadwrightId));
+				SettlementProfessionDiagnostics.log(
+					level,
+					settlement,
+					SettlementRoleKeys.ROADWRIGHT,
+					"missing_supplies",
+					"villager=" + roadwrightId + " action=" + task.action() + " workPos=" + task.workPos().toShortString()
+				);
 				continue;
 			}
 
@@ -178,11 +197,38 @@ public final class SettlementRoadwrightWork {
 			steerRoadwrightTowardTask(roadwright, task.standPos());
 
 			if (!isWithinWorkReach(roadwright, task.workPos())) {
+				SettlementProfessionDiagnostics.log(
+					level,
+					settlement,
+					SettlementRoleKeys.ROADWRIGHT,
+					"moving_to_work",
+					"villager=" + roadwrightId
+						+ " action=" + task.action()
+						+ " workPos=" + task.workPos().toShortString()
+						+ " stand=" + task.standPos().toShortString()
+				);
 				continue;
 			}
 
+			Map<String, Integer> beforeStock = new HashMap<>(stock);
 			if (performRoadwork(level, settlement, stock, task)) {
 				roadwright.swing(InteractionHand.MAIN_HAND);
+				SettlementProfessionReports.recordStockDeltas(
+					level,
+					settlement,
+					SettlementRoleKeys.ROADWRIGHT,
+					roadwright,
+					beforeStock,
+					stock,
+					"recovered"
+				);
+				SettlementProfessionReports.recordAccomplished(
+					level,
+					settlement,
+					SettlementRoleKeys.ROADWRIGHT,
+					roadwright,
+					"completed " + task.action().name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ')
+				);
 				worldChanged = true;
 				Optional<RoadworkDebugPlan> continuedPlan = advanceRoadworkPlanOnSameRoute(level, settlement, plan.get());
 

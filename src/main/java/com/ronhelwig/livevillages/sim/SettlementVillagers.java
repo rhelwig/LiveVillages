@@ -118,6 +118,18 @@ public final class SettlementVillagers {
 		return population;
 	}
 
+	public static List<Villager> reportableVillagers(ServerLevel level, SettlementState settlement) {
+		return settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
+	}
+
+	public static String reportProfessionKey(Villager villager) {
+		return displayProfessionKey(villager);
+	}
+
+	public static String reportTaskKey(ServerLevel level, SettlementState settlement, Villager villager) {
+		return villagerTaskKey(level, settlement, villager, Set.of(), Map.of(), false);
+	}
+
 	public static List<Villager> nearbyFarmers(ServerLevel level, SettlementState settlement) {
 		return settlementVillagers(level, settlement, villagerRadius(settlement)).stream()
 			.filter(villager -> !villager.isBaby() && villager.getVillagerData().profession().is(VillagerProfession.FARMER))
@@ -647,6 +659,11 @@ public final class SettlementVillagers {
 		for (Villager villager : villagers) {
 			if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
 				changed |= ensureFishermanJobSite(level, villager);
+				continue;
+			}
+
+			if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
+				changed |= ensureButcherJobSite(level, villager);
 			}
 		}
 
@@ -735,6 +752,13 @@ public final class SettlementVillagers {
 					.filter(villager -> canReachProfessionJobSite(level, villager, demand.type()))
 					.findFirst();
 				if (candidate.isEmpty()) {
+					SettlementProfessionDiagnostics.log(
+						level,
+						settlement,
+						roleKeyForProfessionDemand(demand.type()),
+						"no_reachable_candidate",
+						"unmet=" + demand.unmetDemand() + " unemployed=" + unemployedVillagers.size()
+					);
 					continue;
 				}
 
@@ -816,6 +840,41 @@ public final class SettlementVillagers {
 		}
 
 		return changed;
+	}
+
+	public static BlockPos settlementGatheringPos(ServerLevel level, SettlementState settlement) {
+		return resolveGatheringPos(level, settlement);
+	}
+
+	public static boolean isAtSettlementGathering(ServerLevel level, SettlementState settlement, Villager villager) {
+		return isActuallyAtVillageGathering(level, settlement, villager);
+	}
+
+	public static Optional<BlockPos> settlementVillagerHomePos(ServerLevel level, Villager villager) {
+		return heldHome(level, villager);
+	}
+
+	public static Optional<BlockPos> settlementEveningTargetPos(ServerLevel level, SettlementState settlement, Villager villager) {
+		if (isVillageGatheringTime(level)) {
+			return Optional.of(resolveGatheringPos(level, settlement));
+		}
+
+		if (isVillageRestTime(level)) {
+			return heldHome(level, villager).or(() -> Optional.of(resolveGatheringPos(level, settlement)));
+		}
+
+		return Optional.empty();
+	}
+
+	public static boolean isNearSettlementEveningTarget(ServerLevel level, Villager villager, BlockPos targetPos) {
+		int radius = isVillageRestTime(level) ? 2 : GATHERING_RADIUS_BLOCKS;
+		return villager.blockPosition().distSqr(targetPos) <= radius * radius;
+	}
+
+	public static boolean isNearSettlementEveningTarget(ServerLevel level, SettlementState settlement, Villager villager) {
+		return settlementEveningTargetPos(level, settlement, villager)
+			.filter(targetPos -> isNearSettlementEveningTarget(level, villager, targetPos))
+			.isPresent();
 	}
 
 	public static boolean ensureVillagerGatheringPoint(ServerLevel level, SettlementState settlement) {
@@ -902,6 +961,8 @@ public final class SettlementVillagers {
 		int cartographers = 0;
 		int bakers = 0;
 		int farmers = 0;
+		int butchers = 0;
+		int fishermen = 0;
 		int fletchers = 0;
 		int foresters = 0;
 		int miners = 0;
@@ -925,6 +986,10 @@ public final class SettlementVillagers {
 				cartographers++;
 			} else if (isCustomBaker(villager)) {
 				bakers++;
+			} else if (profession.is(VillagerProfession.BUTCHER)) {
+				butchers++;
+			} else if (profession.is(VillagerProfession.FISHERMAN)) {
+				fishermen++;
 			} else if (isFoodWorker(profession)) {
 				farmers++;
 			} else if (profession.is(VillagerProfession.FLETCHER)) {
@@ -950,7 +1015,7 @@ public final class SettlementVillagers {
 			}
 		}
 
-		int remaining = villagers.size() - cartographers - bakers - farmers - fletchers - foresters - miners - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
+		int remaining = villagers.size() - cartographers - bakers - farmers - butchers - fishermen - fletchers - foresters - miners - portmasters - carpenters - masons - roadwrights - constructionSupport - trademasters - unemployed;
 		unemployed += Math.max(0, remaining);
 
 		if (trademasters <= 0 && !villagers.isEmpty()) {
@@ -986,6 +1051,14 @@ public final class SettlementVillagers {
 
 		if (bakers > 0) {
 			population.put(SettlementRoleKeys.BAKER, bakers);
+		}
+
+		if (butchers > 0) {
+			population.put(SettlementRoleKeys.BUTCHER, butchers);
+		}
+
+		if (fishermen > 0) {
+			population.put(SettlementRoleKeys.FISHERMAN, fishermen);
 		}
 
 		if (fletchers > 0) {
@@ -1311,6 +1384,24 @@ public final class SettlementVillagers {
 		return true;
 	}
 
+	private static boolean promoteToButcher(ServerLevel level, Villager villager) {
+		Optional<BlockPos> heldJobSite = heldButcherJobSite(level, villager);
+
+		if (heldJobSite.isPresent()) {
+			assignButcherJobSite(level, villager, heldJobSite.get());
+			return true;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableButcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		assignButcherJobSite(level, villager, reachableJobSite.get());
+		return true;
+	}
+
 	private static boolean ensureCarpenterJobSite(ServerLevel level, Villager villager) {
 		if (heldCarpenterJobSite(level, villager).isPresent()) {
 			return false;
@@ -1471,6 +1562,21 @@ public final class SettlementVillagers {
 		}
 
 		assignFishermanJobSite(level, villager, reachableJobSite.get());
+		return true;
+	}
+
+	private static boolean ensureButcherJobSite(ServerLevel level, Villager villager) {
+		if (heldButcherJobSite(level, villager).isPresent()) {
+			return false;
+		}
+
+		Optional<BlockPos> reachableJobSite = findReachableButcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE);
+
+		if (reachableJobSite.isEmpty()) {
+			return false;
+		}
+
+		assignButcherJobSite(level, villager, reachableJobSite.get());
 		return true;
 	}
 
@@ -1861,6 +1967,24 @@ public final class SettlementVillagers {
 				.findFirst());
 	}
 
+	private static Optional<BlockPos> findReachableButcherJobSite(
+		ServerLevel level,
+		Villager villager,
+		net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy occupancy
+	) {
+		return owningSettlementFor(level, villager)
+			.flatMap(settlement -> level.getPoiManager().findAllClosestFirstWithType(
+				poiType -> poiType.is(PoiTypes.BUTCHER),
+				pos -> horizontalDistanceSqr(pos, settlement.center()) <= (double) professionSearchRadiusBlocks(settlement, ProfessionDemandType.BUTCHER) * professionSearchRadiusBlocks(settlement, ProfessionDemandType.BUTCHER),
+				villager.blockPosition(),
+				Math.max(JOB_SITE_SEARCH_RADIUS_BLOCKS, professionSearchRadiusBlocks(settlement, ProfessionDemandType.BUTCHER)),
+				occupancy
+			)
+				.filter(pair -> canReach(villager, pair.getSecond(), pair.getFirst()))
+				.map(com.mojang.datafixers.util.Pair::getSecond)
+				.findFirst());
+	}
+
 	private static void assignTrademasterJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
 		GlobalPos globalPos = GlobalPos.of(level.dimension(), jobSite);
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
@@ -1956,6 +2080,18 @@ public final class SettlementVillagers {
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
 		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
 		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FISHERMAN));
+		lockCustomProfession(villager);
+		villager.setOffers(new MerchantOffers());
+		villager.refreshBrain(level);
+		level.broadcastEntityEvent(villager, (byte) 14);
+	}
+
+	private static void assignButcherJobSite(ServerLevel level, Villager villager, BlockPos jobSite) {
+		GlobalPos globalPos = GlobalPos.of(level.dimension(), jobSite);
+		villager.releasePoi(MemoryModuleType.JOB_SITE);
+		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
+		villager.getBrain().setMemory(MemoryModuleType.JOB_SITE, globalPos);
+		villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.BUTCHER));
 		lockCustomProfession(villager);
 		villager.setOffers(new MerchantOffers());
 		villager.refreshBrain(level);
@@ -2244,6 +2380,10 @@ public final class SettlementVillagers {
 
 	private static boolean canBecomeFisherman(Villager villager) {
 		return fishermanCandidateRank(villager) != Integer.MAX_VALUE;
+	}
+
+	private static boolean canBecomeButcher(Villager villager) {
+		return butcherCandidateRank(villager) != Integer.MAX_VALUE;
 	}
 
 	private static boolean canHelpWithConstruction(Villager villager) {
@@ -2672,6 +2812,24 @@ public final class SettlementVillagers {
 		return Integer.MAX_VALUE;
 	}
 
+	private static int butcherCandidateRank(Villager villager) {
+		if (villager.isBaby()) {
+			return Integer.MAX_VALUE;
+		}
+
+		Holder<VillagerProfession> profession = villager.getVillagerData().profession();
+
+		if (profession.is(VillagerProfession.BUTCHER)) {
+			return 0;
+		}
+
+		if (profession.is(VillagerProfession.NONE)) {
+			return 1;
+		}
+
+		return Integer.MAX_VALUE;
+	}
+
 	private static Map<ProfessionDemandType, Integer> currentProfessionCounts(List<Villager> villagers) {
 		Map<ProfessionDemandType, Integer> counts = new LinkedHashMap<>();
 
@@ -2721,6 +2879,9 @@ public final class SettlementVillagers {
 		if (villager.getVillagerData().profession().is(VillagerProfession.FISHERMAN)) {
 			return ProfessionDemandType.FISHERMAN;
 		}
+		if (villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
+			return ProfessionDemandType.BUTCHER;
+		}
 		return null;
 	}
 
@@ -2758,6 +2919,7 @@ public final class SettlementVillagers {
 			case PORTMASTER -> desiredPortmasterCount(level, settlement);
 			case FLETCHER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FLETCHER);
 			case FISHERMAN -> desiredFishermanCount(level, settlement);
+			case BUTCHER -> desiredButcherCount(level, settlement);
 		};
 	}
 
@@ -2776,6 +2938,7 @@ public final class SettlementVillagers {
 			case PORTMASTER -> SettlementRoleKeys.PORTMASTER;
 			case FLETCHER -> SettlementRoleKeys.FLETCHER;
 			case FISHERMAN -> SettlementRoleKeys.FISHERMAN;
+			case BUTCHER -> SettlementRoleKeys.BUTCHER;
 		};
 	}
 
@@ -2790,6 +2953,7 @@ public final class SettlementVillagers {
 			case PORTMASTER -> heldPortmasterJobSite(level, villager).isPresent() || findReachablePortmasterJobSite(level, villager).isPresent();
 			case FLETCHER -> heldFletcherJobSite(level, villager).isPresent() || findReachableFletcherJobSite(level, villager).isPresent();
 			case FISHERMAN -> heldFishermanJobSite(level, villager).isPresent() || findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
+			case BUTCHER -> heldButcherJobSite(level, villager).isPresent() || findReachableButcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
 		};
 	}
 
@@ -2804,6 +2968,7 @@ public final class SettlementVillagers {
 			case PORTMASTER -> promoteToPortmaster(level, villager);
 			case FLETCHER -> promoteToFletcher(level, villager);
 			case FISHERMAN -> promoteToFisherman(level, villager);
+			case BUTCHER -> promoteToButcher(level, villager);
 		};
 	}
 
@@ -2820,6 +2985,26 @@ public final class SettlementVillagers {
 			.distinct()
 			.count();
 		return workstationCount > 0 ? 1 : 0;
+	}
+
+	private static int desiredButcherCount(ServerLevel level, SettlementState settlement) {
+		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.BUTCHER),
+			pos -> true,
+			settlement.center(),
+			professionSearchRadiusBlocks(settlement, ProfessionDemandType.BUTCHER),
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.distinct()
+			.count();
+
+		if (workstationCount <= 0) {
+			return 0;
+		}
+
+		return (int) Math.min(2L, workstationCount);
 	}
 
 	private static int desiredBedLinkedProfessionCount(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
@@ -2851,6 +3036,7 @@ public final class SettlementVillagers {
 			case ROADWRIGHT -> poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI);
 			case FORESTER -> poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI);
 			case FLETCHER -> poiType -> poiType.is(PoiTypes.FLETCHER);
+			case BUTCHER -> poiType -> poiType.is(PoiTypes.BUTCHER);
 			default -> throw new IllegalArgumentException("No bed-linked job-site predicate for " + type);
 		};
 	}
@@ -2919,6 +3105,7 @@ public final class SettlementVillagers {
 			case ROADWRIGHT -> heldRoadwrightJobSite(level, villager);
 			case FORESTER -> heldForesterJobSite(level, villager);
 			case FLETCHER -> heldFletcherJobSite(level, villager);
+			case BUTCHER -> heldButcherJobSite(level, villager);
 			default -> Optional.empty();
 		};
 	}
@@ -3304,7 +3491,8 @@ public final class SettlementVillagers {
 		MINER(55),
 		PORTMASTER(50),
 		FLETCHER(40),
-		FISHERMAN(35);
+		FISHERMAN(35),
+		BUTCHER(65);
 
 		private final int priority;
 
