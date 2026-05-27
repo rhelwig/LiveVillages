@@ -1411,7 +1411,18 @@ public final class SettlementConstruction {
 	}
 
 	public static Optional<SettlementState> findWorkstationSettlement(ServerLevel level, BlockPos pos) {
-		return LiveVillagesSavedData.get(level.getServer()).findNearestSettlement(
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> containingSettlement = savedData.findSettlementForPosition(
+			level.dimension(),
+			pos,
+			settlement -> true
+		);
+
+		if (containingSettlement.isPresent()) {
+			return containingSettlement;
+		}
+
+		return savedData.findNearestSettlement(
 			level.dimension(),
 			pos,
 			WORKSTATION_SETTLEMENT_LINK_RADIUS_BLOCKS,
@@ -1428,6 +1439,17 @@ public final class SettlementConstruction {
 	}
 
 	public static TradeBoardPlacementDecision evaluateTradeBoardPlacement(ServerLevel level, BlockPos boardPos) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> outpost = OutpostTrust.findOrCreateOutpostAt(level, savedData, boardPos);
+
+		if (outpost.isPresent()) {
+			SettlementState settlement = outpost.get();
+			return TradeBoardPlacementDecision.linked(
+				settlement,
+				"This Trade Board will join " + settlement.name() + "."
+			);
+		}
+
 		Optional<SettlementState> containingSettlement = findSettlementContainingPosition(level, boardPos);
 
 		if (containingSettlement.isPresent()) {
@@ -1438,7 +1460,7 @@ public final class SettlementConstruction {
 			);
 		}
 
-		Optional<SettlementState> nearbySettlement = LiveVillagesSavedData.get(level.getServer()).findNearestSettlement(
+		Optional<SettlementState> nearbySettlement = savedData.findNearestSettlement(
 			level.dimension(),
 			boardPos,
 			TRADE_BOARD_FOUNDING_MIN_SPACING_BLOCKS,
@@ -1514,6 +1536,10 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		if (isPositionInExistingShelteredStructure(level, benchPos)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = benchPos.relative(horizontalFacing.getOpposite(), 3).below();
 		AnchoredStructureSite site = findAnchoredStructureSite(
@@ -1554,6 +1580,10 @@ public final class SettlementConstruction {
 	) {
 		if (existingBuildSite.isPresent()) {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, tablePos)) {
+			return WorkstationBuildResult.completed();
 		}
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
@@ -1598,6 +1628,10 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		if (isPositionInExistingShelteredStructure(level, stonecutterPos)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = stonecutterPos.relative(horizontalFacing.getOpposite(), 3).below();
 		AnchoredStructureSite site = findAnchoredStructureSite(
@@ -1638,6 +1672,10 @@ public final class SettlementConstruction {
 	) {
 		if (existingBuildSite.isPresent()) {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, tablePos)) {
+			return WorkstationBuildResult.completed();
 		}
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
@@ -1726,6 +1764,10 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		if (isPositionInExistingShelteredStructure(level, tablePos)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.relative(horizontalFacing.getOpposite(), 3).below();
 		AnchoredStructureSite site = findAnchoredStructureSite(
@@ -1768,6 +1810,10 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		if (isPositionInExistingShelteredStructure(level, smokerPos)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = smokerPos.relative(horizontalFacing.getOpposite(), 3).below();
 		AnchoredStructureSite site = findAnchoredStructureSite(
@@ -1808,6 +1854,10 @@ public final class SettlementConstruction {
 	) {
 		if (existingBuildSite.isPresent()) {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, tablePos)) {
+			return WorkstationBuildResult.completed();
 		}
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
@@ -1887,6 +1937,10 @@ public final class SettlementConstruction {
 			), stock, tick));
 		}
 
+		if (isPositionInExistingShelteredStructure(level, boardPos)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		AnchoredStructureSite site = findAnchoredStructureSite(
 			level,
 			origin,
@@ -1950,6 +2004,10 @@ public final class SettlementConstruction {
 				structureFacing,
 				tick
 			), stock, tick));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, workstationPos)) {
+			return WorkstationBuildResult.completed();
 		}
 
 		AnchoredStructureSite site = findAnchoredStructureSite(
@@ -5867,6 +5925,84 @@ public final class SettlementConstruction {
 		}
 	}
 
+	public static boolean isPositionInExistingShelteredStructure(ServerLevel level, BlockPos pos) {
+		if (!level.hasChunkAt(pos) || !isExistingStructureFloor(level, pos.below())) {
+			return false;
+		}
+
+		if (!hasExistingStructureRoof(level, pos)) {
+			return false;
+		}
+
+		int boundedDirections = 0;
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (hasExistingStructureBoundary(level, pos, direction)) {
+				boundedDirections++;
+			}
+		}
+
+		return boundedDirections >= 2;
+	}
+
+	private static boolean hasExistingStructureRoof(ServerLevel level, BlockPos workstationPos) {
+		for (int dy = 2; dy <= 6; dy++) {
+			BlockPos scanPos = workstationPos.above(dy);
+
+			if (!level.hasChunkAt(scanPos)) {
+				return false;
+			}
+
+			BlockState state = level.getBlockState(scanPos);
+			if (state.isSolid() && isExistingStructureBlock(level, scanPos, state)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean hasExistingStructureBoundary(ServerLevel level, BlockPos workstationPos, Direction direction) {
+		for (int distance = 1; distance <= 5; distance++) {
+			BlockPos basePos = workstationPos.relative(direction, distance);
+
+			for (int dy = 0; dy <= 2; dy++) {
+				BlockPos scanPos = basePos.above(dy);
+
+				if (!level.hasChunkAt(scanPos)) {
+					return false;
+				}
+
+				BlockState state = level.getBlockState(scanPos);
+				if (isExistingStructureBoundaryBlock(level, scanPos, state)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isExistingStructureFloor(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		return state.isSolid() && isExistingStructureBlock(level, pos, state);
+	}
+
+	private static boolean isExistingStructureBoundaryBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		return isExistingStructureBlock(level, pos, state)
+			&& (state.isSolid()
+				|| state.getBlock() instanceof CrossCollisionBlock
+				|| state.getBlock() instanceof DoorBlock
+				|| state.getBlock() instanceof FenceGateBlock
+				|| state.getBlock() instanceof TrapDoorBlock);
+	}
+
+	private static boolean isExistingStructureBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		return !isReplaceable(state)
+			&& !state.liquid()
+			&& !canLandscapeRemove(level, pos, state);
+	}
+
 	private static int signRotationForFacing(Direction facing) {
 		return switch (facing) {
 			case EAST -> 12;
@@ -6676,17 +6812,21 @@ public final class SettlementConstruction {
 		}
 	}
 
-	public record WorkstationBuildResult(boolean isStarted, boolean isBlocked, boolean isResumed, SettlementBuildSite buildSite) {
+	public record WorkstationBuildResult(boolean isStarted, boolean isBlocked, boolean isResumed, boolean isCompleted, SettlementBuildSite buildSite) {
 		public static WorkstationBuildResult started(SettlementBuildSite buildSite) {
-			return new WorkstationBuildResult(true, false, false, buildSite);
+			return new WorkstationBuildResult(true, false, false, false, buildSite);
 		}
 
 		public static WorkstationBuildResult resumed(SettlementBuildSite buildSite) {
-			return new WorkstationBuildResult(false, false, true, buildSite);
+			return new WorkstationBuildResult(false, false, true, false, buildSite);
 		}
 
 		public static WorkstationBuildResult blocked() {
-			return new WorkstationBuildResult(false, true, false, null);
+			return new WorkstationBuildResult(false, true, false, false, null);
+		}
+
+		public static WorkstationBuildResult completed() {
+			return new WorkstationBuildResult(false, false, false, true, null);
 		}
 	}
 

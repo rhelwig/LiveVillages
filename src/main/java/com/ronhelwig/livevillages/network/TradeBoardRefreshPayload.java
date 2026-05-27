@@ -14,6 +14,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.menu.TradeBoardInventoryEntryView;
 import com.ronhelwig.livevillages.menu.TradeBoardPlayerGoodsView;
+import com.ronhelwig.livevillages.menu.TradeBoardRaidView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 
 public record TradeBoardRefreshPayload(
@@ -21,6 +22,8 @@ public record TradeBoardRefreshPayload(
 	TradeBoardSettlementView settlement,
 	String message,
 	boolean success,
+	String playerStandingLabel,
+	TradeBoardRaidView raid,
 	List<TradeBoardPlayerGoodsView> playerGoods,
 	List<TradeBoardInventoryEntryView> inventoryRows
 ) implements CustomPacketPayload {
@@ -30,6 +33,8 @@ public record TradeBoardRefreshPayload(
 		TradeBoardSettlementView.CODEC.fieldOf("settlement").forGetter(TradeBoardRefreshPayload::settlement),
 		Codec.STRING.optionalFieldOf("message", "").forGetter(TradeBoardRefreshPayload::message),
 		Codec.BOOL.optionalFieldOf("success", false).forGetter(TradeBoardRefreshPayload::success),
+		Codec.STRING.optionalFieldOf("player_standing_label", "").forGetter(TradeBoardRefreshPayload::playerStandingLabel),
+		TradeBoardRaidView.CODEC.optionalFieldOf("raid", TradeBoardRaidView.EMPTY).forGetter(TradeBoardRefreshPayload::raid),
 		TradeBoardPlayerGoodsView.CODEC.listOf().optionalFieldOf("player_goods", List.of()).forGetter(TradeBoardRefreshPayload::playerGoods),
 		TradeBoardInventoryEntryView.CODEC.listOf().optionalFieldOf("inventory_rows", List.of()).forGetter(TradeBoardRefreshPayload::inventoryRows)
 	).apply(instance, TradeBoardRefreshPayload::new));

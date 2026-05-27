@@ -464,7 +464,10 @@ public final class SettlementLoadedObservation {
 		if (state.is(Blocks.SMOOTH_STONE)
 			|| state.is(Blocks.SMOOTH_STONE_SLAB)
 			|| state.is(Blocks.STONE_STAIRS)
-			|| state.is(Blocks.STONE_SLAB)) {
+			|| state.is(Blocks.STONE_SLAB)
+			|| state.is(Blocks.POLISHED_GRANITE)
+			|| state.is(Blocks.POLISHED_DIORITE)
+			|| state.is(Blocks.POLISHED_ANDESITE)) {
 			return "smooth";
 		}
 

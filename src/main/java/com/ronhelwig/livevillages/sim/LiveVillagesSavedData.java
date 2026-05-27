@@ -48,6 +48,10 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int SHARED_MAP_MAX_SAMPLES_PER_UPDATE = 1_200;
 	private static final int SHARED_MAP_REFRESH_TICKS = 600;
 	private static final int SHARED_MAP_MAX_CELLS_PER_DIMENSION = 40_000;
+	private static final com.mojang.serialization.MapCodec<OutpostPersistence> OUTPOST_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(OutpostPersistence::playerStandings),
+		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(OutpostPersistence::raids)
+	).apply(instance, OutpostPersistence::new));
 	private static final Codec<LiveVillagesSavedData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, SettlementState.CODEC).optionalFieldOf("settlements", Map.of()).forGetter(data -> data.settlements),
 		Codec.unboundedMap(Codec.STRING, RouteState.CODEC).optionalFieldOf("routes", Map.of()).forGetter(data -> data.routes),
@@ -58,6 +62,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
+		OUTPOST_PERSISTENCE_CODEC.forGetter(data -> new OutpostPersistence(data.outpostPlayerStandings, data.outpostRaidStates)),
 		Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("villager_settlements", Map.of()).forGetter(data -> data.villagerSettlements),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
@@ -81,6 +86,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
 	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
+	private final LinkedHashMap<String, Map<String, OutpostPlayerStanding>> outpostPlayerStandings;
+	private final LinkedHashMap<String, OutpostRaidState> outpostRaidStates;
 	private final LinkedHashMap<String, String> villagerSettlements;
 	private final LinkedHashMap<String, Long> preferredVillagerHomes;
 	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
@@ -90,6 +97,16 @@ public class LiveVillagesSavedData extends SavedData {
 	public final Map<String, CachedSurvey> surveyCache = new HashMap<>();
 
 	public record CachedSurvey(SettlementConstruction.InfrastructureSurvey survey, long lastSurveyTick) {
+	}
+
+	private record OutpostPersistence(
+		Map<String, Map<String, OutpostPlayerStanding>> playerStandings,
+		Map<String, OutpostRaidState> raids
+	) {
+		private OutpostPersistence {
+			playerStandings = playerStandings == null ? Map.of() : playerStandings;
+			raids = raids == null ? Map.of() : raids;
+		}
 	}
 
 	public record SharedTerrainCell(String terrainCode, long lastObservedTick) {
@@ -108,7 +125,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new OutpostPersistence(Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -121,6 +138,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
 		Map<String, Map<String, Integer>> bakeryFreebiesOwed,
+		OutpostPersistence outpostPersistence,
 		Map<String, String> villagerSettlements,
 		Map<String, Long> preferredVillagerHomes,
 		Map<String, Long> loadedRoadworkCatchupTicks,
@@ -139,6 +157,9 @@ public class LiveVillagesSavedData extends SavedData {
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
 		this.bakeryFreebiesOwed = new LinkedHashMap<>();
 		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
+		this.outpostPlayerStandings = new LinkedHashMap<>();
+		outpostPersistence.playerStandings().forEach((settlementId, playerStandings) -> this.outpostPlayerStandings.put(settlementId, new LinkedHashMap<>(playerStandings)));
+		this.outpostRaidStates = new LinkedHashMap<>(outpostPersistence.raids());
 		this.villagerSettlements = new LinkedHashMap<>(villagerSettlements);
 		this.preferredVillagerHomes = new LinkedHashMap<>(preferredVillagerHomes);
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
@@ -170,6 +191,39 @@ public class LiveVillagesSavedData extends SavedData {
 
 	public Collection<SettlementConstructionDelivery> getConstructionDeliveries() {
 		return Collections.unmodifiableCollection(constructionDeliveries.values());
+	}
+
+	public Collection<OutpostRaidState> outpostRaidStates() {
+		return Collections.unmodifiableCollection(outpostRaidStates.values());
+	}
+
+	public Optional<OutpostRaidState> outpostRaidState(String outpostSettlementId) {
+		if (outpostSettlementId == null || outpostSettlementId.isBlank()) {
+			return Optional.empty();
+		}
+
+		return Optional.ofNullable(outpostRaidStates.get(outpostSettlementId));
+	}
+
+	public void putOutpostRaidState(OutpostRaidState raidState) {
+		if (raidState == null || raidState.outpostSettlementId().isBlank()) {
+			return;
+		}
+
+		OutpostRaidState previous = outpostRaidStates.put(raidState.outpostSettlementId(), raidState);
+		if (!raidState.equals(previous)) {
+			setDirty();
+		}
+	}
+
+	public void removeOutpostRaidState(String outpostSettlementId) {
+		if (outpostSettlementId == null || outpostSettlementId.isBlank()) {
+			return;
+		}
+
+		if (outpostRaidStates.remove(outpostSettlementId) != null) {
+			setDirty();
+		}
 	}
 
 	public char sharedTerrainAt(net.minecraft.resources.ResourceKey<Level> dimension, int worldX, int worldZ) {
@@ -235,6 +289,13 @@ public class LiveVillagesSavedData extends SavedData {
 			.filter(buildSite -> buildSite.settlementId().equals(settlementId))
 			.filter(buildSite -> buildSite.blueprintId() == blueprintId)
 			.filter(buildSite -> buildSite.referencesWorkstation(workstationPos))
+			.findFirst();
+	}
+
+	public Optional<SettlementBuildSite> findBuildSite(String settlementId, SettlementBuildSiteType blueprintId) {
+		return buildSites.values().stream()
+			.filter(buildSite -> buildSite.settlementId().equals(settlementId))
+			.filter(buildSite -> buildSite.blueprintId() == blueprintId)
 			.findFirst();
 	}
 
@@ -353,6 +414,146 @@ public class LiveVillagesSavedData extends SavedData {
 
 		setDirty();
 		return true;
+	}
+
+	public OutpostPlayerStanding outpostPlayerStanding(String settlementId, UUID playerId) {
+		if (settlementId == null || playerId == null) {
+			return OutpostPlayerStanding.unknown();
+		}
+
+		Map<String, OutpostPlayerStanding> playerStandings = outpostPlayerStandings.get(settlementId);
+		if (playerStandings == null) {
+			return OutpostPlayerStanding.unknown();
+		}
+
+		return playerStandings.getOrDefault(playerId.toString(), OutpostPlayerStanding.unknown());
+	}
+
+	public OutpostPlayerStanding settlementPlayerStanding(SettlementState settlement, UUID playerId) {
+		if (settlement == null || playerId == null) {
+			return OutpostPlayerStanding.unknown();
+		}
+
+		Map<String, OutpostPlayerStanding> playerStandings = outpostPlayerStandings.get(settlement.id());
+		if (playerStandings == null) {
+			return SettlementPlayerStandings.defaultStanding(settlement.kind());
+		}
+
+		return playerStandings.getOrDefault(playerId.toString(), SettlementPlayerStandings.defaultStanding(settlement.kind()));
+	}
+
+	public OutpostPlayerStanding settlementPlayerStanding(SettlementState settlement, ServerPlayer player) {
+		if (settlement == null || player == null) {
+			return OutpostPlayerStanding.unknown();
+		}
+
+		Map<String, OutpostPlayerStanding> playerStandings = outpostPlayerStandings.get(settlement.id());
+		OutpostPlayerStanding defaultStanding = SettlementPlayerStandings.defaultStanding(settlement.kind());
+		if (playerStandings == null || playerStandings.isEmpty()) {
+			return defaultStanding;
+		}
+
+		OutpostPlayerStanding uuidStanding = playerStandings.get(player.getUUID().toString());
+		OutpostPlayerStanding nameStanding = playerStandings.get(playerStandingNameKey(player));
+		OutpostPlayerStanding singleplayerStanding = playerStandings.get(singleplayerStandingKey());
+
+		if (player.level().getServer().isSingleplayer()) {
+			List<OutpostPlayerStanding> directStandings = new ArrayList<>();
+			if (singleplayerStanding != null) {
+				directStandings.add(singleplayerStanding);
+			}
+			if (uuidStanding != null) {
+				directStandings.add(uuidStanding);
+			}
+			if (nameStanding != null) {
+				directStandings.add(nameStanding);
+			}
+
+			OutpostPlayerStanding standing = singleplayerStanding != null
+				? SettlementPlayerStandings.bestStanding(settlement.kind(), directStandings)
+				: SettlementPlayerStandings.mergeHistoricalStandings(settlement.kind(), playerStandings.values());
+
+			if (!standing.equals(defaultStanding)
+				&& (singleplayerStanding == null || !singleplayerStanding.equals(standing) || uuidStanding == null || nameStanding == null)) {
+				setSettlementPlayerStanding(settlement, player, standing);
+			}
+
+			return standing;
+		}
+
+		if (uuidStanding != null) {
+			return uuidStanding;
+		}
+
+		if (nameStanding != null) {
+			return nameStanding;
+		}
+
+		return defaultStanding;
+	}
+
+	public void setSettlementPlayerStanding(String settlementId, UUID playerId, OutpostPlayerStanding standing) {
+		setOutpostPlayerStanding(settlementId, playerId, standing);
+	}
+
+	public void setSettlementPlayerStanding(SettlementState settlement, ServerPlayer player, OutpostPlayerStanding standing) {
+		if (settlement == null || player == null || standing == null) {
+			return;
+		}
+
+		setPlayerStandingEntries(
+			settlement.id(),
+			player.getUUID().toString(),
+			playerStandingNameKey(player),
+			player.level().getServer().isSingleplayer() ? singleplayerStandingKey() : null,
+			standing
+		);
+	}
+
+	public void setOutpostPlayerStanding(String settlementId, UUID playerId, OutpostPlayerStanding standing) {
+		if (settlementId == null || settlementId.isBlank() || playerId == null || standing == null) {
+			return;
+		}
+
+		setPlayerStandingEntries(settlementId, playerId.toString(), null, null, standing);
+	}
+
+	private void setPlayerStandingEntries(
+		String settlementId,
+		String primaryKey,
+		String secondaryKey,
+		String tertiaryKey,
+		OutpostPlayerStanding standing
+	) {
+		if (settlementId == null || settlementId.isBlank() || primaryKey == null || primaryKey.isBlank() || standing == null) {
+			return;
+		}
+
+		Map<String, OutpostPlayerStanding> updated = new LinkedHashMap<>(outpostPlayerStandings.getOrDefault(settlementId, Map.of()));
+		boolean changed = !standing.equals(updated.put(primaryKey, standing));
+
+		if (secondaryKey != null && !secondaryKey.isBlank()) {
+			changed |= !standing.equals(updated.put(secondaryKey, standing));
+		}
+
+		if (tertiaryKey != null && !tertiaryKey.isBlank()) {
+			changed |= !standing.equals(updated.put(tertiaryKey, standing));
+		}
+
+		if (!changed) {
+			return;
+		}
+
+		outpostPlayerStandings.put(settlementId, updated);
+		setDirty();
+	}
+
+	private static String playerStandingNameKey(ServerPlayer player) {
+		return "name:" + player.getGameProfile().name().toLowerCase(java.util.Locale.ROOT);
+	}
+
+	private static String singleplayerStandingKey() {
+		return "singleplayer";
 	}
 
 	public Optional<BlockPos> preferredVillagerHome(UUID villagerId) {
@@ -495,6 +696,9 @@ public class LiveVillagesSavedData extends SavedData {
 		boolean removed = settlements.remove(settlementId) != null;
 		removed |= bootstrapVillagerSpawnTicks.remove(settlementId) != null;
 		removed |= bakeryFreebiesOwed.remove(settlementId) != null;
+		removed |= outpostPlayerStandings.remove(settlementId) != null;
+		removed |= outpostRaidStates.remove(settlementId) != null;
+		removed |= outpostRaidStates.entrySet().removeIf(entry -> entry.getValue().targetSettlementId().equals(settlementId));
 		removed |= buildSites.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 		removed |= constructionDeliveries.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 
@@ -716,7 +920,7 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			long taskStart = SettlementPerformanceLog.start();
-			changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+			changed |= ensureWorkforceIfNeeded(level, settlement);
 			Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, settlement);
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
@@ -951,11 +1155,65 @@ public class LiveVillagesSavedData extends SavedData {
 			ServerLevel level = server.getLevel(settlement.dimension());
 
 			if (!isLoadedMaintenanceDue(settlement, currentTick, "construction", intervalTicks)
-				|| level == null || !level.isLoaded(settlement.center()) || !level.isPositionEntityTicking(settlement.center()) || !SettlementVillagers.usesActualVillagers(settlement)) {
+				|| level == null || !level.isLoaded(settlement.center()) || !level.isPositionEntityTicking(settlement.center())) {
 				continue;
 			}
 
 			long taskStart = SettlementPerformanceLog.start();
+
+			if (settlement.kind() == SettlementKind.OUTPOST) {
+				Map<String, Integer> actualPopulation = OutpostSettlementWork.censusPopulation(level, settlement);
+				SettlementState workingSettlement = actualPopulation.equals(settlement.population())
+					? settlement
+					: settlement.withPopulation(actualPopulation);
+				Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
+				changed |= OutpostGear.maintainOutpostEquipment(level, workingSettlement, stock) > 0;
+				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+				SettlementConstructionWork.ConstructionWorkResult constructionResult = SettlementConstructionWork.maintainLoadedOutpostConstruction(
+					level,
+					workingSettlement,
+					stock,
+					activeBuildSites,
+					OutpostSettlementWork.canWorkThisPass(workingSettlement, currentTick, intervalTicks, actualPopulation.values().stream().mapToInt(Integer::intValue).sum())
+				);
+
+				for (SettlementBuildSite buildSite : constructionResult.buildSites()) {
+					SettlementBuildSite previousBuildSite = buildSites.put(buildSite.id(), buildSite);
+
+					if (!buildSite.equals(previousBuildSite)) {
+						changed = true;
+					}
+				}
+
+				boolean stockChanged = !stock.equals(workingSettlement.stock());
+				SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
+
+				if (!updatedSettlement.equals(settlement)) {
+					entry.setValue(updatedSettlement);
+					changed = true;
+				}
+
+				changed |= constructionResult.worldChanged();
+				SettlementPerformanceLog.warnIfSlow("loaded_outpost_construction", workingSettlement, taskStart, server.getTickCount());
+				continue;
+			}
+
+			if (!SettlementVillagers.usesActualVillagers(settlement)) {
+				continue;
+			}
+
 			Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, settlement);
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
@@ -1096,6 +1354,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return Math.floorMod(hash, modulo);
 	}
 
+	private static boolean ensureWorkforceIfNeeded(ServerLevel level, SettlementState settlement) {
+		return SettlementVillagers.usesActualVillagers(settlement) && SettlementVillagers.ensureWorkforce(level, settlement);
+	}
+
 	private boolean tryStartVanillaCartographerHouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		boolean changed = false;
 
@@ -1114,7 +1376,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1131,6 +1393,9 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST, boardPos);
+			if (existingBuildSite.isEmpty() && findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST).isPresent()) {
+				continue;
+			}
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartTradingPostAtWorkstation(
 				level,
@@ -1145,7 +1410,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1217,7 +1482,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1264,7 +1529,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1291,7 +1556,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1347,7 +1612,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1374,7 +1639,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1401,7 +1666,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
-				changed |= SettlementVillagers.ensureWorkforce(level, settlement);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1429,6 +1694,12 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementVillagers.ensureVillagerHomes(level, settlement);
 				SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 				simulationInput = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
+			} else if (loadedSettlement && settlement.kind() == SettlementKind.OUTPOST) {
+				int trimmedRaiders = OutpostSettlementWork.trimExcessUntrackedRaiders(level, settlement);
+				if (trimmedRaiders > 0) {
+					LiveVillages.LOGGER.info("Trimmed {} excess unmanaged raiders from outpost {}", trimmedRaiders, settlement.id());
+				}
+				simulationInput = settlement.withPopulation(OutpostSettlementWork.censusPopulation(level, settlement));
 			}
 
 			long simulationStart = SettlementPerformanceLog.start();
@@ -1444,17 +1715,29 @@ public class LiveVillagesSavedData extends SavedData {
 
 			SettlementState updatedSettlement = simulationResult.settlement();
 
-			if (simulationResult.requestedVillagerSpawns() > 0 && level != null && level.isLoaded(updatedSettlement.center()) && level.isPositionEntityTicking(updatedSettlement.center()) && SettlementVillagers.usesActualVillagers(updatedSettlement)) {
-				LiveVillages.LOGGER.info("Spawning {} villagers for settlement {}", simulationResult.requestedVillagerSpawns(), settlement.id());
-				int spawnedVillagers = spawnSettlementVillagers(level, updatedSettlement, simulationResult.requestedVillagerSpawns());
+			if (simulationResult.requestedVillagerSpawns() > 0 && level != null && level.isLoaded(updatedSettlement.center()) && level.isPositionEntityTicking(updatedSettlement.center())) {
+				if (updatedSettlement.kind() == SettlementKind.OUTPOST) {
+					LiveVillages.LOGGER.info("Recruiting {} outpost members for settlement {}", simulationResult.requestedVillagerSpawns(), settlement.id());
+					OutpostRecruitmentResult recruitmentResult = spawnOutpostRecruits(level, updatedSettlement, simulationResult.requestedVillagerSpawns());
 
-				if (spawnedVillagers > 0) {
-					SettlementVillagers.ensureWorkforce(level, updatedSettlement);
-					SettlementVillagers.ensureVillagerHomes(level, updatedSettlement);
-					SettlementVillagers.ensureVillagerGatheringPoint(level, updatedSettlement);
-					updatedSettlement = updatedSettlement
-						.withGrowthProgress(Math.max(0.0D, updatedSettlement.growthProgress() - spawnedVillagers))
-						.withPopulation(SettlementVillagers.censusPopulation(level, updatedSettlement));
+					if (recruitmentResult.spawned() > 0) {
+						updatedSettlement = updatedSettlement
+							.withStock(recruitmentResult.stock())
+							.withGrowthProgress(Math.max(0.0D, updatedSettlement.growthProgress() - recruitmentResult.spawned()))
+							.withPopulation(OutpostSettlementWork.censusPopulation(level, updatedSettlement));
+					}
+				} else if (SettlementVillagers.usesActualVillagers(updatedSettlement)) {
+					LiveVillages.LOGGER.info("Spawning {} villagers for settlement {}", simulationResult.requestedVillagerSpawns(), settlement.id());
+					int spawnedVillagers = spawnSettlementVillagers(level, updatedSettlement, simulationResult.requestedVillagerSpawns());
+
+					if (spawnedVillagers > 0) {
+						SettlementVillagers.ensureWorkforce(level, updatedSettlement);
+						SettlementVillagers.ensureVillagerHomes(level, updatedSettlement);
+						SettlementVillagers.ensureVillagerGatheringPoint(level, updatedSettlement);
+						updatedSettlement = updatedSettlement
+							.withGrowthProgress(Math.max(0.0D, updatedSettlement.growthProgress() - spawnedVillagers))
+							.withPopulation(SettlementVillagers.censusPopulation(level, updatedSettlement));
+					}
 				}
 			}
 
@@ -1563,6 +1846,34 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		return spawnedVillagers;
+	}
+
+	private static OutpostRecruitmentResult spawnOutpostRecruits(ServerLevel level, SettlementState settlement, int requestedRecruits) {
+		int spawnedRecruits = 0;
+		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
+		int livePopulation = OutpostSettlementWork.censusPopulation(level, settlement).values().stream().mapToInt(Integer::intValue).sum();
+		int remainingCapacity = Math.max(0, OutpostSettlementWork.recruitmentCapacity(settlement) - livePopulation);
+		int spawnLimit = Math.min(requestedRecruits, remainingCapacity);
+
+		for (int i = 0; i < spawnLimit; i++) {
+			Optional<BlockPos> spawnPos = SettlementVillagers.findSpawnPos(level, settlement.center(), CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS);
+
+			if (spawnPos.isEmpty() || !OutpostSettlementWork.hasRecruitmentSupplies(stock)) {
+				break;
+			}
+
+			if (!OutpostSettlementWork.spawnRecruit(level, settlement, spawnPos.get(), stock)) {
+				break;
+			}
+
+			OutpostSettlementWork.consumeRecruitmentSupplies(stock);
+			spawnedRecruits++;
+		}
+
+		return new OutpostRecruitmentResult(spawnedRecruits, stock);
+	}
+
+	private record OutpostRecruitmentResult(int spawned, Map<String, Integer> stock) {
 	}
 
 	private List<SettlementState> getSettlementsInDimension(MinecraftServer server, net.minecraft.resources.ResourceKey<Level> dimension) {

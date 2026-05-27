@@ -223,6 +223,10 @@ public final class SettlementEconomyRules {
 	public static int plannedDemandForGoods(SettlementState settlement, String goodsKey) {
 		int demand = activeProjectDemandForGoods(settlement, goodsKey);
 
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			return demand + outpostPlannedDemandForGoods(settlement, goodsKey);
+		}
+
 		if (needsHousingProject(settlement) && !hasProjectType(settlement, SettlementProjectType.HOUSING)) {
 			demand += SettlementProjectType.HOUSING.stockCost().getOrDefault(goodsKey, 0);
 		}
@@ -233,6 +237,20 @@ public final class SettlementEconomyRules {
 
 		if (needsStorageProject(settlement) && !hasProjectType(settlement, SettlementProjectType.STORAGE)) {
 			demand += SettlementProjectType.STORAGE.stockCost().getOrDefault(goodsKey, 0);
+		}
+
+		return demand;
+	}
+
+	private static int outpostPlannedDemandForGoods(SettlementState settlement, String goodsKey) {
+		int demand = 0;
+
+		if (needsOutpostStorageProject(settlement) && !hasProjectType(settlement, SettlementProjectType.STORAGE)) {
+			demand += SettlementProjectType.STORAGE.stockCost().getOrDefault(goodsKey, 0);
+		}
+
+		if (needsOutpostDefenseProject(settlement) && !hasProjectType(settlement, SettlementProjectType.DEFENSE)) {
+			demand += SettlementProjectType.DEFENSE.stockCost().getOrDefault(goodsKey, 0);
 		}
 
 		return demand;
@@ -265,6 +283,13 @@ public final class SettlementEconomyRules {
 	}
 
 	private static int professionalReserveForGoods(SettlementState settlement, String goodsKey) {
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			int outpostReserve = outpostReserveForGoods(goodsKey);
+			if (outpostReserve > 0) {
+				return outpostReserve;
+			}
+		}
+
 		if (settlement.population().getOrDefault(SettlementRoleKeys.FORESTER, 0) > 0) {
 			if (SettlementGoods.isSeedlingGoods(goodsKey)) {
 				return goodsKey.equals("dark_oak_sapling") ? 8 : 4;
@@ -364,6 +389,24 @@ public final class SettlementEconomyRules {
 		return 0;
 	}
 
+	private static int outpostReserveForGoods(String goodsKey) {
+		return switch (goodsKey) {
+			case "arrow" -> 48;
+			case "iron_ingot" -> 16;
+			case "raw_iron", "coal" -> 12;
+			case "leather", "flint", "feather" -> 16;
+			case "bread", "beef", "mutton", "pork", "cod" -> 18;
+			case "wheat", "carrot", "potato", "beetroot" -> 24;
+			case "logs", "planks", "cobblestone" -> 36;
+			case "stick" -> 24;
+			case "torch" -> 16;
+			case "lantern" -> 8;
+			case "chest", "ladder" -> 4;
+			case "emerald" -> 8;
+			default -> 0;
+		};
+	}
+
 	private static int activeProjectDemandForGoods(SettlementState settlement, String goodsKey) {
 		int demand = 0;
 
@@ -391,6 +434,19 @@ public final class SettlementEconomyRules {
 			.mapToInt(Integer::intValue)
 			.sum();
 		return totalStock >= 48;
+	}
+
+	private static boolean needsOutpostStorageProject(SettlementState settlement) {
+		int totalStock = settlement.stock().values().stream()
+			.mapToInt(Integer::intValue)
+			.sum();
+		return totalStock >= 24;
+	}
+
+	private static boolean needsOutpostDefenseProject(SettlementState settlement) {
+		int population = Math.max(1, settlement.totalPopulation());
+		int desiredDefense = Math.max(1, (int) Math.ceil(population / 4.0D));
+		return settlement.defenseLevel() < desiredDefense;
 	}
 
 	private static boolean hasProjectType(SettlementState settlement, SettlementProjectType type) {

@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.client.screen;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -18,6 +19,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardGoodsView;
 import com.ronhelwig.livevillages.menu.TradeBoardInventoryEntryView;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardProjectView;
+import com.ronhelwig.livevillages.menu.TradeBoardRaidView;
 import com.ronhelwig.livevillages.menu.TradeBoardRouteView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
@@ -25,6 +27,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardTrading;
 import com.ronhelwig.livevillages.menu.TradeBoardTrading.GoodsTradeOption;
 import com.ronhelwig.livevillages.menu.TradeBoardTrading.PlayerGoodsOption;
 import com.ronhelwig.livevillages.network.TradeBoardRefreshPayload;
+import com.ronhelwig.livevillages.sim.SettlementKind;
 
 public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private static final int SCREEN_WIDTH = 360;
@@ -127,11 +130,23 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
 		TradeBoardSettlementView settlement = menu.settlement();
 		int growthWidth = font.width(settlement.growthSummary());
+		String standingText = menu.playerStandingLabel().isBlank() ? "" : "Rank: " + menu.playerStandingLabel();
+		int standingWidth = font.width(standingText);
+		int standingX = standingText.isBlank() ? imageWidth / 2 : (imageWidth - standingWidth) / 2;
+		int growthX = imageWidth - 10 - growthWidth;
+		int nameMaxWidth = standingText.isBlank()
+			? Math.max(80, growthX - 18)
+			: Math.max(80, standingX - 18);
+		String nameText = trimToWidth(settlement.settlementName(), nameMaxWidth);
 
-		graphics.text(font, settlement.settlementName(), 10, 8, 0xFFF8E6BE, false);
-		graphics.text(font, settlement.growthSummary(), imageWidth - 10 - growthWidth, 9, 0xFFF2CF84, false);
+		graphics.text(font, nameText, 10, 8, 0xFFF8E6BE, false);
+		if (!standingText.isBlank()) {
+			int standingMaxWidth = Math.max(80, growthX - standingX - 8);
+			graphics.text(font, trimToWidth(standingText, standingMaxWidth), standingX, 8, 0xFFEBCB87, false);
+		}
+		graphics.text(font, settlement.growthSummary(), growthX, 9, 0xFFF2CF84, false);
 
-		if (!activeTab.hidesTopSummary()) {
+		if (!hidesTopSummaryForActiveTab()) {
 			int y = TOP_SUMMARY_Y;
 			graphics.text(
 				font,
@@ -165,7 +180,13 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			case OVERVIEW -> drawOverviewTab(graphics, settlement);
 			case TRADE -> drawTradeTab(graphics, settlement);
 			case BOUNTIES -> drawBountiesTab(graphics, mouseX, mouseY, settlement);
-			case ROUTES -> drawRoutesTab(graphics, settlement);
+			case ROUTES -> {
+				if (isOutpostBoard()) {
+					drawRaidTab(graphics, settlement, menu.raid());
+				} else {
+					drawRoutesTab(graphics, settlement);
+				}
+			}
 		}
 	}
 
@@ -243,7 +264,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 		for (int index = 0; index < tabs.length; index++) {
 			Tab tab = tabs[index];
-			Button button = Button.builder(Component.literal(tab.label), clicked -> switchTab(tab))
+			Button button = Button.builder(Component.literal(tabLabel(tab)), clicked -> switchTab(tab))
 				.bounds(startX + index * (TAB_BUTTON_WIDTH + 6), topPos + TAB_BAR_Y, TAB_BUTTON_WIDTH, TAB_BUTTON_HEIGHT)
 				.build();
 			button.active = tab != activeTab;
@@ -340,6 +361,28 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		drawFeedback(graphics);
 	}
 
+	private void drawRaidTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement, TradeBoardRaidView raid) {
+		graphics.text(font, "Raid Status", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+		int y = TRADE_SECTION_TOP_Y + 13;
+		y = drawWrappedText(graphics, Component.literal(raid.status().isBlank() ? "No raid information recorded." : raid.status()), LEFT_COLUMN_X, y, imageWidth - 20, 0xFFE8DDC8) + 2;
+
+		if (!raid.targetSettlementName().isBlank()) {
+			graphics.text(font, "Target: " + trimToWidth(raid.targetSettlementName(), imageWidth - 70), LEFT_COLUMN_X, y, 0xFFDCC8A4, false);
+			y += INFO_ROW_SPACING + 1;
+		}
+
+		if (raid.partySize() > 0) {
+			graphics.text(font, "Party: " + raid.partySize() + " raiders  Phase: " + raid.phaseLabel(), LEFT_COLUMN_X, y, 0xFFDCC8A4, false);
+			y += INFO_ROW_SPACING + 1;
+		}
+
+		int detailY = Math.max(y + 8, 116);
+		graphics.text(font, "Last Raid Gains", LEFT_COLUMN_X, detailY, 0xFFF2CF84, false);
+		drawRaidLoot(graphics, raid, detailY + 14);
+		drawRaidRewards(graphics, raid, detailY + 14);
+		drawFeedback(graphics);
+	}
+
 	private void drawRoutesTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
 		drawTextSection(
 			graphics,
@@ -354,6 +397,53 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			)
 		);
 		drawRouteSection(graphics, WIDE_SECTION_X, ROUTE_SECTION_TOP_Y, "Recent Trade", settlement.routes(), settlement.routes().size());
+	}
+
+	private void drawRaidLoot(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
+		if (raid.loot().isEmpty()) {
+			graphics.text(font, "No goods recorded", LEFT_COLUMN_X, y, 0xFF9F8E72, false);
+			return;
+		}
+
+		int rowY = y;
+		int visibleCount = Math.min(7, raid.loot().size());
+		for (int index = 0; index < visibleCount; index++) {
+			TradeBoardGoodsView loot = raid.loot().get(index);
+			drawGoodsIcon(graphics, loot.goodsKey(), LEFT_COLUMN_X, rowY - 4, Math.max(1, loot.current()));
+			String label = TradeBoardTradeRules.compactLabel(loot.goodsKey(), loot.label());
+			graphics.text(font, trimToWidth(loot.current() + " " + label, 140), LEFT_COLUMN_X + 20, rowY, 0xFFE8DDC8, false);
+			rowY += INFO_ROW_SPACING + 2;
+		}
+
+		if (raid.loot().size() > visibleCount) {
+			graphics.text(font, "+" + (raid.loot().size() - visibleCount) + " more goods", LEFT_COLUMN_X, rowY, 0xFF9F8E72, false);
+		}
+	}
+
+	private void drawRaidRewards(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
+		int x = RIGHT_COLUMN_X;
+		graphics.text(font, "Player Rewards", x, y - 14, 0xFFF2CF84, false);
+
+		if (raid.playerRewards().isEmpty()) {
+			graphics.text(font, "No participants recorded", x, y, 0xFF9F8E72, false);
+			return;
+		}
+
+		List<Map.Entry<String, Integer>> rewards = raid.playerRewards().entrySet().stream()
+			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+			.toList();
+		int rowY = y;
+		int visibleCount = Math.min(7, rewards.size());
+		for (int index = 0; index < visibleCount; index++) {
+			Map.Entry<String, Integer> reward = rewards.get(index);
+			graphics.text(font, trimToWidth(reward.getKey(), 84), x, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, "+" + reward.getValue() + " support", x + 88, rowY, 0xFFDCC8A4, false);
+			rowY += INFO_ROW_SPACING + 2;
+		}
+
+		if (rewards.size() > visibleCount) {
+			graphics.text(font, "+" + (rewards.size() - visibleCount) + " more players", x, rowY, 0xFF9F8E72, false);
+		}
 	}
 
 	private void drawPlayerGoodsDetail(GuiGraphicsExtractor graphics, TradeBoardInventoryEntryView selected, TradeBoardSettlementView settlement) {
@@ -646,6 +736,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	private void updateFromServer(TradeBoardRefreshPayload payload) {
 		menu.updateSettlement(payload.settlement());
+		menu.updatePlayerStandingLabel(payload.playerStandingLabel());
+		menu.updateRaid(payload.raid());
 		playerInventoryRowsSnapshot = payload.inventoryRows();
 		hasPlayerInventoryRowsSnapshot = true;
 		feedbackMessage = payload.message();
@@ -806,6 +898,20 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	private static <T> List<T> firstRows(List<T> entries, int maxRows) {
 		return entries.subList(0, Math.min(entries.size(), maxRows));
+	}
+
+	private boolean isOutpostBoard() {
+		return menu.settlement().settlementKind() == SettlementKind.OUTPOST;
+	}
+
+	private String tabLabel(Tab tab) {
+		return isOutpostBoard() && tab == Tab.ROUTES ? "Raid" : tab.label;
+	}
+
+	private boolean hidesTopSummaryForActiveTab() {
+		return activeTab == Tab.TRADE
+			|| activeTab == Tab.BOUNTIES
+			|| (activeTab == Tab.ROUTES && isOutpostBoard());
 	}
 
 	private int infoSectionWidth(int x) {
@@ -1029,8 +1135,5 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			return this == TRADE;
 		}
 
-		private boolean hidesTopSummary() {
-			return this == TRADE || this == BOUNTIES;
-		}
 	}
 }

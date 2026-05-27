@@ -86,6 +86,7 @@ public final class BuildSiteAssistedPlacement {
 			}
 
 			List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks());
+			int placedBlocks = 1;
 			placePlannedBlock(level, buildSite, rootBlock.block(), rootBlock.pos(), stack);
 			updatedBlocks.set(rootBlock.index(), rootBlock.block().withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, ""));
 			savedData.releaseConstructionDeliveriesForBlock(buildSite.settlementId(), buildSite.id(), rootBlock.block().position());
@@ -93,12 +94,15 @@ public final class BuildSiteAssistedPlacement {
 			AssistedBuildBlock pairedBlock = pairedBuildBlock(level, buildSite, rootBlock).orElse(null);
 
 			if (pairedBlock != null) {
+				placedBlocks++;
 				placePlannedBlock(level, buildSite, pairedBlock.block(), pairedBlock.pos(), stack);
 				updatedBlocks.set(pairedBlock.index(), pairedBlock.block().withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, ""));
 				savedData.releaseConstructionDeliveriesForBlock(buildSite.settlementId(), buildSite.id(), pairedBlock.block().position());
 			}
 
-			savedData.putBuildSite(buildSite.withBlocks(updatedBlocks, isComplete(updatedBlocks), tick));
+			boolean complete = isComplete(updatedBlocks);
+			savedData.putBuildSite(buildSite.withBlocks(updatedBlocks, complete, tick));
+			SettlementPlayerStandings.recordBuildSupport(level, player, settlement.get(), placedBlocks, complete && !buildSite.complete());
 
 			if (!player.getAbilities().instabuild) {
 				stack.shrink(1);

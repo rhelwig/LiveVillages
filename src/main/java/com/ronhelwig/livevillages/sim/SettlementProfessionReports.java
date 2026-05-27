@@ -263,7 +263,6 @@ public final class SettlementProfessionReports {
 			ServerLevel level = server.getLevel(settlement.dimension());
 
 			if (level == null
-				|| !SettlementVillagers.usesActualVillagers(settlement)
 				|| !level.isLoaded(settlement.center())
 				|| !level.isPositionEntityTicking(settlement.center())) {
 				continue;
@@ -337,10 +336,15 @@ public final class SettlementProfessionReports {
 	private static String renderReport(ServerLevel level, SettlementState settlement, long dayIndex, DailyReport report) {
 		StringBuilder builder = new StringBuilder();
 		builder.append("Live Villages daily report\n");
-		builder.append("Village: ").append(settlement.name()).append('\n');
+		builder.append("Settlement: ").append(settlement.name()).append('\n');
+		builder.append("Kind: ").append(settlement.kind().getSerializedName()).append('\n');
 		builder.append("Day: ").append(dayNumber(dayIndex)).append('\n');
 		builder.append("Dimension: ").append(level.dimension().identifier()).append('\n');
 		builder.append("Generated: ").append(LocalDateTime.now()).append("\n\n");
+
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			appendOutpostMemberSummary(builder, level, settlement);
+		}
 
 		if (!report.tradeSummaries.isEmpty()) {
 			builder.append("Inter-settlement trades:\n");
@@ -400,6 +404,43 @@ public final class SettlementProfessionReports {
 		}
 
 		return builder.toString();
+	}
+
+	private static void appendOutpostMemberSummary(StringBuilder builder, ServerLevel level, SettlementState settlement) {
+		Map<String, Integer> population = OutpostSettlementWork.censusPopulation(level, settlement);
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		OutpostRaidState raidState = savedData.outpostRaidState(settlement.id()).orElse(null);
+		SettlementState raidTarget = raidState == null
+			? null
+			: savedData.getSettlement(raidState.targetSettlementId()).orElse(null);
+		builder.append("Outpost raid status: ")
+			.append(OutpostRaids.describeRaidState(raidState, raidTarget, OutpostRaids.currentRaidTick(level.getServer())))
+			.append('\n');
+		if (raidState != null && raidState.phase() == OutpostRaidPhase.COOLDOWN && !raidState.outcome().isBlank()) {
+			if (raidState.lastLoot().isEmpty()) {
+				builder.append("Last raid gains: none recorded\n");
+			} else {
+				builder.append("Last raid gains: ").append(summarizeGoods(raidState.lastLoot())).append('\n');
+			}
+
+			if (raidState.lastPlayerRewards().isEmpty()) {
+				builder.append("Last raid player rewards: none recorded\n");
+			} else {
+				builder.append("Last raid player rewards: ").append(summarizePlayerRewards(raidState.lastPlayerRewards())).append('\n');
+			}
+		}
+
+		if (population.isEmpty()) {
+			builder.append("Outpost members observed: none\n\n");
+			return;
+		}
+
+		String summary = population.entrySet().stream()
+			.filter(entry -> entry.getValue() > 0)
+			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+			.map(entry -> entry.getValue() + " " + roleLabel(entry.getKey()))
+			.collect(java.util.stream.Collectors.joining(", "));
+		builder.append("Outpost members observed: ").append(summary).append("\n\n");
 	}
 
 	private static void appendProgressLine(StringBuilder builder, String label, Map<String, Integer> goods) {
@@ -796,6 +837,8 @@ public final class SettlementProfessionReports {
 			case SettlementRoleKeys.PORTMASTER -> "Portmaster";
 			case SettlementRoleKeys.TRADEMASTER -> "Trademaster";
 			case SettlementRoleKeys.UNEMPLOYED -> "Unemployed";
+			case SettlementRoleKeys.GUARD -> "Guard";
+			case SettlementRoleKeys.PILLAGER -> "Pillager";
 			case "armorer" -> "Armorer";
 			case "child" -> "Children";
 			case "cleric" -> "Cleric";
@@ -912,6 +955,13 @@ public final class SettlementProfessionReports {
 		return goods.entrySet().stream()
 			.sorted(Comparator.comparing(Map.Entry::getKey))
 			.map(entry -> entry.getValue() + " " + goodsLabel(entry.getKey()))
+			.collect(java.util.stream.Collectors.joining(", "));
+	}
+
+	private static String summarizePlayerRewards(Map<String, Integer> rewards) {
+		return rewards.entrySet().stream()
+			.sorted(Comparator.comparing(Map.Entry::getKey))
+			.map(entry -> entry.getKey() + " +" + entry.getValue() + " support")
 			.collect(java.util.stream.Collectors.joining(", "));
 	}
 

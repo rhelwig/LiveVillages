@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.block;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import com.mojang.serialization.MapCodec;
 
@@ -43,6 +44,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementState;
@@ -196,14 +198,19 @@ public class TradeBoardBlock extends BaseEntityBlock {
 			.orElseGet(() -> tradeBoard.createAndLinkCustomSettlement(serverLevel));
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
-		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartTradingPostAtWorkstation(
-			serverLevel,
-			pos,
-			state.getValue(FACING),
-			settlement.id(),
-			stock,
-			savedData.findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST, pos)
-		);
+		Optional<SettlementBuildSite> existingBuildSite = savedData.findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST, pos);
+		Optional<SettlementBuildSite> existingTradingPost = savedData.findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST);
+		boolean hasOtherTradingPost = existingBuildSite.isEmpty() && existingTradingPost.isPresent();
+		SettlementConstruction.WorkstationBuildResult buildResult = hasOtherTradingPost
+			? SettlementConstruction.WorkstationBuildResult.completed()
+			: SettlementConstruction.tryStartTradingPostAtWorkstation(
+				serverLevel,
+				pos,
+				state.getValue(FACING),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
 
 		if (buildResult.isStarted()) {
 			savedData.putBuildSite(buildResult.buildSite());
@@ -226,6 +233,8 @@ public class TradeBoardBlock extends BaseEntityBlock {
 				serverPlayer.sendSystemMessage(Component.literal("Trading Post construction started around this Trade Board."));
 			} else if (buildResult.isResumed()) {
 				serverPlayer.sendSystemMessage(Component.literal("Trading Post construction is already planned around this Trade Board."));
+			} else if (hasOtherTradingPost) {
+				serverPlayer.sendSystemMessage(Component.literal("This settlement already has a Trading Post site, so this Trade Board will not start another one."));
 			} else if (buildResult.isBlocked()) {
 				serverPlayer.sendSystemMessage(Component.literal("The settlement can't build a Trading Post here."));
 			}

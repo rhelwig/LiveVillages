@@ -13,8 +13,9 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 
 import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostTrust;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
-import com.ronhelwig.livevillages.sim.SettlementKind;
+import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
@@ -27,14 +28,24 @@ public final class SettlementTradeAccess {
 	}
 
 	public static Optional<TradeBoardOpenData> openData(ServerLevel level, BlockPos accessPos) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
 		return resolveSettlement(level, accessPos).map(settlement -> new TradeBoardOpenData(
 			accessPos.immutable(),
-			createSettlementView(level, settlement)
+			createSettlementView(level, settlement),
+			"",
+			TradeBoardLogic.createRaidView(level, savedData, settlement)
 		));
 	}
 
 	public static boolean openTradeMenu(ServerPlayer player, BlockPos accessPos, Component title) {
-		Optional<TradeBoardOpenData> openData = openData((ServerLevel) player.level(), accessPos);
+		ServerLevel level = (ServerLevel) player.level();
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<TradeBoardOpenData> openData = resolveSettlement(level, accessPos).map(settlement -> new TradeBoardOpenData(
+			accessPos.immutable(),
+			createSettlementView(level, settlement),
+			SettlementPlayerStandings.displayStanding(savedData, settlement, player),
+			TradeBoardLogic.createRaidView(level, savedData, settlement)
+		));
 		if (openData.isEmpty()) {
 			return false;
 		}
@@ -49,13 +60,14 @@ public final class SettlementTradeAccess {
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
-		return SettlementConstruction.findWorkstationSettlement(level, accessPos)
+		return OutpostTrust.findOrCreateOutpostAt(level, savedData, accessPos)
+			.or(() -> SettlementConstruction.findWorkstationSettlement(level, accessPos))
 			.or(() -> SettlementConstruction.findSettlementContainingPosition(level, accessPos))
 			.or(() -> savedData.findNearestSettlement(
 				level.dimension(),
 				accessPos,
 				LINK_RADIUS_BLOCKS,
-				settlement -> settlement.kind() != SettlementKind.OUTPOST
+				settlement -> true
 			));
 	}
 

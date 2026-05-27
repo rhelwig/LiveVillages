@@ -40,6 +40,7 @@ import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementConstructionDelivery;
 import com.ronhelwig.livevillages.sim.SettlementKind;
 import com.ronhelwig.livevillages.sim.SettlementLoadedObservation;
+import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.SettlementRoadwrightWork;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementTradeRange;
@@ -502,7 +503,8 @@ public final class LiveVillagesNetworking {
 		).stream()
 			.map(worker -> new SettlementOverlayWorkerView(worker.workerLabel(), worker.taskLabel(), worker.targetLabel(), worker.detailLabel()))
 			.toList();
-		return SettlementOverlaySnapshot.available(view, distanceBlocks, construction, tasks, workers);
+		String playerStandingLabel = SettlementPlayerStandings.debugStanding(savedData, settlement, player);
+		return SettlementOverlaySnapshot.available(view, distanceBlocks, playerStandingLabel, construction, tasks, workers);
 	}
 
 	private static SettlementOverlayConstructionView createConstructionView(
@@ -536,7 +538,9 @@ public final class LiveVillagesNetworking {
 
 		return new SettlementOverlayConstructionView(
 			activeBuildSites,
-			SettlementVillagers.nearbyConstructionWorkers(level, settlement).size(),
+			settlement.kind() == SettlementKind.OUTPOST
+				? SettlementVillagers.nearbyProfessionPopulation(level, settlement).values().stream().mapToInt(Integer::intValue).sum()
+				: SettlementVillagers.nearbyConstructionWorkers(level, settlement).size(),
 			pendingBlocks,
 			missingMaterialBlocks,
 			blockedBlocks,
@@ -558,16 +562,16 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static BuildSitePreviewSnapshot buildBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
-		Optional<BuildSitePreviewSnapshot> workstationPreview = buildProspectiveWorkstationPreviewSnapshot(player, targetPos);
-
-		if (workstationPreview.isPresent()) {
-			return workstationPreview.get();
-		}
-
 		Optional<BuildSitePreviewSnapshot> infrastructurePreview = buildPlacedInfrastructurePreviewSnapshot(player, targetPos);
 
 		if (infrastructurePreview.isPresent()) {
 			return infrastructurePreview.get();
+		}
+
+		Optional<BuildSitePreviewSnapshot> workstationPreview = buildProspectiveWorkstationPreviewSnapshot(player, targetPos);
+
+		if (workstationPreview.isPresent()) {
+			return workstationPreview.get();
 		}
 
 		return buildNearestBuildSitePreviewSnapshot(player, targetPos);

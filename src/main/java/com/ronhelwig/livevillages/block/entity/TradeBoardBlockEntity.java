@@ -27,10 +27,12 @@ import com.ronhelwig.livevillages.menu.TradeBoardLogic;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardOpenData;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostTrust;
 import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementKind;
 import com.ronhelwig.livevillages.sim.SettlementNamer;
+import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
@@ -74,13 +76,14 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 
 	@Override
 	public TradeBoardOpenData getScreenOpeningData(ServerPlayer player) {
-		return createOpenData((ServerLevel) player.level());
+		return createOpenData((ServerLevel) player.level(), player);
 	}
 
 	@Override
 	public AbstractContainerMenu createMenu(int syncId, Inventory inventory, Player player) {
 		ServerLevel serverLevel = (ServerLevel) Objects.requireNonNull(level, "Trade Board menu opened without a server level");
-		return new TradeBoardMenu(syncId, inventory, createOpenData(serverLevel));
+		ServerPlayer serverPlayer = player instanceof ServerPlayer candidate ? candidate : null;
+		return new TradeBoardMenu(syncId, inventory, createOpenData(serverLevel, serverPlayer));
 	}
 
 	@Override
@@ -110,17 +113,27 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 			var linkedSettlement = savedData.getSettlement(linkedSettlementId);
 
 			if (linkedSettlement.isPresent()) {
+				if (linkedSettlement.get().kind() != SettlementKind.OUTPOST) {
+					var outpost = OutpostTrust.findOrCreateOutpostAt(serverLevel, savedData, worldPosition);
+
+					if (outpost.isPresent()) {
+						syncLinkedSettlement(outpost.get().id(), outpost.get().name());
+						return outpost.get();
+					}
+				}
+
 				syncLinkedSettlement(linkedSettlement.get().id(), linkedSettlement.get().name());
 				return linkedSettlement.get();
 			}
 		}
 
-		SettlementState settlement = SettlementConstruction.findSettlementContainingPosition(serverLevel, worldPosition)
+		SettlementState settlement = OutpostTrust.findOrCreateOutpostAt(serverLevel, savedData, worldPosition)
+			.or(() -> SettlementConstruction.findSettlementContainingPosition(serverLevel, worldPosition))
 			.or(() -> savedData.findNearestSettlement(
 				serverLevel.dimension(),
 				worldPosition,
 				LINK_RADIUS_BLOCKS,
-				existingSettlement -> existingSettlement.kind() != SettlementKind.OUTPOST
+				existingSettlement -> true
 			))
 			.orElseGet(() -> createCustomSettlement(serverLevel, savedData));
 
@@ -197,7 +210,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		return settlement;
 	}
 
-	private TradeBoardOpenData createOpenData(ServerLevel serverLevel) {
+	private TradeBoardOpenData createOpenData(ServerLevel serverLevel, ServerPlayer player) {
 		SettlementState settlement = reconcileLoadedSettlement(serverLevel, resolveSettlement(serverLevel));
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		List<SettlementBuildSite> buildSites = savedData.getBuildSitesForSettlement(settlement.id());
@@ -214,18 +227,20 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 				SettlementVillagers.nearbyProfessionPopulation(serverLevel, settlement),
 				TradeBoardLogic.constructionTradeDemand(buildSites),
 				buildSites
-			)
+			),
+			SettlementPlayerStandings.displayStanding(savedData, settlement, player),
+			TradeBoardLogic.createRaidView(serverLevel, savedData, settlement)
 		);
 	}
 
 	private SettlementState reconcileLoadedSettlement(ServerLevel serverLevel, SettlementState settlement) {
-		if (!SettlementVillagers.usesActualVillagers(settlement) || !serverLevel.isLoaded(settlement.center())) {
+		if ((!SettlementVillagers.usesActualVillagers(settlement) && settlement.kind() != SettlementKind.OUTPOST) || !serverLevel.isLoaded(settlement.center())) {
 			return settlement;
 		}
 
 		SettlementConstruction.InfrastructureSurvey infrastructure = SettlementConstruction.survey(serverLevel, settlement);
 		int actualHousing = infrastructure.housingCapacity();
-		boolean shouldSyncExactHousing = settlement.kind() == SettlementKind.CUSTOM;
+		boolean shouldSyncExactHousing = settlement.kind() == SettlementKind.CUSTOM || settlement.kind() == SettlementKind.OUTPOST;
 		int reconciledHousing = shouldSyncExactHousing
 			? actualHousing
 			: Math.max(settlement.housingCapacity(), actualHousing);

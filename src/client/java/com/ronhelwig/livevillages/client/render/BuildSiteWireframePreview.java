@@ -25,6 +25,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 import com.ronhelwig.livevillages.client.LiveVillagesClientKeys;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
@@ -142,7 +144,7 @@ public final class BuildSiteWireframePreview {
 	private static Optional<BlockPos> targetedBlockPos(Minecraft client) {
 		if (client.hitResult instanceof BlockHitResult blockHit && blockHit.getType() == HitResult.Type.BLOCK) {
 			BlockPos clickedPos = blockHit.getBlockPos();
-			if (client.level.getBlockState(clickedPos).is(LiveVillagesBlocks.PORTMASTER_ANCHOR)) {
+			if (isPreviewAnchorBlock(client.level.getBlockState(clickedPos))) {
 				return Optional.of(clickedPos);
 			}
 
@@ -154,6 +156,21 @@ public final class BuildSiteWireframePreview {
 		}
 
 		return Optional.empty();
+	}
+
+	private static boolean isPreviewAnchorBlock(BlockState state) {
+		return state.is(LiveVillagesBlocks.PORTMASTER_ANCHOR)
+			|| state.is(LiveVillagesBlocks.BAKERS_COUNTER)
+			|| state.is(LiveVillagesBlocks.CARPENTER_BENCH)
+			|| state.is(LiveVillagesBlocks.MINER_WORKSTATION)
+			|| state.is(LiveVillagesBlocks.SURVEYOR_TABLE)
+			|| state.is(LiveVillagesBlocks.FORESTER_TABLE)
+			|| state.is(LiveVillagesBlocks.TRADE_BOARD)
+			|| state.is(LiveVillagesBlocks.LIGHTHOUSE)
+			|| state.is(Blocks.CARTOGRAPHY_TABLE)
+			|| state.is(Blocks.SMOKER)
+			|| state.is(Blocks.STONECUTTER)
+			|| state.is(Blocks.FLETCHING_TABLE);
 	}
 
 	private static void render(LevelRenderContext context) {

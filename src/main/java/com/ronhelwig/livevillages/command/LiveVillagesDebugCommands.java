@@ -14,6 +14,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import com.ronhelwig.livevillages.menu.TradeBoardGoodsView;
 import com.ronhelwig.livevillages.menu.TradeBoardLogic;
@@ -21,9 +22,12 @@ import com.ronhelwig.livevillages.menu.TradeBoardProjectView;
 import com.ronhelwig.livevillages.menu.TradeBoardRoleView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostRaidState;
+import com.ronhelwig.livevillages.sim.OutpostRaids;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 import com.ronhelwig.livevillages.sim.SettlementKind;
+import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.VillageAutodetector;
 
 public final class LiveVillagesDebugCommands {
@@ -124,7 +128,7 @@ public final class LiveVillagesDebugCommands {
 		source.sendSystemMessage(Component.literal(
 			"Population=%d Housing=%d Comfort=%s Security=%s Routes=%d Growth=%s Progress=%.2f"
 				.formatted(
-					settlement.totalPopulation(),
+					view.population(),
 					settlement.housingCapacity(),
 					percent(settlement.comfort()),
 					percent(settlement.security()),
@@ -133,6 +137,18 @@ public final class LiveVillagesDebugCommands {
 					settlement.growthProgress()
 				)
 		));
+		if (source.getEntity() instanceof ServerPlayer player) {
+			source.sendSystemMessage(Component.literal(
+				"Your standing: " + SettlementPlayerStandings.debugStanding(savedData, settlement, player)
+			));
+		}
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			OutpostRaidState raidState = savedData.outpostRaidState(settlement.id()).orElse(null);
+			SettlementState raidTarget = raidState == null
+				? null
+				: savedData.getSettlement(raidState.targetSettlementId()).orElse(null);
+			source.sendSystemMessage(Component.literal("Raid: " + OutpostRaids.describeRaidState(raidState, raidTarget, OutpostRaids.currentRaidTick(source.getServer()))));
+		}
 		sendRoleSection(source, view.roleCounts());
 		source.sendSystemMessage(Component.literal("Wealth: " + summarizeMap(settlement.wealth())));
 		source.sendSystemMessage(Component.literal("Stock: " + summarizeMap(settlement.stock())));

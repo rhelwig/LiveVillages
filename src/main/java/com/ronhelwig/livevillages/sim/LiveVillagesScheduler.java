@@ -42,6 +42,22 @@ public final class LiveVillagesScheduler {
 			}
 
 			start = System.nanoTime();
+			OutpostTrust.maintainServer(server, savedData);
+			elapsed = System.nanoTime() - start;
+			if (elapsed > 10_000_000) {
+				LiveVillages.LOGGER.warn("Outpost trust maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
+			}
+
+			start = System.nanoTime();
+			if (OutpostRaids.maintain(server, savedData, OutpostRaids.currentRaidTick(server))) {
+				savedData.setDirty();
+			}
+			elapsed = System.nanoTime() - start;
+			if (elapsed > 10_000_000) {
+				LiveVillages.LOGGER.warn("Outpost raid maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
+			}
+
+			start = System.nanoTime();
 			savedData.maintainLoadedFarmerState(server, TICKS_BETWEEN_FARMER_MAINTENANCE);
 			elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) { // Log if > 10ms

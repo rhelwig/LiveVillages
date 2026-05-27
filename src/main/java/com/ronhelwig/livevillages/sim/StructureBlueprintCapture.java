@@ -45,10 +45,11 @@ import net.minecraft.world.level.storage.LevelResource;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 
 public final class StructureBlueprintCapture {
-	private static final int MAX_CAPTURE_DISTANCE_BLOCKS = 24;
-	private static final int MAX_CAPTURE_RADIUS_BLOCKS = 16;
-	private static final int MAX_CAPTURE_BLOCKS = 768;
-	private static final int MAX_CAPTURE_VOLUME = 4096;
+	private static final int MAX_CAPTURE_DISTANCE_BLOCKS = 32;
+	private static final int MAX_CAPTURE_HORIZONTAL_RADIUS_BLOCKS = 24;
+	private static final int MAX_CAPTURE_VERTICAL_RADIUS_BLOCKS = 32;
+	private static final int MAX_CAPTURE_BLOCKS = 3072;
+	private static final int MAX_CAPTURE_VOLUME = 24576;
 	private static final String CAPTURE_SYMBOLS = "abcdefghijklmnopqrstuvwxyz0123456789!$%&*+-=?@^~";
 	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -239,9 +240,9 @@ public final class StructureBlueprintCapture {
 	}
 
 	private static boolean withinCaptureBounds(BlockPos seedPos, BlockPos candidatePos) {
-		return Math.abs(candidatePos.getX() - seedPos.getX()) <= MAX_CAPTURE_RADIUS_BLOCKS
-			&& Math.abs(candidatePos.getY() - seedPos.getY()) <= MAX_CAPTURE_RADIUS_BLOCKS
-			&& Math.abs(candidatePos.getZ() - seedPos.getZ()) <= MAX_CAPTURE_RADIUS_BLOCKS;
+		return Math.abs(candidatePos.getX() - seedPos.getX()) <= MAX_CAPTURE_HORIZONTAL_RADIUS_BLOCKS
+			&& Math.abs(candidatePos.getY() - seedPos.getY()) <= MAX_CAPTURE_VERTICAL_RADIUS_BLOCKS
+			&& Math.abs(candidatePos.getZ() - seedPos.getZ()) <= MAX_CAPTURE_HORIZONTAL_RADIUS_BLOCKS;
 	}
 
 	private static boolean isExposedStructureBlock(ServerLevel level, BlockPos pos, BlockState state) {

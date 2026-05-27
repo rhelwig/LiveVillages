@@ -7,10 +7,14 @@ import net.minecraft.core.BlockPos;
 
 public record TradeBoardOpenData(
 	BlockPos boardPos,
-	TradeBoardSettlementView settlement
+	TradeBoardSettlementView settlement,
+	String playerStandingLabel,
+	TradeBoardRaidView raid
 ) {
 	public static final Codec<TradeBoardOpenData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		BlockPos.CODEC.fieldOf("board_pos").forGetter(TradeBoardOpenData::boardPos),
-		TradeBoardSettlementView.CODEC.fieldOf("settlement").forGetter(TradeBoardOpenData::settlement)
+		TradeBoardSettlementView.CODEC.fieldOf("settlement").forGetter(TradeBoardOpenData::settlement),
+		Codec.STRING.optionalFieldOf("player_standing_label", "").forGetter(TradeBoardOpenData::playerStandingLabel),
+		TradeBoardRaidView.CODEC.optionalFieldOf("raid", TradeBoardRaidView.EMPTY).forGetter(TradeBoardOpenData::raid)
 	).apply(instance, TradeBoardOpenData::new));
 }

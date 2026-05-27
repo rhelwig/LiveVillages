@@ -100,6 +100,10 @@ public final class SettlementVillagers {
 
 	public static Map<String, Integer> nearbyProfessionPopulation(ServerLevel level, SettlementState settlement) {
 		if (!usesActualVillagers(settlement)) {
+			if (settlement.kind() == SettlementKind.OUTPOST && level.isLoaded(settlement.center())) {
+				return OutpostSettlementWork.censusPopulation(level, settlement);
+			}
+
 			return Map.copyOf(settlement.population());
 		}
 
@@ -2331,6 +2335,10 @@ public final class SettlementVillagers {
 		int visibleCount = 0;
 
 		for (Monster monster : level.getEntitiesOfClass(Monster.class, bounds, monster -> monster.isAlive() && !monster.isRemoved())) {
+			if (OutpostTrust.shouldIgnoreSleepDanger(villager, monster)) {
+				continue;
+			}
+
 			nearbyCount++;
 
 			if (villager.hasLineOfSight(monster)) {
@@ -3068,10 +3076,18 @@ public final class SettlementVillagers {
 			return 1;
 		}
 
-		return LiveVillagesSavedData.get(level.getServer())
-			.findBuildSite(settlement.id(), buildSiteType, workstationPos)
-			.map(buildSite -> builtWorkstationHomeBeds(level, buildSite).size())
-			.orElse(0);
+		Optional<SettlementBuildSite> buildSite = LiveVillagesSavedData.get(level.getServer())
+			.findBuildSite(settlement.id(), buildSiteType, workstationPos);
+
+		if (buildSite.isPresent()) {
+			return builtWorkstationHomeBeds(level, buildSite.get()).size();
+		}
+
+		if (!SettlementConstruction.isPositionInExistingShelteredStructure(level, workstationPos)) {
+			return 0;
+		}
+
+		return nearbyShelteredHomeBeds(level, workstationPos).size();
 	}
 
 	private static int assignedWorkstationCount(
@@ -3148,6 +3164,25 @@ public final class SettlementVillagers {
 			.flatMap(Optional::stream)
 			.filter(homePos -> level.getPoiManager().exists(homePos, poiType -> poiType.is(PoiTypes.HOME)))
 			.map(BlockPos::immutable)
+			.toList();
+	}
+
+	private static List<BlockPos> nearbyShelteredHomeBeds(ServerLevel level, BlockPos workstationPos) {
+		int searchRadius = WORKSTATION_HOME_SEARCH_RADIUS_BLOCKS;
+		int searchRadiusSquared = searchRadius * searchRadius;
+
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.HOME),
+			pos -> pos.distSqr(workstationPos) <= searchRadiusSquared,
+			workstationPos,
+			searchRadius,
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.distinct()
+			.filter(homePos -> SettlementConstruction.isPositionInExistingShelteredStructure(level, homePos))
+			.limit(2)
 			.toList();
 	}
 

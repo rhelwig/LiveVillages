@@ -317,6 +317,10 @@ public final class SettlementEconomySimulator {
 			projects.add(project);
 		}
 
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			return planOutpostProjects(settlement, projects);
+		}
+
 		int population = settlement.totalPopulation();
 		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity());
 		boolean needsHousing = population > 0 && effectiveHousing < population + 1;
@@ -361,11 +365,37 @@ public final class SettlementEconomySimulator {
 			}
 		}
 
-		if (population >= 3 && settlement.defenseLevel() < desiredDefenseLevel(population) && !hasProjectType(projects, SettlementProjectType.DEFENSE)) {
+		boolean needsDefenseRecovery = settlement.security() < 0.45D;
+		if (population >= 3 && (settlement.defenseLevel() < desiredDefenseLevel(population) || needsDefenseRecovery) && !hasProjectType(projects, SettlementProjectType.DEFENSE)) {
 			projects.add(new SettlementProject(nextProjectId(projects, "defense"), SettlementProjectType.DEFENSE, "", 0.0D, 0.8D));
 		}
 
 		maybeQueueRoadProject(settlement, projects, routes, allSettlements, infrastructure, level);
+		return projects;
+	}
+
+	private static List<SettlementProject> planOutpostProjects(SettlementState settlement, List<SettlementProject> existingProjects) {
+		List<SettlementProject> projects = new ArrayList<>();
+
+		for (SettlementProject project : existingProjects) {
+			if (project.type() == SettlementProjectType.STORAGE || project.type() == SettlementProjectType.DEFENSE) {
+				projects.add(project);
+			}
+		}
+
+		int totalStock = settlement.stock().values().stream()
+			.mapToInt(Integer::intValue)
+			.sum();
+		if (totalStock >= 24 && !hasProjectType(projects, SettlementProjectType.STORAGE)) {
+			projects.add(new SettlementProject(nextProjectId(projects, "storage"), SettlementProjectType.STORAGE, "", 0.0D, 0.45D));
+		}
+
+		int population = Math.max(1, settlement.totalPopulation());
+		int desiredDefense = Math.max(1, desiredDefenseLevel(population) + 1);
+		if (settlement.defenseLevel() < desiredDefense && !hasProjectType(projects, SettlementProjectType.DEFENSE)) {
+			projects.add(new SettlementProject(nextProjectId(projects, "defense"), SettlementProjectType.DEFENSE, "", 0.0D, 0.6D));
+		}
+
 		return projects;
 	}
 
@@ -559,6 +589,10 @@ public final class SettlementEconomySimulator {
 		double security,
 		double elapsedDays
 	) {
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			return applyOutpostGrowth(settlement, population, foodSupply, security, elapsedDays);
+		}
+
 		int freeHousing = Math.max(0, housingCapacity - population);
 		double housingFactor = clamp(freeHousing / (double) Math.max(1, population), 0.0D, 1.0D);
 		double foodFactor = clamp(foodSupply.ratio(), 0.0D, 1.1D);
@@ -573,6 +607,28 @@ public final class SettlementEconomySimulator {
 		progress = clamp(progress, 0.0D, Math.max(0.99D, freeHousing + 0.99D));
 		int requestedVillagerSpawns = freeHousing > 0 ? Math.min(1, (int) Math.floor(progress)) : 0;
 		return new GrowthResult(progress, requestedVillagerSpawns);
+	}
+
+	private static GrowthResult applyOutpostGrowth(
+		SettlementState settlement,
+		int population,
+		SupplyState foodSupply,
+		double security,
+		double elapsedDays
+	) {
+		int freeCapacity = Math.max(0, OutpostSettlementWork.recruitmentCapacity(settlement) - population);
+		double foodFactor = clamp(foodSupply.ratio(), 0.0D, 1.1D);
+		double capacityFactor = freeCapacity <= 0 ? 0.0D : clamp(freeCapacity / (double) Math.max(4, population), 0.25D, 1.0D);
+		double growthRate = 0.18D * foodFactor * (0.55D + security * 0.45D) * capacityFactor;
+		double progress = settlement.growthProgress() + (growthRate * elapsedDays);
+
+		if (freeCapacity <= 0 || foodFactor < 0.65D) {
+			progress = Math.max(0.0D, progress - elapsedDays * 0.06D);
+		}
+
+		progress = clamp(progress, 0.0D, Math.max(0.99D, freeCapacity + 0.99D));
+		int requestedRecruits = freeCapacity > 0 ? Math.min(1, (int) Math.floor(progress)) : 0;
+		return new GrowthResult(progress, requestedRecruits);
 	}
 
 	private static RouteState createLandRoute(

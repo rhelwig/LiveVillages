@@ -539,7 +539,13 @@ public final class RouteNetworkSimulator {
 			|| surfaceState.is(Blocks.SMOOTH_STONE_SLAB)
 			|| surfaceState.is(Blocks.STONE_SLAB)
 			|| surfaceState.is(Blocks.STONE_STAIRS)
-			|| belowState.is(Blocks.SMOOTH_STONE);
+			|| surfaceState.is(Blocks.POLISHED_GRANITE)
+			|| surfaceState.is(Blocks.POLISHED_DIORITE)
+			|| surfaceState.is(Blocks.POLISHED_ANDESITE)
+			|| belowState.is(Blocks.SMOOTH_STONE)
+			|| belowState.is(Blocks.POLISHED_GRANITE)
+			|| belowState.is(Blocks.POLISHED_DIORITE)
+			|| belowState.is(Blocks.POLISHED_ANDESITE);
 	}
 
 	private static boolean isBrickRoad(BlockState surfaceState, BlockState belowState) {

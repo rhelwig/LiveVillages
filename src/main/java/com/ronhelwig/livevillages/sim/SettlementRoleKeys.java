@@ -13,6 +13,7 @@ public final class SettlementRoleKeys {
 	public static final String GUARD = "guard";
 	public static final String MASON = "mason";
 	public static final String MINER = "miner";
+	public static final String PILLAGER = "pillager";
 	public static final String PORTMASTER = "portmaster";
 	public static final String ROADWRIGHT = "roadwright";
 	public static final String SCRIBE = "scribe";

@@ -32,6 +32,7 @@ Already solid enough to plan from:
 
 - settlement persistence, village autodetection, route state, and Trade Board UI/trading
 - staged construction with persistent build sites, assisted player placement, and preview overlays
+- first-pass player standing exists: peaceful parley near a loaded pillager outpost can raise a player to `Tolerated`, trusted nearby raiders stop targeting that player unless recently provoked, trusted outpost raiders do not block player sleep, assisted placement grants support, Trade Board donations/trades grant extra support when they satisfy shortages or deliver outpost-valued martial/logistics goods, exact-item weapons/armor/tools can be recognized by outposts even when they come from other mods, nearby raiders can equip donated gear upgrades, rank thresholds are centralized and scale upward with world difficulty, loaded outposts can slowly recruit new members from growth progress and stock, outposts maintain martial/logistics reserve demand and abstract storage/defense project priorities instead of civic village priorities, civilian settlements default to `Friend` standing, Trade Boards display the current player's standing, placed Trade Boards can link to outpost settlements, loaded raiders count as outpost population, placed outpost workstations can create normal active build sites for player-assisted previews, and loaded outposts can slowly advance build sites through inefficient fallback construction
 - an in-game structure capture hotkey that exports the looked-at structure as a text blueprint draft for later curation
 - custom anchors and workstations for `Trade Board`, `Carpenter's Bench`, `Forester's Table`, `Surveyor's Table`, `Portmaster's Anchor`, `Lighthouse`, `Milepost`, `Simple Housing Shelter`, and `Housing Shelter`
 - a first-pass `Glass Display Case` block exists as a full-size clear bakery display block, with block-local sale inventory, a visibly glass top, direct purchase interaction, and authored-facing support that staged bakery construction should preserve
@@ -59,6 +60,50 @@ Already solid enough to plan from:
 - debug and inspection support exists through overlays, build previews, and `/livevillages settlements ...` commands
 
 ## Active Workstreams
+
+### 0. Outpost Settlement Integration
+
+Status: In progress
+
+Goal:
+
+- make pillager outposts behave like persistent hostile settlements that players can cautiously join, support, and eventually raid with, while keeping the first pass bounded to settlement membership, standing, construction, recruitment, and readable feedback.
+
+Scope for the current work unit:
+
+- show exact player standing and support progress in debug surfaces, including current rank, support points, and next threshold
+- keep loaded outpost population, worker count, and role lists based on raiders plus outpost-member villagers rather than actual villagers only
+- award outpost support for useful actions: donating needed materials, completing staged build-site blocks, and supplying martial goods such as arrows/food/weapons; later add defending the outpost from non-member hostile mobs
+- recognize exact-item weapons, armor, shields, bows, crossbows, spears, tridents, maces, and practical tools as outpost-valued gear; donated upgrades should be equipped by nearby raiders before leftover items go into stock, while newly recruited outpost members and later replacement equipment draw gear and ranged supplies from settlement stock instead of generating them for free
+- keep rank thresholds in one helper so tuning or later config support can change the base values and difficulty scaling without hunting through standing logic
+- keep the first-pass rank gates clear: `Tolerated` prevents hostility and sleep blocking, `Associate` makes pillagers stop aiming/staring at the player and exposes better outpost information, `Raider` and above remain hooks for raid-prep and command features
+- at `Banner Bearer` or higher, nearby outpost raiders should help defend the player against recent hostile monster attackers inside the outpost influence radius
+- define `Banner Bearer` as the first raid-participation rank: trusted players receive raid muster notices, can join an outpost raid by traveling with or near the target, and earn support from a successful raid without gaining full outpost command authority
+- reserve `Captain` for explicit raid command authority, including triggering raids, denying tribute deals to force an actual raid, and negotiating deals once the interaction design is clear; a goat horn or similar deliberate signal is a candidate trigger
+- add first-pass persisted outpost raid state with bounded phases: weekly eligibility, target selection among nearby non-outpost settlements, mustering notices, abstract march timing, control-or-tribute resolution, loot transfer, player support awards, itemized last-raid results, and cooldown
+- keep outpost raid phase and cooldown timers on persistent world game time rather than server uptime so reloads preserve the remaining delay
+- improve raid consequences: loot should include bounded emerald wealth as well as stock, and raids or tribute should reduce victim security enough to push defensive recovery work
+- make the first visible raid step happen at the outpost by rallying loaded raiders around a banner-carrying pillager during `Muster`
+- keep visible raid parties associated with their home outpost while away from the tower, count those active raiders in the outpost census during the march/raid, and keep their first march target on a dry land waypoint when the direct target line would pull them into water
+- add visible raid return behavior after actual raids: surviving participants should navigate back to their home outpost and remain trusted outpost members throughout the trip
+- distinguish Live Villages raid names from vanilla raids: use names such as `Plunder Raid` for ordinary overland outpost raids and reserve `Viking Raid` for later boat-borne variants
+- later add a raid bossbar or equivalent HUD timer during the control phase so nearby players can see how long the raiders must hold the village center
+- later add `Thralls` as a successful-raid consequence: take at most the lesser of half the raider count or `20%` of victim population, prefer unemployed villagers first, avoid the term `slavery`, and make Thralls weaker than normal specialist labor unless assigned to a concrete outpost job
+- use Roadwright-style terrain preference for first-pass raid movement: existing paths/stone roads are preferred for march waypoints, and fuller outpost road planning should later create non-trade raid corridors to nearby villages without making outposts normal trading partners
+- expose raid feedback where players already look: outpost nightly reports list itemized raid gains and support rewards, while outpost Trade Boards replace the normal `Routes` tab with a `Raid` tab showing current/last raid status, gains, and player rewards; the `Trade` tab remains available for donations and barter
+- keep first-pass virtual raid participation generous enough for testing: `Banner Bearer+` players near either the mustering outpost or the target at resolution earn the recorded support reward until visible escort/marching behavior exists
+- treat first-pass outpost raids as coercive extraction rather than extermination: success should come from holding the village center/bell/Trade Board area, defeating or outlasting defenders, or accepting tribute; do not require villager kills, do not require all golems to die, and defer chest-ransacking visuals to a later improvement
+- add first-pass outpost recruitment/growth: loaded outposts accrue growth without village housing, spend food plus a small amount of valuable stock when recruiting, fill available `Fletcher`, `Forester`, or lower-priority `Roadwright` workstation openings before defaulting back to ordinary `Pillager`s, and keep lower-value civil roles deferred
+- expand outpost recruitment from Pillagers to broader Illagers by tier: Vindicators at Tier `2+` capped to half Pillagers, Evokers at Tier `3+` capped to half Vindicators, Illusioners at Tier `4+` capped to half Evokers, and Witches at Tier `3+` only when the outpost has a Witch Hut; outpost-owned hostile members should ignore light-level spawn prevention and should not despawn naturally
+- keep outpost construction priorities martial and practical: first-pass abstract projects prefer storage and defenses over civic village projects; later expand concrete structure priority toward `Trading Post`, `Fletcher Hut`, and `Forester Workshop`
+- keep placed workstation previews independent from outpost priority, so a low-priority Cartographer's House or other valid structure still shows a wireframe and can be player-built even if the outpost would not choose it next
+- count outpost housing pressure only against non-raider members, since pillagers and guard raiders do not use village beds; loaded outposts should still reconcile actual beds for villagers and other bed-using members
+- keep loaded outposts eligible for nightly report files, including an observed member census even when most members are raiders rather than villagers
+- keep only Live Villages-spawned outpost recruits persistent, count vanilla raiders only while present, trim excess unmanaged raiders when a loaded outpost has already ballooned past its cap, and require a nearby outpost member for loaded fallback construction block placement so construction progress does not appear to teleport across the outpost
+- prevent a settlement from starting more than one `Trading Post` build site; additional Trade Boards may link to the settlement, but should not create duplicate trade-post projects
+- add loaded-world materialization for virtual improvements, especially Trading Posts completed by settlements before the player first loads the area
+- keep outpost villagers protected and counted as outpost members; defer pillager-style profession uniforms until the behavior is stable
+- defer full player-led raid command controls until the first-pass persisted raid foundation is stable enough to trust target selection, tribute, loot transfer, participation credit, and cooldowns across reloads
 
 ### 1. Economy, Harbors, And Trade
 
@@ -142,10 +187,12 @@ Focus:
 - continue turning staged construction into generic reusable infrastructure instead of a set of one-off structure rules
 - add generic duplicate suppression, repair reopening, and upgrade handling across all staged structure types
 - make structure blueprints and retrofit logic tier-aware without requiring every tier bump to place a duplicate building
-- keep the first-pass authoring capture tool bounded and text-export oriented: capture the looked-at structure, normalize facing/layers, write a file for later curation, and avoid turning the first implementation into a full editor
+- keep hostile outpost construction visibly slower than village specialist construction: loaded raiders may advance staged build sites by scavenging/extorting one block at a time, while richer outpost recruitment, profession weighting, pillager-style civilian skins, and player-led raids remain later work
+- keep the first-pass authoring capture tool bounded and text-export oriented: capture the looked-at structure, normalize facing/layers, write a file for later curation, tolerate tall vanilla structures such as pillager outpost towers, and avoid turning the first implementation into a full editor
 - make the first-pass `Tier 1` palisade concrete: log wall at least `4` blocks high, interior slab firing walk below the top log, torch spacing about every `10` blocks, stair access about every `30` blocks, and simple path-aligned gatehouses
 - keep early fortification radius smaller for starter villages, with `Tier 1` aiming for about `80%` of settlement radius before later tiers expand toward the full radius
 - keep preview and site-validation logic permissive for removable natural vegetation so trees or brush do not falsely block otherwise valid builds
+- keep workstation placement and held-item previews valid inside known outposts, while preserving the broader near-settlement fallback for non-outpost villages
 - keep structure-spacing validation strict against existing crafted infrastructure while allowing natural terrain or vegetation to be cleared, with special handling so simple shovel-made dirt paths do not block placement and improved route surfaces only block the actual footprint
 - keep footprint fill validation consistent with the rest of placement rules so clearable natural blocks inside raised or filled columns do not falsely fail shifted previews
 - treat exposed natural ore and buried natural roots or branches as ordinary terrain support for preview validation when they do not require moat clearing, so forests and rocky ground do not create false negatives
@@ -177,6 +224,7 @@ Focus:
 - survey fortification detection should stay strict enough to show adjacent log-and-slab palisades without turning ordinary tree trunks into fake building dots, and the map should also expose shoreline or harbor water so docks and coastal defenses read clearly
 - `Trade Board` founding previews now work outside existing settlements: a board inside a settlement radius joins that settlement, a board outside all settlement radii can found a new `Tier 1` settlement when clear, and placement should reject too-close founding attempts with a visible message instead of silently linking across open terrain
 - natural flowers and similar loose vegetation should stay clearable during structure placement, while bordered garden beds, potted flowers, and other obviously decorative planted structures still count as blockers
+- when a recognized workstation is already inside an existing sheltered structure, accept that building as the workstation's completed structure variant instead of placing a `can't build here` sign or forcing a duplicate staged build nearby
 
 ### 5. Roads, Maps, And Route Planning
 
@@ -268,7 +316,9 @@ Keep these visible, but not as active work:
 - later civic designation blocks such as apartment or keep anchors
 - expanded street-light, bridge, and broader civic-improvement behavior
 - a generalized blueprint-import feature that may be worth extracting into a standalone sharing/build-assist mod once the import, packaging, and staged-construction UX are mature
-- hostile outposts as self-building raiding settlements with different staffing and growth rules
+- hostile outposts as self-building raiding settlements with different staffing and growth rules beyond the current parley / `Tolerated` / `Associate` trust foundation
+- boat-borne coastal or river outpost raid variants that use completed docks or later port infrastructure, after water routes and boat behavior are mature
+- mounted pillager patrols and raiding parties once outposts can acquire, tame, train, and maintain horses or other mounts
 
 ## Maintenance Notes
 

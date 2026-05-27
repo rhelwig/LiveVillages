@@ -19,8 +19,11 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import com.ronhelwig.livevillages.network.TradeBoardRefreshPayload;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostGear;
 import com.ronhelwig.livevillages.sim.RouteState;
 import com.ronhelwig.livevillages.sim.SettlementBuildSite;
+import com.ronhelwig.livevillages.sim.SettlementKind;
+import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
@@ -82,7 +85,7 @@ public final class TradeBoardTrading {
 
 		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
 			ItemStack stack = inventory.getItem(slot);
-			String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack, settlementTier);
+			String goodsKey = tradeGoodsKeyForStack(stack, view, settlementTier);
 
 			if (goodsKey != null && TradeBoardTradeRules.isTradeableGoods(goodsKey)) {
 				counts.merge(goodsKey, stack.getCount(), Integer::sum);
@@ -113,7 +116,7 @@ public final class TradeBoardTrading {
 			boolean hasStoredContents = TradeBoardTradeRules.hasStoredContents(stack);
 			String exactItemKey = TradeBoardTradeRules.exactItemKeyForStack(stack);
 			String rowKey = hasStoredContents ? exactItemKey + "#slot:" + slotIndex : exactItemKey;
-			String tradeGoodsKey = TradeBoardTradeRules.goodsKeyForStack(stack, view.tier());
+			String tradeGoodsKey = tradeGoodsKeyForStack(stack, view, view.tier());
 			String stockKey = TradeBoardTradeRules.stockKeyForStack(stack);
 			if (rowKey == null || stockKey == null || exactItemKey == null) {
 				continue;
@@ -323,13 +326,13 @@ public final class TradeBoardTrading {
 		TradeBoardSettlementView view = createTradeView(serverLevel, savedData, settlement);
 		TradeResult result;
 		if (isPlayerTrade) {
-			result = handlePlayerGoodsTrade(player, settlement, view, buttonId - PLAYER_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handlePlayerGoodsTrade(serverLevel, player, settlement, view, buttonId - PLAYER_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		} else if (isVillageTrade) {
-			result = handleVillageGoodsTrade(player, settlement, view, buttonId - VILLAGE_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleVillageGoodsTrade(serverLevel, player, settlement, view, buttonId - VILLAGE_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		} else if (isDonateContents) {
-			result = handleDonateContents(player, settlement, view, buttonId - DONATE_CONTENTS_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleDonateContents(serverLevel, player, settlement, view, buttonId - DONATE_CONTENTS_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		} else {
-			result = handleDonation(player, settlement, view, buttonId - DONATE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleDonation(serverLevel, player, settlement, view, buttonId - DONATE_BUTTON_BASE, serverLevel.getServer().getTickCount());
 		}
 
 		if (!result.success()) {
@@ -341,12 +344,14 @@ public final class TradeBoardTrading {
 			result.updatedSettlement(),
 			serverLevel.getServer().getTickCount()
 		);
+		SettlementPlayerStandings.recordTradeSupport(serverLevel, player, refreshedSettlement, result.supportPoints());
 		TradeBoardSettlementView refreshedView = createTradeView(serverLevel, savedData, refreshedSettlement);
 		sendTradeResult(player, boardPos, refreshedView, result);
 		return true;
 	}
 
 	private static TradeResult handleDonation(
+		ServerLevel serverLevel,
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
@@ -376,20 +381,26 @@ public final class TradeBoardTrading {
 		}
 
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
-		stock.merge(selectedRow.stockKey(), amount, Integer::sum);
+		DeliveryResult delivery = deliverGoodsToSettlement(serverLevel, settlement, stock, selectedRow.stockKey(), amount);
 		cleanMap(stock);
+		int supportPoints = supportForDeliveredGoods(view, Map.of(selectedRow.stockKey(), amount), true);
 
 		return TradeResult.success(
 			updateSettlementStock(settlement, stock, currentTick),
-			"Donated %d %s to %s.".formatted(
+			supportPoints,
+			donationMessage(
+				"Donated %d %s to %s.".formatted(
 				amount,
 				selectedRow.label(),
 				settlement.name()
+				),
+				delivery.equipped()
 			)
 		);
 	}
 
 	private static TradeResult handleDonateContents(
+		ServerLevel serverLevel,
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
@@ -418,7 +429,9 @@ public final class TradeBoardTrading {
 		}
 
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
+		Map<String, Integer> deliveredGoods = new LinkedHashMap<>();
 		int donatedStacks = 0;
+		int equippedGear = 0;
 
 		for (ItemStack content : contents) {
 			String stockKey = TradeBoardTradeRules.stockKeyForStack(content);
@@ -426,7 +439,8 @@ public final class TradeBoardTrading {
 				continue;
 			}
 
-			stock.merge(stockKey, content.getCount(), Integer::sum);
+			equippedGear += deliverGoodsToSettlement(serverLevel, settlement, stock, stockKey, content.getCount()).equipped();
+			deliveredGoods.merge(stockKey, content.getCount(), Integer::sum);
 			donatedStacks++;
 		}
 
@@ -436,17 +450,23 @@ public final class TradeBoardTrading {
 
 		TradeBoardTradeRules.clearStoredContents(containerStack);
 		cleanMap(stock);
+		int supportPoints = supportForDeliveredGoods(view, deliveredGoods, true);
 
 		return TradeResult.success(
 			updateSettlementStock(settlement, stock, currentTick),
-			"Donated stored contents from %s to %s.".formatted(
+			supportPoints,
+			donationMessage(
+				"Donated stored contents from %s to %s.".formatted(
 				containerStack.getHoverName().getString(),
 				settlement.name()
+				),
+				equippedGear
 			)
 		);
 	}
 
 	private static TradeResult handlePlayerGoodsTrade(
+		ServerLevel serverLevel,
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
@@ -492,24 +512,29 @@ public final class TradeBoardTrading {
 			return TradeResult.failure("The trade failed while removing goods from your inventory.");
 		}
 
-		stock.merge(offeredGoods.goodsKey(), amount, Integer::sum);
+		DeliveryResult delivery = deliverGoodsToSettlement(serverLevel, settlement, stock, offeredGoods.goodsKey(), amount);
 		stock.put(payout.goodsKey(), stock.getOrDefault(payout.goodsKey(), 0) - payout.amount());
 		giveStack(player, TradeBoardTradeRules.createGoodsStack(payout.goodsKey(), payout.amount()));
 		cleanMap(stock);
 
 		return TradeResult.success(
 			updateSettlementStock(settlement, stock, currentTick),
-			"Traded %d %s to %s for %d %s.".formatted(
+			supportForDeliveredGoods(view, Map.of(offeredGoods.goodsKey(), amount), false),
+			donationMessage(
+				"Traded %d %s to %s for %d %s.".formatted(
 				amount,
 				offeredGoods.label().toLowerCase(Locale.ROOT),
 				settlement.name(),
 				payout.amount(),
 				payout.label().toLowerCase(Locale.ROOT)
+				),
+				delivery.equipped()
 			)
 		);
 	}
 
 	private static TradeResult handleVillageGoodsTrade(
+		ServerLevel serverLevel,
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
@@ -544,18 +569,22 @@ public final class TradeBoardTrading {
 		}
 
 		stock.put(requestedGoods.goodsKey(), stock.getOrDefault(requestedGoods.goodsKey(), 0) - amount);
-		stock.merge(payment.goodsKey(), payment.amount(), Integer::sum);
+		DeliveryResult delivery = deliverGoodsToSettlement(serverLevel, settlement, stock, payment.goodsKey(), payment.amount());
 		giveStack(player, TradeBoardTradeRules.createGoodsStack(requestedGoods.goodsKey(), amount));
 		cleanMap(stock);
 
 		return TradeResult.success(
 			updateSettlementStock(settlement, stock, currentTick),
-			"Traded %d %s to %s for %d %s.".formatted(
+			supportForDeliveredGoods(view, Map.of(payment.goodsKey(), payment.amount()), false),
+			donationMessage(
+				"Traded %d %s to %s for %d %s.".formatted(
 				payment.amount(),
 				payment.label().toLowerCase(Locale.ROOT),
 				settlement.name(),
 				amount,
 				requestedGoods.label().toLowerCase(Locale.ROOT)
+				),
+				delivery.equipped()
 			)
 		);
 	}
@@ -586,6 +615,21 @@ public final class TradeBoardTrading {
 		int tradeBundleSize = TradeBoardTradeRules.bundleSize(goodsKey);
 
 		if (shortage == null) {
+			if (view.settlementKind() == SettlementKind.OUTPOST && OutpostGear.isValuedExactItem(goodsKey)) {
+				return new PlayerGoodsOption(
+					goodsKey,
+					label,
+					playerAmount,
+					tradeBundleSize,
+					tradeBundleSize,
+					100,
+					TradeBoardTradeRules.bundleValuePoints(goodsKey, 100),
+					TradeBoardTradeRules.itemValuePoints(goodsKey, 100),
+					true,
+					playerAmount >= tradeBundleSize
+				);
+			}
+
 			return new PlayerGoodsOption(
 				goodsKey,
 				label,
@@ -612,6 +656,18 @@ public final class TradeBoardTrading {
 			true,
 			playerAmount >= shortage.tradeBundleSize()
 		);
+	}
+
+	private static String tradeGoodsKeyForStack(ItemStack stack, TradeBoardSettlementView view, int settlementTier) {
+		String goodsKey = TradeBoardTradeRules.goodsKeyForStack(stack, settlementTier);
+		if (goodsKey != null) {
+			return goodsKey;
+		}
+
+		String exactItemKey = TradeBoardTradeRules.exactItemKeyForStack(stack);
+		return view != null && view.settlementKind() == SettlementKind.OUTPOST && OutpostGear.isValuedExactItem(exactItemKey)
+			? exactItemKey
+			: null;
 	}
 
 	private static List<GoodsTradeOption> payoutOptions(TradeBoardSettlementView view, String offeredGoodsKey, int offeredValuePoints) {
@@ -693,6 +749,104 @@ public final class TradeBoardTrading {
 		return 0;
 	}
 
+	private static int supportForDeliveredGoods(TradeBoardSettlementView view, Map<String, Integer> deliveredGoods, boolean donation) {
+		if (view == null || deliveredGoods == null || deliveredGoods.isEmpty()) {
+			return 1;
+		}
+
+		int support = 1;
+		for (Map.Entry<String, Integer> entry : deliveredGoods.entrySet()) {
+			String goodsKey = entry.getKey();
+			int amount = entry.getValue() == null ? 0 : entry.getValue();
+			if (goodsKey == null || amount <= 0) {
+				continue;
+			}
+
+			int shortageSupport = shortageSupportForDeliveredGoods(view, goodsKey, amount);
+			int outpostSupport = view.settlementKind() == SettlementKind.OUTPOST
+				? outpostSupportForDeliveredGoods(goodsKey, amount)
+				: 0;
+			support += Math.max(shortageSupport, outpostSupport);
+		}
+
+		int cap = donation ? 16 : 8;
+		return Math.max(1, Math.min(cap, support));
+	}
+
+	private static DeliveryResult deliverGoodsToSettlement(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		String goodsKey,
+		int amount
+	) {
+		if (stock == null || goodsKey == null || amount <= 0) {
+			return new DeliveryResult(0, 0);
+		}
+
+		int equipped = OutpostGear.equipDonatedGear(level, settlement, stock, goodsKey, amount);
+		int stored = Math.max(0, amount - equipped);
+		if (stored > 0) {
+			stock.merge(goodsKey, stored, Integer::sum);
+		}
+
+		return new DeliveryResult(stored, equipped);
+	}
+
+	private static String donationMessage(String baseMessage, int equippedGear) {
+		if (equippedGear <= 0) {
+			return baseMessage;
+		}
+
+		return baseMessage + " " + equippedGear + " equipped by nearby pillagers.";
+	}
+
+	private static int shortageSupportForDeliveredGoods(TradeBoardSettlementView view, String goodsKey, int amount) {
+		TradeBoardGoodsView shortage = goodsView(view.shortages(), goodsKey);
+		if (shortage == null) {
+			return 0;
+		}
+
+		int wantedAmount = Math.min(amount, Math.max(0, shortage.target() - shortage.current()));
+		if (wantedAmount <= 0) {
+			return 0;
+		}
+
+		int bundleSize = Math.max(1, shortage.tradeBundleSize());
+		int supportUnit = Math.max(1, bundleSize / 2);
+		return divideRoundUp(wantedAmount, supportUnit);
+	}
+
+	private static int outpostSupportForDeliveredGoods(String goodsKey, int amount) {
+		int supportUnit = outpostSupportUnit(goodsKey);
+		return supportUnit <= 0 ? 0 : divideRoundUp(amount, supportUnit);
+	}
+
+	private static int outpostSupportUnit(String goodsKey) {
+		int exactGearSupportUnit = OutpostGear.supportUnitForExactItem(goodsKey);
+		if (exactGearSupportUnit > 0) {
+			return exactGearSupportUnit;
+		}
+
+		return switch (goodsKey) {
+			case "arrow" -> 8;
+			case "iron_ingot", "diamond" -> 2;
+			case "raw_iron", "coal", "leather", "flint", "feather", "lantern" -> 4;
+			case "bread", "baked_potato", "beef", "mutton", "pork", "cod" -> 6;
+			case "wheat", "carrot", "potato", "beetroot", "logs", "planks", "cobblestone", "torch" -> 12;
+			case "chest", "ladder" -> 2;
+			default -> 0;
+		};
+	}
+
+	private static int divideRoundUp(int value, int divisor) {
+		if (value <= 0 || divisor <= 0) {
+			return 0;
+		}
+
+		return (value + divisor - 1) / divisor;
+	}
+
 	private static TradeBoardGoodsView goodsView(List<TradeBoardGoodsView> entries, String goodsKey) {
 		for (TradeBoardGoodsView entry : entries) {
 			if (entry.goodsKey().equals(goodsKey)) {
@@ -736,15 +890,32 @@ public final class TradeBoardTrading {
 	}
 
 	private static void sendTradeResult(ServerPlayer player, BlockPos boardPos, TradeBoardSettlementView view, TradeResult result) {
-		player.sendSystemMessage(Component.literal(result.message()));
+		String message = result.displayMessage();
+		player.sendSystemMessage(Component.literal(message));
 		ServerPlayNetworking.send(player, new TradeBoardRefreshPayload(
 			boardPos.immutable(),
 			view,
-			result.message(),
+			message,
 			result.success(),
+			playerStandingLabel(player, view),
+			raidView(player, view),
 			playerGoodsCounts(player.getInventory(), view),
 			playerInventoryRows(player.getInventory(), view)
 		));
+	}
+
+	private static String playerStandingLabel(ServerPlayer player, TradeBoardSettlementView view) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
+		return savedData.getSettlement(view.settlementId())
+			.map(settlement -> SettlementPlayerStandings.displayStanding(savedData, settlement, player))
+			.orElse("");
+	}
+
+	private static TradeBoardRaidView raidView(ServerPlayer player, TradeBoardSettlementView view) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
+		return savedData.getSettlement(view.settlementId())
+			.map(settlement -> TradeBoardLogic.createRaidView((ServerLevel) player.level(), savedData, settlement))
+			.orElse(TradeBoardRaidView.EMPTY);
 	}
 
 	private static void giveStack(ServerPlayer player, ItemStack stack) {
@@ -872,13 +1043,24 @@ public final class TradeBoardTrading {
 		}
 	}
 
-	private record TradeResult(boolean success, SettlementState updatedSettlement, String message) {
-		private static TradeResult success(SettlementState updatedSettlement, String message) {
-			return new TradeResult(true, updatedSettlement, message);
+	private record DeliveryResult(int stored, int equipped) {
+	}
+
+	private record TradeResult(boolean success, SettlementState updatedSettlement, int supportPoints, String message) {
+		private static TradeResult success(SettlementState updatedSettlement, int supportPoints, String message) {
+			return new TradeResult(true, updatedSettlement, Math.max(1, supportPoints), message);
 		}
 
 		private static TradeResult failure(String message) {
-			return new TradeResult(false, null, message);
+			return new TradeResult(false, null, 0, message);
+		}
+
+		private String displayMessage() {
+			if (!success || supportPoints <= 0) {
+				return message;
+			}
+
+			return message + " (+" + supportPoints + " support)";
 		}
 	}
 }

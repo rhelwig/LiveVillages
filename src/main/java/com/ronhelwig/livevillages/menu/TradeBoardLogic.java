@@ -10,6 +10,10 @@ import java.util.function.Function;
 
 import net.minecraft.server.level.ServerLevel;
 
+import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostRaidState;
+import com.ronhelwig.livevillages.sim.OutpostRaids;
+import com.ronhelwig.livevillages.sim.OutpostSettlementWork;
 import com.ronhelwig.livevillages.sim.RouteState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockStatus;
@@ -122,7 +126,8 @@ public final class TradeBoardLogic {
 		Map<String, Integer> constructionDemand,
 		List<SettlementBuildSite> buildSites
 	) {
-		int population = Math.max(1, settlement.totalPopulation());
+		int reportedPopulation = rolePopulation.values().stream().mapToInt(Integer::intValue).sum();
+		int population = Math.max(1, reportedPopulation > 0 ? reportedPopulation : settlement.totalPopulation());
 		List<TradeBoardGoodsView> shortages = new ArrayList<>();
 		List<TradeBoardGoodsView> surpluses = new ArrayList<>();
 
@@ -212,12 +217,12 @@ public final class TradeBoardLogic {
 			settlement.name(),
 			settlement.kind(),
 			SettlementTiers.unlockedTier(settlement),
-			settlement.totalPopulation(),
+			population,
 			settlement.housingCapacity(),
 			settlement.wealth().getOrDefault("emerald", 0),
 			settlement.comfort(),
 			settlement.security(),
-			summarizeGrowth(settlement, population),
+			summarizeGrowth(settlement, population, rolePopulation),
 			roleCounts,
 			shortages,
 			surpluses,
@@ -261,6 +266,44 @@ public final class TradeBoardLogic {
 		}
 
 		return Map.copyOf(demand);
+	}
+
+	public static TradeBoardRaidView createRaidView(ServerLevel level, LiveVillagesSavedData savedData, SettlementState settlement) {
+		if (level == null || savedData == null || settlement == null || settlement.kind() != com.ronhelwig.livevillages.sim.SettlementKind.OUTPOST) {
+			return TradeBoardRaidView.EMPTY;
+		}
+
+		OutpostRaidState raidState = savedData.outpostRaidState(settlement.id()).orElse(null);
+		SettlementState target = raidState == null
+			? null
+			: savedData.getSettlement(raidState.targetSettlementId()).orElse(null);
+
+		if (raidState == null) {
+			return new TradeBoardRaidView(
+				OutpostRaids.describeRaidState(null, null, OutpostRaids.currentRaidTick(level.getServer())),
+				"",
+				"",
+				"",
+				0,
+				List.of(),
+				Map.of()
+			);
+		}
+
+		List<TradeBoardGoodsView> loot = raidState.lastLoot().entrySet().stream()
+			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+			.map(entry -> stockGoodsView(level, entry.getKey(), entry.getValue()))
+			.toList();
+
+		return new TradeBoardRaidView(
+			OutpostRaids.describeRaidState(raidState, target, OutpostRaids.currentRaidTick(level.getServer())),
+			target == null ? "" : target.name(),
+			raidState.outcome(),
+			humanizeKey(raidState.phase().getSerializedName()),
+			raidState.partySize(),
+			loot,
+			raidState.lastPlayerRewards()
+		);
 	}
 
 	private static void addConstructionDemandShortages(
@@ -387,12 +430,12 @@ public final class TradeBoardLogic {
 			.toList();
 	}
 
-	private static String summarizeGrowth(SettlementState settlement, int population) {
+	private static String summarizeGrowth(SettlementState settlement, int population, Map<String, Integer> rolePopulation) {
 		if (population <= 0) {
 			return "Empty";
 		}
 
-		int freeHousing = settlement.housingCapacity() - population;
+		int freeHousing = settlement.housingCapacity() - OutpostSettlementWork.bedUsingPopulation(settlement, rolePopulation);
 		int storedFood = settlement.stock().getOrDefault("bread", 0)
 			+ settlement.stock().getOrDefault("baked_potato", 0)
 			+ settlement.stock().getOrDefault("cookie", 0)

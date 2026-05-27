@@ -2,8 +2,13 @@
   "required": true,
   "package": "com.ronhelwig.livevillages.mixin",
   "mixins": [
+    "AbstractIllagerMixin",
     "BellBlockMixin",
-    "FarmlandBlockMixin"
+    "FarmlandBlockMixin",
+    "LookAtPlayerGoalMixin",
+    "MobTargetMixin",
+    "PillagerMixin",
+    "ServerPlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -11,6 +11,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 public record SettlementOverlaySnapshot(
 	String statusMessage,
 	int distanceBlocks,
+	String playerStandingLabel,
 	Optional<TradeBoardSettlementView> settlement,
 	Optional<SettlementOverlayConstructionView> construction,
 	List<SettlementOverlayTaskView> tasks,
@@ -19,6 +20,7 @@ public record SettlementOverlaySnapshot(
 	public static final Codec<SettlementOverlaySnapshot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.STRING.optionalFieldOf("status_message", "").forGetter(SettlementOverlaySnapshot::statusMessage),
 		Codec.INT.optionalFieldOf("distance_blocks", -1).forGetter(SettlementOverlaySnapshot::distanceBlocks),
+		Codec.STRING.optionalFieldOf("player_standing_label", "").forGetter(SettlementOverlaySnapshot::playerStandingLabel),
 		TradeBoardSettlementView.CODEC.optionalFieldOf("settlement").forGetter(SettlementOverlaySnapshot::settlement),
 		SettlementOverlayConstructionView.CODEC.optionalFieldOf("construction").forGetter(SettlementOverlaySnapshot::construction),
 		SettlementOverlayTaskView.CODEC.listOf().optionalFieldOf("tasks", List.of()).forGetter(SettlementOverlaySnapshot::tasks),
@@ -26,16 +28,17 @@ public record SettlementOverlaySnapshot(
 	).apply(instance, SettlementOverlaySnapshot::new));
 
 	public static SettlementOverlaySnapshot unavailable(String statusMessage) {
-		return new SettlementOverlaySnapshot(statusMessage, -1, Optional.empty(), Optional.empty(), List.of(), List.of());
+		return new SettlementOverlaySnapshot(statusMessage, -1, "", Optional.empty(), Optional.empty(), List.of(), List.of());
 	}
 
 	public static SettlementOverlaySnapshot available(
 		TradeBoardSettlementView settlement,
 		int distanceBlocks,
+		String playerStandingLabel,
 		SettlementOverlayConstructionView construction,
 		List<SettlementOverlayTaskView> tasks,
 		List<SettlementOverlayWorkerView> workers
 	) {
-		return new SettlementOverlaySnapshot("", distanceBlocks, Optional.of(settlement), Optional.of(construction), tasks, workers);
+		return new SettlementOverlaySnapshot("", distanceBlocks, playerStandingLabel, Optional.of(settlement), Optional.of(construction), tasks, workers);
 	}
 }

@@ -12,11 +12,15 @@ import com.ronhelwig.livevillages.content.LiveVillagesMenus;
 public class TradeBoardMenu extends AbstractContainerMenu {
 	private final BlockPos boardPos;
 	private TradeBoardSettlementView settlement;
+	private String playerStandingLabel;
+	private TradeBoardRaidView raid;
 
 	public TradeBoardMenu(int syncId, Inventory inventory, TradeBoardOpenData openData) {
 		super(LiveVillagesMenus.TRADE_BOARD, syncId);
 		this.boardPos = openData.boardPos();
 		this.settlement = openData.settlement();
+		this.playerStandingLabel = openData.playerStandingLabel();
+		this.raid = openData.raid();
 	}
 
 	public BlockPos boardPos() {
@@ -29,6 +33,22 @@ public class TradeBoardMenu extends AbstractContainerMenu {
 
 	public void updateSettlement(TradeBoardSettlementView updatedSettlement) {
 		this.settlement = updatedSettlement;
+	}
+
+	public String playerStandingLabel() {
+		return playerStandingLabel;
+	}
+
+	public void updatePlayerStandingLabel(String updatedPlayerStandingLabel) {
+		this.playerStandingLabel = updatedPlayerStandingLabel == null ? "" : updatedPlayerStandingLabel;
+	}
+
+	public TradeBoardRaidView raid() {
+		return raid;
+	}
+
+	public void updateRaid(TradeBoardRaidView updatedRaid) {
+		this.raid = updatedRaid == null ? TradeBoardRaidView.EMPTY : updatedRaid;
 	}
 
 	@Override

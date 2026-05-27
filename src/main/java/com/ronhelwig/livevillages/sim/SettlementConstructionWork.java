@@ -213,6 +213,62 @@ public final class SettlementConstructionWork {
 		return new ConstructionWorkResult(List.copyOf(workingBuildSites), stockChanged, buildSitesChanged, worldChanged, deliveriesChanged);
 	}
 
+	public static ConstructionWorkResult maintainLoadedOutpostConstruction(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> buildSites,
+		boolean canBuildThisPass
+	) {
+		if (buildSites.isEmpty()) {
+			return ConstructionWorkResult.unchanged(buildSites);
+		}
+
+		long tick = level.getServer().getTickCount();
+		List<SettlementBuildSite> workingBuildSites = new ArrayList<>(buildSites.size());
+		boolean buildSitesChanged = false;
+		boolean worldChanged = false;
+		Map<String, Integer> stockBeforeReconcile = new LinkedHashMap<>(stock);
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, settlement, buildSite, tick);
+			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
+			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
+
+			if (!refreshedBuildSite.equals(buildSite)) {
+				buildSitesChanged = true;
+			}
+
+			workingBuildSites.add(refreshedBuildSite);
+		}
+
+		boolean stockChanged = !stock.equals(stockBeforeReconcile);
+
+		if (canBuildThisPass) {
+			List<BlockPos> memberPositions = OutpostSettlementWork.constructionMemberPositions(level, settlement);
+			ConstructionTask task = chooseOutpostConstructionTask(level, workingBuildSites, memberPositions);
+
+			if (task != null) {
+				if (shouldOutpostScavengeMaterial(level, task) && !task.block().expectedMaterialKey().isBlank()) {
+					stock.merge(task.block().expectedMaterialKey(), 1, Integer::sum);
+					stockChanged = true;
+				}
+
+				ConstructionActionResult actionResult = performConstructionTask(level, stock, task, tick, false);
+
+				if (actionResult.buildSiteChanged()) {
+					workingBuildSites.set(task.siteIndex(), actionResult.buildSite());
+					buildSitesChanged = true;
+				}
+
+				stockChanged |= actionResult.stockChanged();
+				worldChanged |= actionResult.worldChanged();
+			}
+		}
+
+		return new ConstructionWorkResult(List.copyOf(workingBuildSites), stockChanged, buildSitesChanged, worldChanged, false);
+	}
+
 	private static SettlementBuildSite reconcileBuildSiteWithWorld(ServerLevel level, SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks().size());
 		Set<String> retainedPositions = new HashSet<>();
@@ -873,6 +929,122 @@ public final class SettlementConstructionWork {
 		}
 
 		return bestTask.withStandPos(reachableStandPos.get());
+	}
+
+	private static ConstructionTask chooseOutpostConstructionTask(ServerLevel level, List<SettlementBuildSite> buildSites, List<BlockPos> memberPositions) {
+		ConstructionTask bestTask = null;
+
+		for (int siteIndex = 0; siteIndex < buildSites.size(); siteIndex++) {
+			SettlementBuildSite buildSite = buildSites.get(siteIndex);
+
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			int candidateBlocksChecked = 0;
+			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
+				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
+
+				if ((block.status() != SettlementBuildBlockStatus.PENDING && block.status() != SettlementBuildBlockStatus.MISSING_MATERIAL)
+					|| isPairedContinuation(buildSite, block)) {
+					continue;
+				}
+
+				BuildRelativePos relativePos = parseRelativePos(block.position());
+				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+
+				if (relativePos == null || targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
+					continue;
+				}
+
+				if (!OutpostSettlementWork.canReachConstructionFromAnyMember(memberPositions, targetPos.get())) {
+					continue;
+				}
+
+				if (!canOutpostWorkCurrentBlock(level, buildSite, block, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				if (isUnsupportedWallTorch(level, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				Optional<PairedBlock> pairedBlock = pairedRootBlock(buildSite, block);
+				if (pairedBlock.isPresent()) {
+					Optional<BlockPos> pairedPos = SettlementConstruction.buildSiteBlockPos(buildSite, pairedBlock.get().block());
+					BlockState pairedPlannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, pairedBlock.get().block());
+
+					if (pairedPos.isEmpty()
+						|| pairedPlannedState == null
+						|| !level.hasChunkAt(pairedPos.get())
+						|| !OutpostSettlementWork.canReachConstructionFromAnyMember(memberPositions, pairedPos.get())
+						|| !canOutpostWorkCurrentBlock(level, buildSite, pairedBlock.get().block(), pairedPos.get(), pairedPlannedState)
+						|| (requiresIndependentConstructionSupport(pairedPlannedState)
+							&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState))) {
+						continue;
+					}
+				}
+
+				candidateBlocksChecked++;
+
+				if (candidateBlocksChecked > MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE) {
+					break;
+				}
+
+				ConstructionTask candidateTask = new ConstructionTask(
+					siteIndex,
+					blockIndex,
+					buildSite,
+					block,
+					targetPos.get(),
+					targetPos.get(),
+					taskLayerPriority(buildSite, relativePos.up()),
+					claimKey(buildSite, block)
+				);
+
+				if (bestTask == null || candidateTask.layer() < bestTask.layer()) {
+					bestTask = candidateTask;
+				}
+			}
+		}
+
+		return bestTask;
+	}
+
+	private static boolean canOutpostWorkCurrentBlock(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos targetPos,
+		BlockState plannedState
+	) {
+		if (SettlementConstruction.isStructureMarginGroundBackfillBlock(block)) {
+			BlockState currentState = level.getBlockState(targetPos);
+			return currentState.isAir()
+				|| SettlementConstruction.isBuildSiteReplaceable(currentState)
+				|| SettlementConstruction.matchesStructureMarginGroundReplacement(currentState);
+		}
+
+		BlockState currentState = level.getBlockState(targetPos);
+		return statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)
+			|| SettlementConstruction.isBuildSiteReplaceable(currentState);
+	}
+
+	private static boolean shouldOutpostScavengeMaterial(ServerLevel level, ConstructionTask task) {
+		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(task.buildSite(), task.block());
+
+		if (plannedState == null || SettlementConstruction.isStructureMarginGroundBackfillBlock(task.block())) {
+			return false;
+		}
+
+		BlockState currentState = level.getBlockState(task.targetPos());
+		return !statesMatchBuildSiteIntent(task.buildSite(), task.block(), currentState, plannedState)
+			&& SettlementConstruction.isBuildSiteReplaceable(currentState);
 	}
 
 	private static int workerConstructionAffinity(Villager worker, String materialKey) {
