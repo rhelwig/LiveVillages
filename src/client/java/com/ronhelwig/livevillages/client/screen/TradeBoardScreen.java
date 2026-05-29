@@ -78,6 +78,9 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private static final int BOUNTY_ROW_HEIGHT = 14;
 	private static final int BOUNTY_LIST_Y = 92;
 	private static final int BOUNTY_DETAIL_Y = 68;
+	private static final int RAID_LOOT_ROW_SPACING = 12;
+	private static final int RAID_LOOT_COLUMN_WIDTH = 162;
+	private static final int RAID_LOOT_MAX_VISIBLE = 12;
 	private static final int WRAPPED_TEXT_LINE_HEIGHT = 10;
 	private static Tab lastActiveTab = Tab.OVERVIEW;
 	private static final Component BOUNTY_LABEL = Component.literal("Settlement Bounties");
@@ -376,10 +379,11 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			y += INFO_ROW_SPACING + 1;
 		}
 
-		int detailY = Math.max(y + 8, 116);
+		y = drawRaidRewards(graphics, raid, y + 2);
+
+		int detailY = Math.max(y + 8, 126);
 		graphics.text(font, "Last Raid Gains", LEFT_COLUMN_X, detailY, 0xFFF2CF84, false);
 		drawRaidLoot(graphics, raid, detailY + 14);
-		drawRaidRewards(graphics, raid, detailY + 14);
 		drawFeedback(graphics);
 	}
 
@@ -405,45 +409,53 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			return;
 		}
 
-		int rowY = y;
-		int visibleCount = Math.min(7, raid.loot().size());
+		int visibleCount = Math.min(RAID_LOOT_MAX_VISIBLE, raid.loot().size());
+		int rowsPerColumn = Math.max(1, (visibleCount + 1) / 2);
 		for (int index = 0; index < visibleCount; index++) {
 			TradeBoardGoodsView loot = raid.loot().get(index);
-			drawGoodsIcon(graphics, loot.goodsKey(), LEFT_COLUMN_X, rowY - 4, Math.max(1, loot.current()));
+			int column = index / rowsPerColumn;
+			int row = index % rowsPerColumn;
+			int rowX = LEFT_COLUMN_X + column * RAID_LOOT_COLUMN_WIDTH;
+			int rowY = y + row * RAID_LOOT_ROW_SPACING;
+			drawGoodsIcon(graphics, loot.goodsKey(), rowX, rowY - 4, Math.max(1, loot.current()));
 			String label = TradeBoardTradeRules.compactLabel(loot.goodsKey(), loot.label());
-			graphics.text(font, trimToWidth(loot.current() + " " + label, 140), LEFT_COLUMN_X + 20, rowY, 0xFFE8DDC8, false);
-			rowY += INFO_ROW_SPACING + 2;
+			graphics.text(font, trimToWidth(loot.current() + " " + label, RAID_LOOT_COLUMN_WIDTH - 22), rowX + 20, rowY, 0xFFE8DDC8, false);
 		}
 
 		if (raid.loot().size() > visibleCount) {
-			graphics.text(font, "+" + (raid.loot().size() - visibleCount) + " more goods", LEFT_COLUMN_X, rowY, 0xFF9F8E72, false);
+			int hiddenY = y + rowsPerColumn * RAID_LOOT_ROW_SPACING;
+			graphics.text(font, "+" + (raid.loot().size() - visibleCount) + " more goods", LEFT_COLUMN_X, hiddenY, 0xFF9F8E72, false);
 		}
 	}
 
-	private void drawRaidRewards(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
-		int x = RIGHT_COLUMN_X;
-		graphics.text(font, "Player Rewards", x, y - 14, 0xFFF2CF84, false);
+	private int drawRaidRewards(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
+		graphics.text(font, "Player Rewards", LEFT_COLUMN_X, y, 0xFFF2CF84, false);
+		y += INFO_ROW_SPACING + 1;
 
 		if (raid.playerRewards().isEmpty()) {
-			graphics.text(font, "No participants recorded", x, y, 0xFF9F8E72, false);
-			return;
+			graphics.text(font, "No participants recorded", LEFT_COLUMN_X, y, 0xFF9F8E72, false);
+			return y + INFO_ROW_SPACING;
 		}
 
-		List<Map.Entry<String, Integer>> rewards = raid.playerRewards().entrySet().stream()
-			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
-			.toList();
-		int rowY = y;
-		int visibleCount = Math.min(7, rewards.size());
+		List<Map.Entry<String, Integer>> rewards = sortedRaidRewards(raid);
+		int visibleCount = Math.min(3, rewards.size());
 		for (int index = 0; index < visibleCount; index++) {
 			Map.Entry<String, Integer> reward = rewards.get(index);
-			graphics.text(font, trimToWidth(reward.getKey(), 84), x, rowY, 0xFFE8DDC8, false);
-			graphics.text(font, "+" + reward.getValue() + " support", x + 88, rowY, 0xFFDCC8A4, false);
-			rowY += INFO_ROW_SPACING + 2;
+			String line = reward.getKey() + " +" + reward.getValue() + " support";
+			if (index == visibleCount - 1 && rewards.size() > visibleCount) {
+				line += "  +" + (rewards.size() - visibleCount) + " more";
+			}
+			graphics.text(font, trimToWidth(line, imageWidth - 20), LEFT_COLUMN_X, y, 0xFFE8DDC8, false);
+			y += INFO_ROW_SPACING + 1;
 		}
 
-		if (rewards.size() > visibleCount) {
-			graphics.text(font, "+" + (rewards.size() - visibleCount) + " more players", x, rowY, 0xFF9F8E72, false);
-		}
+		return y;
+	}
+
+	private List<Map.Entry<String, Integer>> sortedRaidRewards(TradeBoardRaidView raid) {
+		return raid.playerRewards().entrySet().stream()
+			.sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+			.toList();
 	}
 
 	private void drawPlayerGoodsDetail(GuiGraphicsExtractor graphics, TradeBoardInventoryEntryView selected, TradeBoardSettlementView settlement) {
