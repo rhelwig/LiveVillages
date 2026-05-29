@@ -99,6 +99,16 @@ public record OutpostRaidState(
 		return completed(outcome, currentTick, nextEligibleTick, Map.of(), Map.of());
 	}
 
+	public OutpostRaidState returning(
+		String outcome,
+		long currentTick,
+		long nextEligibleTick,
+		Map<String, Integer> lastLoot,
+		Map<String, Integer> lastPlayerRewards
+	) {
+		return new OutpostRaidState(outpostSettlementId, targetSettlementId, OutpostRaidPhase.RETURNING, partySize, createdTick, currentTick, nextEligibleTick, lastAnnouncementTick, controlProgressTicks, outcome, lastLoot, lastPlayerRewards);
+	}
+
 	public OutpostRaidState completed(
 		String outcome,
 		long currentTick,

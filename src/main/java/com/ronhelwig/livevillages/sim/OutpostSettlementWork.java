@@ -25,7 +25,7 @@ import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.phys.AABB;
 
 public final class OutpostSettlementWork {
-	private static final int OUTPOST_MEMBER_RADIUS_MARGIN_BLOCKS = 32;
+	private static final int OUTPOST_MEMBER_RADIUS_MARGIN_BLOCKS = 0;
 	private static final int OUTPOST_CONSTRUCTION_MEMBER_RADIUS_BLOCKS = 24;
 	private static final int OUTPOST_CONSTRUCTION_MEMBER_Y_RANGE_BLOCKS = 24;
 	private static final int OUTPOST_WORK_INTERVAL_TICKS = 800;
@@ -148,6 +148,16 @@ public final class OutpostSettlementWork {
 		raider.addTag(ACTIVE_RAID_MEMBER_TAG);
 		raider.addTag(outpostMemberTag(settlement.id()));
 		raider.setPersistenceRequired();
+	}
+
+	public static void clearActiveRaidMember(Raider raider) {
+		if (raider == null) {
+			return;
+		}
+
+		raider.removeTag(ACTIVE_RAID_MEMBER_TAG);
+		raider.setCanJoinRaid(false);
+		raider.setPatrolTarget(null);
 	}
 
 	public static boolean isActiveRaidMember(Raider raider, SettlementState settlement) {

@@ -8,6 +8,7 @@ public enum OutpostRaidPhase implements StringRepresentable {
 	MUSTERING("mustering"),
 	MARCHING("marching"),
 	RAIDING("raiding"),
+	RETURNING("returning"),
 	COOLDOWN("cooldown");
 
 	public static final Codec<OutpostRaidPhase> CODEC = StringRepresentable.fromEnum(OutpostRaidPhase::values);

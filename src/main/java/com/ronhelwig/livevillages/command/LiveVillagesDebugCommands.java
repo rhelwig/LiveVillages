@@ -22,6 +22,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardProjectView;
 import com.ronhelwig.livevillages.menu.TradeBoardRoleView;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.OutpostRaidPhase;
 import com.ronhelwig.livevillages.sim.OutpostRaidState;
 import com.ronhelwig.livevillages.sim.OutpostRaids;
 import com.ronhelwig.livevillages.sim.SettlementState;
@@ -52,7 +53,17 @@ public final class LiveVillagesDebugCommands {
 					.then(Commands.argument("radiusChunks", IntegerArgumentType.integer(0, 256))
 						.executes(context -> rescanSettlements(context, IntegerArgumentType.getInteger(context, "radiusChunks")))))
 				.then(Commands.literal("validate")
-					.executes(LiveVillagesDebugCommands::validateSettlements))));
+					.executes(LiveVillagesDebugCommands::validateSettlements))
+				.then(Commands.literal("clearRaidCooldown")
+					.executes(LiveVillagesDebugCommands::clearNearestOutpostRaidCooldown))
+				.then(Commands.literal("resetRaidCooldown")
+					.executes(LiveVillagesDebugCommands::clearNearestOutpostRaidCooldown))
+				.then(Commands.literal("retreatRaid")
+					.executes(LiveVillagesDebugCommands::retreatNearestOutpostRaid))
+				.then(Commands.literal("terminateRaid")
+					.executes(LiveVillagesDebugCommands::retreatNearestOutpostRaid))
+				.then(Commands.literal("abortRaid")
+					.executes(LiveVillagesDebugCommands::retreatNearestOutpostRaid))));
 	}
 
 	private static int listSettlements(CommandContext<CommandSourceStack> context) {
@@ -199,6 +210,79 @@ public final class LiveVillagesDebugCommands {
 
 		source.sendSuccess(() -> Component.literal("Removed invalid villages: " + String.join(", ", removedNames)), true);
 		return removedNames.size();
+	}
+
+	private static int clearNearestOutpostRaidCooldown(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(source.getServer());
+		BlockPos position = BlockPos.containing(source.getPosition());
+		var outpost = savedData.findNearestSettlement(
+			source.getLevel().dimension(),
+			position,
+			Double.POSITIVE_INFINITY,
+			settlement -> settlement.kind() == SettlementKind.OUTPOST
+		);
+
+		if (outpost.isEmpty()) {
+			source.sendFailure(Component.literal("No outpost is known in this dimension."));
+			return 0;
+		}
+
+		long currentTick = OutpostRaids.currentRaidTick(source.getServer());
+		OutpostRaidState raidState = savedData.outpostRaidState(outpost.get().id()).orElse(null);
+
+		if (raidState != null && raidState.phase() != OutpostRaidPhase.COOLDOWN) {
+			source.sendFailure(Component.literal("Nearest outpost already has an active raid: " + OutpostRaids.describeRaidState(raidState, savedData.getSettlement(raidState.targetSettlementId()).orElse(null), currentTick)));
+			return 0;
+		}
+
+		if (raidState == null) {
+			source.sendSuccess(() -> Component.literal(outpost.get().name() + " has no recorded raid cooldown."), true);
+			return 1;
+		}
+
+		OutpostRaidState updated = raidState.completed(
+			raidState.outcome(),
+			currentTick,
+			currentTick,
+			raidState.lastLoot(),
+			raidState.lastPlayerRewards()
+		);
+		savedData.putOutpostRaidState(updated);
+		source.sendSuccess(() -> Component.literal("Cleared raid cooldown for " + outpost.get().name() + "."), true);
+		return 1;
+	}
+
+	private static int retreatNearestOutpostRaid(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(source.getServer());
+		BlockPos position = BlockPos.containing(source.getPosition());
+		var outpost = savedData.findNearestSettlement(
+			source.getLevel().dimension(),
+			position,
+			Double.POSITIVE_INFINITY,
+			settlement -> settlement.kind() == SettlementKind.OUTPOST
+		);
+
+		if (outpost.isEmpty()) {
+			source.sendFailure(Component.literal("No outpost is known in this dimension."));
+			return 0;
+		}
+
+		long currentTick = OutpostRaids.currentRaidTick(source.getServer());
+		OutpostRaidState raidState = savedData.outpostRaidState(outpost.get().id()).orElse(null);
+		if (raidState == null || raidState.phase() == OutpostRaidPhase.COOLDOWN) {
+			source.sendFailure(Component.literal("Nearest outpost has no active raid."));
+			return 0;
+		}
+
+		if (!OutpostRaids.forceRetreat(source.getServer(), savedData, outpost.get(), currentTick)) {
+			source.sendFailure(Component.literal("Could not retreat the active raid for " + outpost.get().name() + "."));
+			return 0;
+		}
+
+		source.sendSuccess(() -> Component.literal("Ordered " + outpost.get().name() + "'s active raid to retreat."), true);
+		return 1;
 	}
 
 	private static void sendGoodsSection(CommandSourceStack source, String title, List<TradeBoardGoodsView> entries, boolean includeTarget) {

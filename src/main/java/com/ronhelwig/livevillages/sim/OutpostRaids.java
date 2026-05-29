@@ -25,14 +25,20 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
+import com.ronhelwig.livevillages.LiveVillages;
+
 public final class OutpostRaids {
 	private static final long RAID_COOLDOWN_TICKS = (long) SettlementEconomyRules.TICKS_PER_DAY * 7L;
 	private static final long MUSTER_TICKS = 1_200L;
 	private static final long MIN_MARCH_TICKS = 2_400L;
 	private static final long MAX_MARCH_TICKS = 12_000L;
+	private static final long MIN_RETURN_TICKS = 1_200L;
+	private static final long MAX_RETURN_TICKS = 8_000L;
 	private static final long RAID_MAX_TICKS = 6_000L;
 	private static final int CONTROL_REQUIRED_TICKS = 1_800;
 	private static final int CONTROL_RADIUS_BLOCKS = 32;
+	private static final int RAID_ARRIVAL_RADIUS_BLOCKS = 18;
+	private static final int RAID_RETURN_HOME_RADIUS_BLOCKS = 32;
 	private static final int TARGET_SEARCH_RADIUS_BLOCKS = 1_024;
 	private static final int BANNER_NOTICE_RADIUS_BLOCKS = 256;
 	private static final int PARTICIPATION_RADIUS_BLOCKS = 160;
@@ -40,7 +46,20 @@ public final class OutpostRaids {
 	private static final int RAID_LAND_WAYPOINT_MAX_BLOCKS = 128;
 	private static final int RAID_LAND_WAYPOINT_STEP_BLOCKS = 16;
 	private static final int RAID_LAND_WAYPOINT_LATERAL_BLOCKS = 96;
+	private static final int RAID_WAYPOINT_REACHED_RADIUS_BLOCKS = 40;
 	private static final int RAID_WATER_SCAN_BLOCKS = 128;
+	private static final int TARGET_CONTROL_SEARCH_RADIUS_BLOCKS = 36;
+	private static final int TARGET_CONTROL_SEARCH_STEP_BLOCKS = 4;
+	private static final int RAID_CARTOGRAPHER_RADIUS_BONUS_BLOCKS = 384;
+	private static final int RAID_ROADWRIGHT_RADIUS_BONUS_BLOCKS = 256;
+	private static final int RAID_PORTMASTER_RADIUS_BONUS_BLOCKS = 256;
+	private static final int RAID_TRADEMASTER_RADIUS_BONUS_BLOCKS = 192;
+	private static final int RAID_LIGHTHOUSE_RADIUS_BONUS_BLOCKS = 512;
+	private static final int MAX_LOOT_TYPES = 12;
+	private static final int MUSTER_GROUND_MIN_BLOCKS = 10;
+	private static final int MUSTER_GROUND_MAX_BLOCKS = 22;
+	private static final int MUSTER_GROUND_STEP_BLOCKS = 4;
+	private static final int MUSTER_GROUND_LATERAL_BLOCKS = 14;
 	private static final int MIN_RAIDERS_TO_LAUNCH = 8;
 	private static final int RAIDERS_LEFT_BEHIND = 4;
 	private static final int MIN_PARTY_SIZE = 3;
@@ -60,11 +79,11 @@ public final class OutpostRaids {
 		"flint",
 		"feather",
 		"leather",
-		"bread",
 		"beef",
 		"mutton",
 		"pork",
 		"cod",
+		"bread",
 		"wheat",
 		"carrot",
 		"potato",
@@ -148,9 +167,53 @@ public final class OutpostRaids {
 			case MUSTERING -> "Mustering " + raidState.partySize() + " raiders for " + targetName;
 			case MARCHING -> "Marching " + raidState.partySize() + " raiders toward " + targetName;
 			case RAIDING -> "Raiding " + targetName + " (" + raidState.controlProgressTicks() + "/" + CONTROL_REQUIRED_TICKS + " control)";
+			case RETURNING -> "Returning from " + targetName;
 			case COOLDOWN -> raidState.outcome().isBlank()
 				? "Raid cooldown: next eligible in " + formatTicks(Math.max(0L, raidState.nextEligibleTick() - currentTick))
 				: "Last raid: " + raidState.outcome() + "; next eligible in " + formatTicks(Math.max(0L, raidState.nextEligibleTick() - currentTick));
+		};
+	}
+
+	public static boolean forceRetreat(MinecraftServer server, LiveVillagesSavedData savedData, SettlementState outpost, long currentTick) {
+		OutpostRaidState raidState = savedData.outpostRaidState(outpost.id()).orElse(null);
+		if (raidState == null || raidState.phase() == OutpostRaidPhase.COOLDOWN) {
+			return false;
+		}
+
+		Optional<SettlementState> target = savedData.getSettlement(raidState.targetSettlementId());
+		long nextEligibleTick = Math.max(currentTick, raidState.nextEligibleTick());
+		if (target.isEmpty() || target.get().kind() == SettlementKind.OUTPOST) {
+			savedData.putOutpostRaidState(raidState.completed(
+				"retreated: target lost",
+				currentTick,
+				nextEligibleTick,
+				raidState.lastLoot(),
+				raidState.lastPlayerRewards()
+			));
+			return true;
+		}
+
+		OutpostRaidState returning = raidState.phase() == OutpostRaidPhase.RETURNING
+			? raidState.withAnnouncementTick(currentTick)
+			: raidState.returning(
+				retreatOutcome(raidState, target.get()),
+				currentTick,
+				nextEligibleTick,
+				raidState.lastLoot(),
+				raidState.lastPlayerRewards()
+			);
+		announce(server, savedData, outpost, target.get(), returning, "returning from");
+		steerLoadedRaidersHome(server, outpost, target.get(), returning.partySize());
+		savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
+		return true;
+	}
+
+	private static String retreatOutcome(OutpostRaidState raidState, SettlementState target) {
+		return switch (raidState.phase()) {
+			case MUSTERING -> "raid on " + target.name() + " called off during muster";
+			case MARCHING -> "retreated before reaching " + target.name();
+			case RAIDING -> "retreated from " + target.name();
+			case RETURNING, COOLDOWN -> raidState.outcome();
 		};
 	}
 
@@ -210,6 +273,7 @@ public final class OutpostRaids {
 			case MUSTERING -> advanceMustering(server, savedData, outpost.get(), target.get(), raidState, currentTick);
 			case MARCHING -> advanceMarching(server, savedData, outpost.get(), target.get(), raidState, currentTick);
 			case RAIDING -> advanceRaiding(server, savedData, outpost.get(), target.get(), raidState, currentTick);
+			case RETURNING -> advanceReturning(server, savedData, outpost.get(), target.get(), raidState, currentTick);
 			case COOLDOWN -> false;
 		};
 	}
@@ -260,7 +324,47 @@ public final class OutpostRaids {
 			steerLoadedRaiders(outpostLevel, outpost, target, raidState.partySize());
 		}
 
-		if (currentTick - updated.phaseStartedTick() < marchTicks) {
+		ServerLevel targetLevel = server.getLevel(target.dimension());
+		boolean targetLoaded = targetLevel != null && targetLevel.isLoaded(target.center());
+		boolean targetTicking = targetLevel != null && targetLevel.isPositionEntityTicking(target.center());
+		long elapsedTicks = currentTick - updated.phaseStartedTick();
+		RaidArrivalStatus arrivalStatus = targetLevel == null
+			? RaidArrivalStatus.unobserved(target.center(), raidState.partySize())
+			: raidArrivalStatus(targetLevel, outpost, target, raidState.partySize());
+		logMarchProgress(
+			server.getTickCount(),
+			outpostLevel != null ? outpostLevel : targetLevel,
+			outpost,
+			target,
+			raidState.partySize(),
+			elapsedTicks,
+			marchTicks,
+			targetLoaded,
+			targetTicking
+		);
+
+		if (targetLoaded
+			&& targetTicking
+			&& maybeRetreatAfterHeavyLosses(server, savedData, outpost, target, updated, arrivalStatus.activeRaiders(), currentTick, false)) {
+			return true;
+		}
+
+		if (elapsedTicks < marchTicks) {
+			if (!updated.equals(raidState)) {
+				savedData.putOutpostRaidState(updated);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetLevel != null
+			&& targetLoaded
+			&& targetTicking
+			&& !arrivalStatus.arrived()) {
+			if (elapsedTicks >= MAX_MARCH_TICKS) {
+				return retreatAfterFailedMarch(server, savedData, outpost, target, updated, arrivalStatus.activeRaiders(), currentTick);
+			}
+
 			if (!updated.equals(raidState)) {
 				savedData.putOutpostRaidState(updated);
 				return true;
@@ -284,47 +388,65 @@ public final class OutpostRaids {
 	) {
 		ServerLevel targetLevel = server.getLevel(target.dimension());
 		int nearbyGolems = targetLevel == null ? 0 : countNearbyGolems(targetLevel, target);
+		RaidArrivalStatus arrivalStatus = targetLevel == null
+			? RaidArrivalStatus.unobserved(target.center(), raidState.partySize())
+			: raidArrivalStatus(targetLevel, outpost, target, raidState.partySize());
+		if (targetLevel != null
+			&& maybeRetreatAfterHeavyLosses(server, savedData, outpost, target, raidState, arrivalStatus.activeRaiders(), currentTick, true)) {
+			return true;
+		}
 
-		if (raidState.controlProgressTicks() == 0 && shouldPayTribute(target, raidState, nearbyGolems)) {
-			LootTransfer transfer = transferLoot(savedData, outpost, target, raidState.partySize(), true);
+		int effectivePartySize = arrivalStatus.observed()
+			? Math.min(raidState.partySize(), arrivalStatus.activeRaiders())
+			: raidState.partySize();
+
+		if (raidState.controlProgressTicks() == 0 && shouldPayTribute(target, effectivePartySize, nearbyGolems)) {
+			LootTransfer transfer = transferLoot(savedData, outpost, target, effectivePartySize, true);
 			damageTargetSecurity(savedData, target, TRIBUTE_SECURITY_PENALTY);
 			Map<String, Integer> rewards = awardParticipants(server, savedData, outpost, target, TRIBUTE_SUPPORT, target.name() + " paid tribute to " + outpost.name() + ".");
-			OutpostRaidState completed = raidState.completed(
+			OutpostRaidState returning = raidState.returning(
 				"paid off by " + target.name() + " (" + transfer.totalTransferred() + " goods)",
 				currentTick,
 				currentTick + RAID_COOLDOWN_TICKS,
 				transfer.transferred(),
 				rewards
 			);
-			savedData.putOutpostRaidState(completed);
+			announce(server, savedData, outpost, target, returning, "returning from");
+			steerLoadedRaidersHome(server, outpost, target, returning.partySize());
+			savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
 			return true;
 		}
 
-		int progress = raidState.controlProgressTicks() + controlProgressThisTick(target, raidState, nearbyGolems);
+		int progress = raidState.controlProgressTicks() + controlProgressThisTick(target, effectivePartySize, nearbyGolems);
 		if (progress >= CONTROL_REQUIRED_TICKS) {
-			LootTransfer transfer = transferLoot(savedData, outpost, target, raidState.partySize(), false);
+			LootTransfer transfer = transferLoot(savedData, outpost, target, effectivePartySize, false);
 			damageTargetSecurity(savedData, target, RAID_SUCCESS_SECURITY_PENALTY);
 			Map<String, Integer> rewards = awardParticipants(server, savedData, outpost, target, RAID_SUCCESS_SUPPORT, outpost.name() + " successfully raided " + target.name() + ".");
-			OutpostRaidState completed = raidState.completed(
+			OutpostRaidState returning = raidState.returning(
 				"successful raid on " + target.name() + " (" + transfer.totalTransferred() + " goods)",
 				currentTick,
 				currentTick + RAID_COOLDOWN_TICKS,
 				transfer.transferred(),
 				rewards
 			);
-			savedData.putOutpostRaidState(completed);
+			announce(server, savedData, outpost, target, returning, "returning from");
+			steerLoadedRaidersHome(server, outpost, target, returning.partySize());
+			savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
 			return true;
 		}
 
 		if (currentTick - raidState.phaseStartedTick() >= RAID_MAX_TICKS) {
 			damageTargetSecurity(savedData, target, RAID_REPELLED_SECURITY_PENALTY);
-			OutpostRaidState completed = raidState.completed(
+			OutpostRaidState returning = raidState.returning(
 				"repelled at " + target.name(),
 				currentTick,
-				currentTick + RAID_COOLDOWN_TICKS
+				currentTick + RAID_COOLDOWN_TICKS,
+				Map.of(),
+				Map.of()
 			);
-			announce(server, savedData, outpost, target, completed, "was repelled at");
-			savedData.putOutpostRaidState(completed.withAnnouncementTick(currentTick));
+			announce(server, savedData, outpost, target, returning, "returning from");
+			steerLoadedRaidersHome(server, outpost, target, returning.partySize());
+			savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
 			return true;
 		}
 
@@ -333,32 +455,120 @@ public final class OutpostRaids {
 		return true;
 	}
 
+	private static boolean advanceReturning(
+		MinecraftServer server,
+		LiveVillagesSavedData savedData,
+		SettlementState outpost,
+		SettlementState target,
+		OutpostRaidState raidState,
+		long currentTick
+	) {
+		OutpostRaidState updated = announceIfDue(server, savedData, outpost, target, raidState, currentTick, "returning from");
+		steerLoadedRaidersHome(server, outpost, target, updated.partySize());
+
+		ServerLevel returnLevel = server.getLevel(outpost.dimension());
+		RaidReturnStatus returnStatus = returnLevel == null
+			? RaidReturnStatus.unobserved(raidMusterPosFallback(outpost, target))
+			: raidReturnStatus(returnLevel, outpost, target);
+		long elapsedTicks = currentTick - updated.phaseStartedTick();
+		long returnTicks = returnTicks(outpost, target);
+		logReturnProgress(server.getTickCount(), returnStatus, outpost, target, elapsedTicks, returnTicks);
+
+		if (elapsedTicks < returnTicks
+			|| (returnStatus.observed()
+				&& returnStatus.activeRaiders() > returnStatus.homeRaiders()
+				&& elapsedTicks < MAX_RETURN_TICKS)) {
+			if (!updated.equals(raidState)) {
+				savedData.putOutpostRaidState(updated);
+				return true;
+			}
+			return false;
+		}
+
+		if (returnLevel != null && returnStatus.activeRaiders() > returnStatus.homeRaiders()) {
+			recoverReturningRaiders(returnLevel, outpost, target);
+		}
+		clearReturnedRaiders(server, outpost, target);
+		OutpostRaidState completed = updated.completed(
+			updated.outcome(),
+			currentTick,
+			updated.nextEligibleTick(),
+			updated.lastLoot(),
+			updated.lastPlayerRewards()
+		);
+		savedData.putOutpostRaidState(completed);
+		return true;
+	}
+
 	private static Optional<SettlementState> chooseTarget(LiveVillagesSavedData savedData, SettlementState outpost) {
-		return savedData.getSettlements().stream()
+		double searchRadius = raidSearchRadius(savedData, outpost);
+		List<SettlementState> candidates = savedData.getSettlements().stream()
 			.filter(settlement -> !settlement.id().equals(outpost.id()))
 			.filter(settlement -> settlement.kind() != SettlementKind.OUTPOST)
 			.filter(settlement -> settlement.dimension().equals(outpost.dimension()))
-			.filter(settlement -> horizontalDistanceSqr(settlement.center(), outpost.center()) <= TARGET_SEARCH_RADIUS_BLOCKS * TARGET_SEARCH_RADIUS_BLOCKS)
+			.filter(settlement -> horizontalDistanceSqr(settlement.center(), outpost.center()) <= searchRadius * searchRadius)
 			.filter(settlement -> transferableValue(settlement) >= 8)
-			.min(Comparator
-				.comparingDouble((SettlementState settlement) -> horizontalDistanceSqr(settlement.center(), outpost.center()))
+			.toList();
+
+		if (candidates.isEmpty()) {
+			return Optional.empty();
+		}
+
+		String lastTargetId = savedData.outpostRaidState(outpost.id())
+			.map(OutpostRaidState::targetSettlementId)
+			.orElse("");
+		List<SettlementState> preferredCandidates = candidates.size() <= 1 || lastTargetId.isBlank()
+			? candidates
+			: candidates.stream()
+				.filter(settlement -> !settlement.id().equals(lastTargetId))
+				.toList();
+
+		if (preferredCandidates.isEmpty()) {
+			preferredCandidates = candidates;
+		}
+
+		return preferredCandidates.stream()
+			.max(Comparator
+				.comparingInt(OutpostRaids::transferableValue)
+				.thenComparingDouble(settlement -> -horizontalDistanceSqr(settlement.center(), outpost.center()))
 				.thenComparing(SettlementState::name));
 	}
 
-	private static boolean shouldPayTribute(SettlementState target, OutpostRaidState raidState, int nearbyGolems) {
+	private static double raidSearchRadius(LiveVillagesSavedData savedData, SettlementState outpost) {
+		int radius = TARGET_SEARCH_RADIUS_BLOCKS;
+		radius += roleCount(outpost, SettlementRoleKeys.CARTOGRAPHER) > 0 ? RAID_CARTOGRAPHER_RADIUS_BONUS_BLOCKS : 0;
+		radius += roleCount(outpost, SettlementRoleKeys.ROADWRIGHT) > 0 ? RAID_ROADWRIGHT_RADIUS_BONUS_BLOCKS : 0;
+		radius += roleCount(outpost, SettlementRoleKeys.PORTMASTER) > 0 ? RAID_PORTMASTER_RADIUS_BONUS_BLOCKS : 0;
+		radius += roleCount(outpost, SettlementRoleKeys.TRADEMASTER) > 0 ? RAID_TRADEMASTER_RADIUS_BONUS_BLOCKS : 0;
+		radius += completedBuildSites(savedData, outpost, SettlementBuildSiteType.LIGHTHOUSE) > 0 ? RAID_LIGHTHOUSE_RADIUS_BONUS_BLOCKS : 0;
+		return radius;
+	}
+
+	private static int roleCount(SettlementState settlement, String roleKey) {
+		return Math.max(0, settlement.population().getOrDefault(roleKey, 0));
+	}
+
+	private static long completedBuildSites(LiveVillagesSavedData savedData, SettlementState settlement, SettlementBuildSiteType buildSiteType) {
+		return savedData.getBuildSitesForSettlement(settlement.id()).stream()
+			.filter(SettlementBuildSite::complete)
+			.filter(buildSite -> buildSite.blueprintId() == buildSiteType)
+			.count();
+	}
+
+	private static boolean shouldPayTribute(SettlementState target, int partySize, int nearbyGolems) {
 		int transferableValue = transferableValue(target);
 		if (transferableValue < 12) {
 			return false;
 		}
 
 		double defensePressure = target.security() + (nearbyGolems * 0.20D);
-		double raidPressure = Math.min(1.0D, raidState.partySize() * 0.12D);
+		double raidPressure = Math.min(1.0D, partySize * 0.12D);
 		return defensePressure < raidPressure;
 	}
 
-	private static int controlProgressThisTick(SettlementState target, OutpostRaidState raidState, int nearbyGolems) {
+	private static int controlProgressThisTick(SettlementState target, int partySize, int nearbyGolems) {
 		double defensePressure = target.security() + (nearbyGolems * 0.18D);
-		double raidPressure = Math.min(1.0D, raidState.partySize() * 0.11D);
+		double raidPressure = Math.min(1.0D, partySize * 0.11D);
 
 		if (defensePressure >= raidPressure + 0.25D) {
 			return 0;
@@ -369,6 +579,76 @@ public final class OutpostRaids {
 		}
 
 		return 20;
+	}
+
+	private static boolean maybeRetreatAfterHeavyLosses(
+		MinecraftServer server,
+		LiveVillagesSavedData savedData,
+		SettlementState outpost,
+		SettlementState target,
+		OutpostRaidState raidState,
+		int activeRaiders,
+		long currentTick,
+		boolean damageTargetSecurity
+	) {
+		if (activeRaiders >= MIN_PARTY_SIZE) {
+			return false;
+		}
+
+		if (damageTargetSecurity) {
+			damageTargetSecurity(savedData, target, RAID_REPELLED_SECURITY_PENALTY);
+		}
+
+		String outcome = activeRaiders <= 0
+			? "lost raiding party near " + target.name()
+			: "retreated from " + target.name() + " after heavy losses";
+		OutpostRaidState returning = raidState.returning(
+			outcome,
+			currentTick,
+			Math.max(currentTick, raidState.nextEligibleTick()),
+			raidState.lastLoot(),
+			raidState.lastPlayerRewards()
+		);
+		LiveVillages.LOGGER.info(
+			"Outpost raid retreating after losses: outpost={} target={} active={} minimum={}",
+			outpost.name(),
+			target.name(),
+			activeRaiders,
+			MIN_PARTY_SIZE
+		);
+		announce(server, savedData, outpost, target, returning, "returning from");
+		steerLoadedRaidersHome(server, outpost, target, returning.partySize());
+		savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
+		return true;
+	}
+
+	private static boolean retreatAfterFailedMarch(
+		MinecraftServer server,
+		LiveVillagesSavedData savedData,
+		SettlementState outpost,
+		SettlementState target,
+		OutpostRaidState raidState,
+		int activeRaiders,
+		long currentTick
+	) {
+		OutpostRaidState returning = raidState.returning(
+			"retreated before reaching " + target.name() + " (path blocked)",
+			currentTick,
+			Math.max(currentTick, raidState.nextEligibleTick()),
+			raidState.lastLoot(),
+			raidState.lastPlayerRewards()
+		);
+		LiveVillages.LOGGER.info(
+			"Outpost raid retreating after failed march: outpost={} target={} active={} elapsed={}",
+			outpost.name(),
+			target.name(),
+			activeRaiders,
+			currentTick - raidState.phaseStartedTick()
+		);
+		announce(server, savedData, outpost, target, returning, "returning from");
+		steerLoadedRaidersHome(server, outpost, target, returning.partySize());
+		savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
+		return true;
 	}
 
 	private static LootTransfer transferLoot(
@@ -382,11 +662,20 @@ public final class OutpostRaids {
 		Map<String, Integer> outpostStock = new LinkedHashMap<>(outpost.stock());
 		Map<String, Integer> targetWealth = new LinkedHashMap<>(target.wealth());
 		Map<String, Integer> outpostWealth = new LinkedHashMap<>(outpost.wealth());
+		Map<String, Integer> targetPopulation = new LinkedHashMap<>(target.population());
+		Map<String, Integer> outpostPopulation = new LinkedHashMap<>(outpost.population());
 		int transferableValue = transferableValue(target);
 		int fractionLimit = Math.max(1, (int) Math.ceil(transferableValue * (tribute ? 0.125D : 0.25D)));
 		int carryLimit = Math.max(1, partySize * (tribute ? 4 : 8));
 		int remaining = Math.min(fractionLimit, carryLimit);
 		Map<String, Integer> transferred = new LinkedHashMap<>();
+		if (!tribute) {
+			int thralls = transferThralls(targetPopulation, outpostPopulation, partySize);
+			if (thralls > 0) {
+				SettlementGoods.addGoods(transferred, SettlementRoleKeys.THRALL, thralls);
+			}
+		}
+
 		int emeralds = transferEmeraldWealth(targetWealth, outpostWealth, partySize, tribute, remaining);
 		if (emeralds > 0) {
 			SettlementGoods.addGoods(transferred, "emerald", emeralds);
@@ -394,7 +683,7 @@ public final class OutpostRaids {
 		}
 
 		for (String goodsKey : sortedLootKeys(targetStock)) {
-			if (remaining <= 0) {
+			if (remaining <= 0 || transferred.size() >= MAX_LOOT_TYPES) {
 				break;
 			}
 
@@ -403,7 +692,8 @@ public final class OutpostRaids {
 				continue;
 			}
 
-			int amount = Math.min(available, remaining);
+			int lootSlotsRemaining = Math.max(1, MAX_LOOT_TYPES - transferred.size());
+			int amount = Math.min(available, Math.max(1, (int) Math.ceil(remaining / (double) lootSlotsRemaining)));
 			if (!SettlementGoods.consumeGoods(targetStock, goodsKey, amount)) {
 				continue;
 			}
@@ -413,9 +703,59 @@ public final class OutpostRaids {
 			remaining -= amount;
 		}
 
-		savedData.putSettlement(withRaidEconomy(target, targetWealth, targetStock));
-		savedData.putSettlement(withRaidEconomy(outpost, outpostWealth, outpostStock));
+		savedData.putSettlement(withRaidEconomy(target, targetPopulation, targetWealth, targetStock));
+		savedData.putSettlement(withRaidEconomy(outpost, outpostPopulation, outpostWealth, outpostStock));
 		return new LootTransfer(transferred);
+	}
+
+	private static int transferThralls(Map<String, Integer> targetPopulation, Map<String, Integer> outpostPopulation, int partySize) {
+		int targetPopulationTotal = targetPopulation.values().stream()
+			.mapToInt(amount -> Math.max(0, amount))
+			.sum();
+		int maxByRaiders = Math.max(0, partySize / 2);
+		int maxByPopulation = Math.max(0, (int) Math.floor(targetPopulationTotal * 0.20D));
+		int remaining = Math.min(maxByRaiders, maxByPopulation);
+		int transferred = 0;
+
+		for (String roleKey : sortedThrallSourceRoles(targetPopulation)) {
+			if (remaining <= 0) {
+				break;
+			}
+
+			int available = Math.max(0, targetPopulation.getOrDefault(roleKey, 0));
+			if (available <= 0) {
+				continue;
+			}
+
+			int amount = Math.min(available, remaining);
+			int updatedAmount = available - amount;
+			if (updatedAmount > 0) {
+				targetPopulation.put(roleKey, updatedAmount);
+			} else {
+				targetPopulation.remove(roleKey);
+			}
+			SettlementGoods.addGoods(outpostPopulation, SettlementRoleKeys.THRALL, amount);
+			remaining -= amount;
+			transferred += amount;
+		}
+
+		return transferred;
+	}
+
+	private static List<String> sortedThrallSourceRoles(Map<String, Integer> population) {
+		List<String> roles = new ArrayList<>(population.keySet());
+		roles.remove(SettlementRoleKeys.THRALL);
+		roles.remove("child");
+		roles.sort(Comparator.comparingInt(OutpostRaids::thrallSourcePriority).thenComparing(role -> role));
+		return roles;
+	}
+
+	private static int thrallSourcePriority(String roleKey) {
+		return switch (roleKey) {
+			case SettlementRoleKeys.UNEMPLOYED -> 0;
+			case "nitwit" -> 1;
+			default -> 10;
+		};
 	}
 
 	private static int transferEmeraldWealth(
@@ -462,9 +802,9 @@ public final class OutpostRaids {
 		));
 	}
 
-	private static SettlementState withRaidEconomy(SettlementState settlement, Map<String, Integer> wealth, Map<String, Integer> stock) {
+	private static SettlementState withRaidEconomy(SettlementState settlement, Map<String, Integer> population, Map<String, Integer> wealth, Map<String, Integer> stock) {
 		return settlement.withSimulationState(
-			settlement.population(),
+			population,
 			wealth,
 			stock,
 			settlement.housingCapacity(),
@@ -504,11 +844,20 @@ public final class OutpostRaids {
 	}
 
 	private static void musterLoadedRaiders(ServerLevel level, SettlementState outpost, SettlementState target, int partySize) {
-		AABB bounds = new AABB(outpost.center()).inflate(CONTROL_RADIUS_BLOCKS, 24.0D, CONTROL_RADIUS_BLOCKS);
-		List<Raider> raiders = level.getEntitiesOfClass(Raider.class, bounds, raider -> raider.isAlive() && !raider.isRemoved()).stream()
-			.sorted(Comparator.comparingDouble(raider -> raider.blockPosition().distSqr(outpost.center())))
+		BlockPos musterPos = raidMusterPos(level, outpost, target);
+		AABB bounds = new AABB(outpost.center()).inflate(CONTROL_RADIUS_BLOCKS, 64.0D, CONTROL_RADIUS_BLOCKS);
+		List<Raider> candidates = level.getEntitiesOfClass(Raider.class, bounds, raider -> raider.isAlive() && !raider.isRemoved()).stream()
+			.sorted(Comparator.comparingDouble(raider -> raider.blockPosition().distSqr(musterPos)))
+			.toList();
+		List<Raider> groundRaiders = candidates.stream()
+			.filter(raider -> Math.abs(raider.blockPosition().getY() - musterPos.getY()) <= 8)
 			.limit(Math.max(MIN_PARTY_SIZE, partySize))
 			.toList();
+		List<Raider> raiders = groundRaiders.size() >= Math.min(MIN_PARTY_SIZE, partySize)
+			? groundRaiders
+			: candidates.stream()
+				.limit(Math.max(MIN_PARTY_SIZE, partySize))
+				.toList();
 		if (raiders.isEmpty()) {
 			return;
 		}
@@ -524,21 +873,62 @@ public final class OutpostRaids {
 			Raid.getOminousBannerInstance(level.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN))
 		);
 
-		BlockPos musterPos = outpost.center();
 		BlockPos marchWaypoint = raidMarchWaypoint(level, outpost, target);
+		int raiderIndex = 0;
 		for (Raider raider : raiders) {
 			OutpostSettlementWork.markOutpostRaidMember(raider, outpost);
 			raider.setCanJoinRaid(true);
 			raider.setPatrolTarget(marchWaypoint);
+			moveStuckTowerRaiderToMuster(level, outpost, musterPos, raider, raiderIndex);
 			if (raider.distanceToSqr(musterPos.getX() + 0.5D, musterPos.getY(), musterPos.getZ() + 0.5D) > 36.0D) {
-				raider.getNavigation().moveTo(musterPos.getX() + 0.5D, musterPos.getY(), musterPos.getZ() + 0.5D, 0.85D);
+				raider.getNavigation().moveTo(musterPos.getX() + 0.5D, musterPos.getY() + 1.0D, musterPos.getZ() + 0.5D, 0.85D);
 			}
 
 			raider.lookAt(bannerCarrier, 30.0F, 30.0F);
+			raiderIndex++;
 		}
 	}
 
+	private static void moveStuckTowerRaiderToMuster(ServerLevel level, SettlementState outpost, BlockPos musterPos, Raider raider, int raiderIndex) {
+		if (raider.blockPosition().getY() <= musterPos.getY() + 10
+			|| horizontalDistanceSqr(raider.blockPosition(), outpost.center()) > CONTROL_RADIUS_BLOCKS * CONTROL_RADIUS_BLOCKS
+			|| raider.getNavigation().createPath(musterPos, 0) != null) {
+			return;
+		}
+
+		BlockPos slot = musterSlot(level, musterPos, raiderIndex);
+		raider.teleportTo(slot.getX() + 0.5D, slot.getY() + 1.0D, slot.getZ() + 0.5D);
+		raider.getNavigation().stop();
+	}
+
+	private static BlockPos musterSlot(ServerLevel level, BlockPos musterPos, int raiderIndex) {
+		int ring = 1 + raiderIndex / 8;
+		int step = raiderIndex % 8;
+		int dx = switch (step) {
+			case 1, 2, 3 -> ring;
+			case 5, 6, 7 -> -ring;
+			default -> 0;
+		};
+		int dz = switch (step) {
+			case 0, 1, 7 -> -ring;
+			case 3, 4, 5 -> ring;
+			default -> 0;
+		};
+		return surfacePos(level, musterPos.getX() + dx, musterPos.getZ() + dz).orElse(musterPos);
+	}
+
 	private static void steerLoadedRaiders(ServerLevel level, SettlementState outpost, SettlementState target, int partySize) {
+		steerLoadedRaidersToward(level, outpost, target, partySize, false);
+	}
+
+	private static void steerLoadedRaidersHome(MinecraftServer server, SettlementState outpost, SettlementState target, int partySize) {
+		ServerLevel level = server.getLevel(outpost.dimension());
+		if (level != null) {
+			steerLoadedRaidersToward(level, outpost, target, partySize, true);
+		}
+	}
+
+	private static void steerLoadedRaidersToward(ServerLevel level, SettlementState outpost, SettlementState target, int partySize, boolean returning) {
 		AABB bounds = between(outpost.center(), target.center()).inflate(RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS, 64.0D, RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS);
 		List<Raider> raiders = level.getEntitiesOfClass(Raider.class, bounds, raider ->
 			raider.isAlive()
@@ -555,12 +945,15 @@ public final class OutpostRaids {
 			return;
 		}
 
-		BlockPos waypoint = raidMarchWaypoint(level, outpost, target);
+		BlockPos waypoint = returning ? null : raidMarchWaypoint(level, outpost, target);
+		BlockPos destination = returning ? null : raidTargetControlPos(level, target);
 
 		for (Raider raider : raiders) {
-			BlockPos currentTarget = horizontalDistanceSqr(raider.blockPosition(), waypoint) <= 12.0D * 12.0D
-				? target.center()
-				: waypoint;
+			BlockPos currentTarget = returning
+				? raidReturnTargetFor(level, outpost, target, raider.blockPosition())
+				: hasReachedRaidWaypoint(raider.blockPosition(), waypoint, destination)
+					? destination
+					: waypoint;
 			raider.setCanJoinRaid(true);
 			raider.setPatrolTarget(currentTarget);
 			if (raider.getNavigation().isDone() || horizontalDistanceSqr(raider.blockPosition(), currentTarget) > 8.0D * 8.0D) {
@@ -569,16 +962,227 @@ public final class OutpostRaids {
 		}
 	}
 
-	private static BlockPos raidMarchWaypoint(ServerLevel level, SettlementState outpost, SettlementState target) {
-		if (!lineHasWaterOrUnknown(level, outpost.center(), target.center(), RAID_WATER_SCAN_BLOCKS)) {
-			return target.center();
+	private static boolean hasReachedRaidWaypoint(BlockPos currentPos, BlockPos waypoint, BlockPos destination) {
+		if (horizontalDistanceSqr(currentPos, waypoint) <= RAID_WAYPOINT_REACHED_RADIUS_BLOCKS * RAID_WAYPOINT_REACHED_RADIUS_BLOCKS) {
+			return true;
 		}
 
-		double dx = target.center().getX() - outpost.center().getX();
-		double dz = target.center().getZ() - outpost.center().getZ();
+		double destinationX = destination.getX() - waypoint.getX();
+		double destinationZ = destination.getZ() - waypoint.getZ();
+		double currentX = currentPos.getX() - waypoint.getX();
+		double currentZ = currentPos.getZ() - waypoint.getZ();
+		return destinationX * currentX + destinationZ * currentZ > 0.0D;
+	}
+
+	private static RaidArrivalStatus raidArrivalStatus(ServerLevel level, SettlementState outpost, SettlementState target, int partySize) {
+		BlockPos targetPos = raidTargetControlPos(level, target);
+		AABB bounds = between(outpost.center(), target.center()).inflate(RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS, 64.0D, RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS);
+		List<Raider> activeRaiders = level.getEntitiesOfClass(Raider.class, bounds, raider ->
+			raider.isAlive()
+				&& !raider.isRemoved()
+				&& OutpostSettlementWork.isActiveRaidMember(raider, outpost));
+
+		if (activeRaiders.isEmpty()) {
+			return new RaidArrivalStatus(true, 0, requiredArrivalCount(partySize, 0), 0, targetPos, null, 0.0D);
+		}
+
+		int required = requiredArrivalCount(partySize, activeRaiders.size());
+		long arrived = activeRaiders.stream()
+			.filter(raider -> horizontalDistanceSqr(raider.blockPosition(), targetPos) <= RAID_ARRIVAL_RADIUS_BLOCKS * RAID_ARRIVAL_RADIUS_BLOCKS)
+			.count();
+		Raider closestRaider = activeRaiders.stream()
+			.min(Comparator.comparingDouble(raider -> horizontalDistanceSqr(raider.blockPosition(), targetPos)))
+			.orElse(null);
+		BlockPos closestPos = closestRaider == null ? null : closestRaider.blockPosition();
+		double closestDistanceSqr = closestRaider == null ? 0.0D : horizontalDistanceSqr(closestPos, targetPos);
+		return new RaidArrivalStatus(true, activeRaiders.size(), required, arrived, targetPos, closestPos, closestDistanceSqr);
+	}
+
+	private static int requiredArrivalCount(int partySize, int activeRaiders) {
+		int originalRequired = Math.min(partySize, Math.max(MIN_PARTY_SIZE, (partySize + 1) / 2));
+		return activeRaiders <= 0 ? originalRequired : Math.min(activeRaiders, originalRequired);
+	}
+
+	private static void logMarchProgress(
+		int serverTick,
+		ServerLevel level,
+		SettlementState outpost,
+		SettlementState target,
+		int partySize,
+		long elapsedTicks,
+		long marchTicks,
+		boolean targetLoaded,
+		boolean targetTicking
+	) {
+		if (serverTick % 200 != 0) {
+			return;
+		}
+
+		RaidArrivalStatus status = level == null
+			? RaidArrivalStatus.unobserved(target.center(), partySize)
+			: raidArrivalStatus(level, outpost, target, partySize);
+		BlockPos waypoint = level == null ? target.center() : raidMarchWaypoint(level, outpost, target);
+		double closestWaypointDistance = status.closestRaiderPos() == null ? 0.0D : Math.sqrt(horizontalDistanceSqr(status.closestRaiderPos(), waypoint));
+		LiveVillages.LOGGER.info(
+			"Outpost raid march: outpost={} target={} elapsed={}/{} targetLoaded={} targetTicking={} active={} arrived={}/{} control={} closest={} closestDistance={} waypoint={} waypointDistance={}",
+			outpost.name(),
+			target.name(),
+			elapsedTicks,
+			marchTicks,
+			targetLoaded,
+			targetTicking,
+			status.activeRaiders(),
+			status.arrivedRaiders(),
+			status.requiredRaiders(),
+			shortPos(status.targetPos()),
+			shortPos(status.closestRaiderPos()),
+			Math.round(Math.sqrt(status.closestDistanceSqr())),
+			shortPos(waypoint),
+			Math.round(closestWaypointDistance)
+		);
+	}
+
+	private static String shortPos(BlockPos pos) {
+		return pos == null ? "none" : pos.toShortString();
+	}
+
+	private static RaidReturnStatus raidReturnStatus(ServerLevel level, SettlementState outpost, SettlementState target) {
+		BlockPos homePos = raidMusterPos(level, outpost, target);
+		List<Raider> activeRaiders = activeRaidersBetween(level, outpost, target);
+		if (activeRaiders.isEmpty()) {
+			return new RaidReturnStatus(true, 0, 0, homePos, null, 0.0D);
+		}
+
+		long homeRaiders = activeRaiders.stream()
+			.filter(raider -> horizontalDistanceSqr(raider.blockPosition(), homePos) <= RAID_RETURN_HOME_RADIUS_BLOCKS * RAID_RETURN_HOME_RADIUS_BLOCKS)
+			.count();
+		Raider closestRaider = activeRaiders.stream()
+			.min(Comparator.comparingDouble(raider -> horizontalDistanceSqr(raider.blockPosition(), homePos)))
+			.orElse(null);
+		BlockPos closestPos = closestRaider == null ? null : closestRaider.blockPosition();
+		double closestDistanceSqr = closestRaider == null ? 0.0D : horizontalDistanceSqr(closestPos, homePos);
+		return new RaidReturnStatus(true, activeRaiders.size(), homeRaiders, homePos, closestPos, closestDistanceSqr);
+	}
+
+	private static List<Raider> activeRaidersBetween(ServerLevel level, SettlementState outpost, SettlementState target) {
+		AABB bounds = between(outpost.center(), target.center()).inflate(RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS, 64.0D, RAID_PARTY_ENTITY_SEARCH_MARGIN_BLOCKS);
+		return level.getEntitiesOfClass(Raider.class, bounds, raider ->
+			raider.isAlive()
+				&& !raider.isRemoved()
+				&& OutpostSettlementWork.isActiveRaidMember(raider, outpost));
+	}
+
+	private static void logReturnProgress(
+		int serverTick,
+		RaidReturnStatus status,
+		SettlementState outpost,
+		SettlementState target,
+		long elapsedTicks,
+		long returnTicks
+	) {
+		if (serverTick % 200 != 0) {
+			return;
+		}
+
+		LiveVillages.LOGGER.info(
+			"Outpost raid return: outpost={} target={} elapsed={}/{} active={} home={} homePos={} closest={} closestHomeDistance={}",
+			outpost.name(),
+			target.name(),
+			elapsedTicks,
+			returnTicks,
+			status.activeRaiders(),
+			status.homeRaiders(),
+			shortPos(status.homePos()),
+			shortPos(status.closestRaiderPos()),
+			Math.round(Math.sqrt(status.closestHomeDistanceSqr()))
+		);
+	}
+
+	private record RaidArrivalStatus(
+		boolean observed,
+		int activeRaiders,
+		int requiredRaiders,
+		long arrivedRaiders,
+		BlockPos targetPos,
+		BlockPos closestRaiderPos,
+		double closestDistanceSqr
+	) {
+		static RaidArrivalStatus unobserved(BlockPos targetPos, int partySize) {
+			return new RaidArrivalStatus(false, 0, requiredArrivalCount(partySize, 0), 0, targetPos, null, 0.0D);
+		}
+
+		boolean arrived() {
+			return activeRaiders >= MIN_PARTY_SIZE && arrivedRaiders >= requiredRaiders;
+		}
+	}
+
+	private record RaidReturnStatus(
+		boolean observed,
+		int activeRaiders,
+		long homeRaiders,
+		BlockPos homePos,
+		BlockPos closestRaiderPos,
+		double closestHomeDistanceSqr
+	) {
+		static RaidReturnStatus unobserved(BlockPos homePos) {
+			return new RaidReturnStatus(false, 0, 0, homePos, null, 0.0D);
+		}
+	}
+
+	private static void clearReturnedRaiders(MinecraftServer server, SettlementState outpost, SettlementState target) {
+		ServerLevel level = server.getLevel(outpost.dimension());
+		if (level == null) {
+			return;
+		}
+
+		BlockPos homePos = raidMusterPos(level, outpost, target);
+		for (Raider raider : activeRaidersBetween(level, outpost, target)) {
+			if (horizontalDistanceSqr(raider.blockPosition(), homePos) > RAID_RETURN_HOME_RADIUS_BLOCKS * RAID_RETURN_HOME_RADIUS_BLOCKS) {
+				continue;
+			}
+
+			OutpostSettlementWork.clearActiveRaidMember(raider);
+		}
+	}
+
+	private static void recoverReturningRaiders(ServerLevel level, SettlementState outpost, SettlementState target) {
+		BlockPos homePos = raidMusterPos(level, outpost, target);
+		int recovered = 0;
+		int index = 0;
+		for (Raider raider : activeRaidersBetween(level, outpost, target)) {
+			if (horizontalDistanceSqr(raider.blockPosition(), homePos) <= RAID_RETURN_HOME_RADIUS_BLOCKS * RAID_RETURN_HOME_RADIUS_BLOCKS) {
+				index++;
+				continue;
+			}
+
+			BlockPos slot = musterSlot(level, homePos, index);
+			raider.teleportTo(slot.getX() + 0.5D, slot.getY() + 1.0D, slot.getZ() + 0.5D);
+			raider.getNavigation().stop();
+			recovered++;
+			index++;
+		}
+
+		if (recovered > 0) {
+			LiveVillages.LOGGER.info(
+				"Recovered {} returning outpost raid stragglers to {} near {}.",
+				recovered,
+				outpost.name(),
+				shortPos(homePos)
+			);
+		}
+	}
+
+	private static BlockPos raidMarchWaypoint(ServerLevel level, SettlementState outpost, SettlementState target) {
+		BlockPos destination = raidTargetControlPos(level, target);
+		if (!lineHasWaterOrUnknown(level, outpost.center(), destination, RAID_WATER_SCAN_BLOCKS)) {
+			return destination;
+		}
+
+		double dx = destination.getX() - outpost.center().getX();
+		double dz = destination.getZ() - outpost.center().getZ();
 		double distance = Math.hypot(dx, dz);
 		if (distance < 1.0D) {
-			return target.center();
+			return destination;
 		}
 
 		double forwardX = dx / distance;
@@ -598,7 +1202,7 @@ public final class OutpostRaids {
 					continue;
 				}
 
-				double score = horizontalDistanceSqr(surface.get(), target.center())
+				double score = horizontalDistanceSqr(surface.get(), destination)
 					+ Math.abs(lateral) * 8.0D
 					+ (RAID_LAND_WAYPOINT_MAX_BLOCKS - forward) * 2.0D
 					- pathSurfaceBonus(level.getBlockState(surface.get()));
@@ -610,7 +1214,149 @@ public final class OutpostRaids {
 			}
 		}
 
+		return best == null ? destination : best;
+	}
+
+	private static BlockPos raidReturnWaypoint(ServerLevel level, SettlementState outpost, SettlementState target) {
+		BlockPos homePos = raidMusterPos(level, outpost, target);
+		return raidLandWaypoint(level, raidTargetControlPos(level, target), homePos).orElse(homePos);
+	}
+
+	private static BlockPos raidReturnTargetFor(ServerLevel level, SettlementState outpost, SettlementState target, BlockPos currentPos) {
+		BlockPos homePos = raidMusterPos(level, outpost, target);
+		if (horizontalDistanceSqr(currentPos, homePos) <= 12.0D * 12.0D
+			|| !lineHasWaterOrUnknown(level, currentPos, homePos, RAID_WATER_SCAN_BLOCKS)) {
+			return homePos;
+		}
+
+		return raidLandWaypoint(level, currentPos, homePos).orElse(homePos);
+	}
+
+	private static Optional<BlockPos> raidLandWaypoint(ServerLevel level, BlockPos from, BlockPos to) {
+		double dx = to.getX() - from.getX();
+		double dz = to.getZ() - from.getZ();
+		double distance = Math.hypot(dx, dz);
+		if (distance < 1.0D) {
+			return Optional.of(to);
+		}
+
+		double forwardX = dx / distance;
+		double forwardZ = dz / distance;
+		double lateralX = -forwardZ;
+		double lateralZ = forwardX;
+		BlockPos best = null;
+		double bestScore = Double.POSITIVE_INFINITY;
+
+		for (int forward = RAID_LAND_WAYPOINT_STEP_BLOCKS * 2; forward <= RAID_LAND_WAYPOINT_MAX_BLOCKS; forward += RAID_LAND_WAYPOINT_STEP_BLOCKS) {
+			for (int lateral = -RAID_LAND_WAYPOINT_LATERAL_BLOCKS; lateral <= RAID_LAND_WAYPOINT_LATERAL_BLOCKS; lateral += RAID_LAND_WAYPOINT_STEP_BLOCKS) {
+				int x = (int) Math.round(from.getX() + forwardX * forward + lateralX * lateral);
+				int z = (int) Math.round(from.getZ() + forwardZ * forward + lateralZ * lateral);
+				Optional<BlockPos> surface = surfacePos(level, x, z);
+
+				if (surface.isEmpty() || lineHasWaterOrUnknown(level, from, surface.get(), forward + Math.abs(lateral))) {
+					continue;
+				}
+
+				double score = horizontalDistanceSqr(surface.get(), to)
+					+ Math.abs(lateral) * 8.0D
+					+ (RAID_LAND_WAYPOINT_MAX_BLOCKS - forward) * 2.0D
+					- pathSurfaceBonus(level.getBlockState(surface.get()));
+
+				if (score < bestScore) {
+					best = surface.get();
+					bestScore = score;
+				}
+			}
+		}
+
+		return Optional.ofNullable(best);
+	}
+
+	private static BlockPos raidMusterPos(ServerLevel level, SettlementState outpost, SettlementState target) {
+		double dx = target.center().getX() - outpost.center().getX();
+		double dz = target.center().getZ() - outpost.center().getZ();
+		double distance = Math.hypot(dx, dz);
+
+		if (distance < 1.0D) {
+			return surfacePos(level, outpost.center().getX() + MUSTER_GROUND_MIN_BLOCKS, outpost.center().getZ()).orElse(outpost.center());
+		}
+
+		double forwardX = dx / distance;
+		double forwardZ = dz / distance;
+		double lateralX = -forwardZ;
+		double lateralZ = forwardX;
+		BlockPos best = null;
+		double bestScore = Double.POSITIVE_INFINITY;
+
+		for (int forward = MUSTER_GROUND_MIN_BLOCKS; forward <= MUSTER_GROUND_MAX_BLOCKS; forward += MUSTER_GROUND_STEP_BLOCKS) {
+			for (int lateral = -MUSTER_GROUND_LATERAL_BLOCKS; lateral <= MUSTER_GROUND_LATERAL_BLOCKS; lateral += MUSTER_GROUND_STEP_BLOCKS) {
+				int x = (int) Math.round(outpost.center().getX() + forwardX * forward + lateralX * lateral);
+				int z = (int) Math.round(outpost.center().getZ() + forwardZ * forward + lateralZ * lateral);
+				Optional<BlockPos> surface = surfacePos(level, x, z);
+
+				if (surface.isEmpty()) {
+					continue;
+				}
+
+				double score = Math.abs(lateral) * 6.0D
+					+ Math.abs(forward - MUSTER_GROUND_MIN_BLOCKS)
+					+ Math.max(0, surface.get().getY() - outpost.center().getY()) * 12.0D
+					- pathSurfaceBonus(level.getBlockState(surface.get()));
+
+				if (score < bestScore) {
+					best = surface.get();
+					bestScore = score;
+				}
+			}
+		}
+
+		return best == null ? outpost.center() : best;
+	}
+
+	private static BlockPos raidMusterPosFallback(SettlementState outpost, SettlementState target) {
+		double dx = target.center().getX() - outpost.center().getX();
+		double dz = target.center().getZ() - outpost.center().getZ();
+		double distance = Math.hypot(dx, dz);
+		if (distance < 1.0D) {
+			return outpost.center();
+		}
+
+		int x = (int) Math.round(outpost.center().getX() + (dx / distance) * MUSTER_GROUND_MIN_BLOCKS);
+		int z = (int) Math.round(outpost.center().getZ() + (dz / distance) * MUSTER_GROUND_MIN_BLOCKS);
+		return new BlockPos(x, outpost.center().getY(), z);
+	}
+
+	private static BlockPos raidTargetControlPos(ServerLevel level, SettlementState target) {
+		Optional<BlockPos> centerSurface = surfacePos(level, target.center().getX(), target.center().getZ());
+		BlockPos best = centerSurface.orElse(null);
+		double bestScore = best == null ? Double.POSITIVE_INFINITY : raidTargetControlScore(level, target, best);
+
+		for (int dx = -TARGET_CONTROL_SEARCH_RADIUS_BLOCKS; dx <= TARGET_CONTROL_SEARCH_RADIUS_BLOCKS; dx += TARGET_CONTROL_SEARCH_STEP_BLOCKS) {
+			for (int dz = -TARGET_CONTROL_SEARCH_RADIUS_BLOCKS; dz <= TARGET_CONTROL_SEARCH_RADIUS_BLOCKS; dz += TARGET_CONTROL_SEARCH_STEP_BLOCKS) {
+				if (dx * dx + dz * dz > TARGET_CONTROL_SEARCH_RADIUS_BLOCKS * TARGET_CONTROL_SEARCH_RADIUS_BLOCKS) {
+					continue;
+				}
+
+				Optional<BlockPos> surface = surfacePos(level, target.center().getX() + dx, target.center().getZ() + dz);
+				if (surface.isEmpty()) {
+					continue;
+				}
+
+				double score = raidTargetControlScore(level, target, surface.get());
+				if (score < bestScore) {
+					best = surface.get();
+					bestScore = score;
+				}
+			}
+		}
+
 		return best == null ? target.center() : best;
+	}
+
+	private static double raidTargetControlScore(ServerLevel level, SettlementState target, BlockPos surface) {
+		return horizontalDistanceSqr(surface, target.center())
+			+ Math.abs(surface.getY() - target.center().getY()) * 64.0D
+			- pathSurfaceBonus(level.getBlockState(surface));
 	}
 
 	private static boolean lineHasWaterOrUnknown(ServerLevel level, BlockPos from, BlockPos to, int maxDistanceBlocks) {
@@ -809,6 +1555,12 @@ public final class OutpostRaids {
 		double distance = Math.sqrt(horizontalDistanceSqr(outpost.center(), target.center()));
 		long ticks = Math.round(distance * 4.0D);
 		return Math.max(MIN_MARCH_TICKS, Math.min(MAX_MARCH_TICKS, ticks));
+	}
+
+	private static long returnTicks(SettlementState outpost, SettlementState target) {
+		double distance = Math.sqrt(horizontalDistanceSqr(outpost.center(), target.center()));
+		long ticks = Math.round(distance * 3.0D);
+		return Math.max(MIN_RETURN_TICKS, Math.min(MAX_RETURN_TICKS, ticks));
 	}
 
 	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {

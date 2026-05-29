@@ -17,6 +17,7 @@ public final class SettlementRoleKeys {
 	public static final String PORTMASTER = "portmaster";
 	public static final String ROADWRIGHT = "roadwright";
 	public static final String SCRIBE = "scribe";
+	public static final String THRALL = "thrall";
 	public static final String TRADEMASTER = "trademaster";
 	public static final String UNEMPLOYED = "unemployed";
 

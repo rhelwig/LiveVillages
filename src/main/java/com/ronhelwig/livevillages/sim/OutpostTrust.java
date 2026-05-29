@@ -36,7 +36,7 @@ import net.minecraft.world.phys.AABB;
 public final class OutpostTrust {
 	private static final int PARLEY_RAIDER_RADIUS_BLOCKS = 32;
 	private static final int OUTPOST_INTERACTION_RADIUS_BLOCKS = 96;
-	private static final int OUTPOST_INFLUENCE_MARGIN_BLOCKS = 32;
+	private static final int OUTPOST_INFLUENCE_MARGIN_BLOCKS = 0;
 	private static final int TARGET_CLEAR_RADIUS_BLOCKS = 96;
 	private static final int ACCEPTED_PLAYER_RELAX_RADIUS_BLOCKS = 24;
 	private static final int RECENT_PROVOCATION_TICKS = 200;
@@ -344,7 +344,25 @@ public final class OutpostTrust {
 			return;
 		}
 
-		SettlementState settlement = savedData.findNearestSettlement(
+		SettlementState settlement = acceptedDefenseOutpostFor(level, savedData, player);
+
+		if (settlement == null || !rankFor(savedData, settlement, player).atLeast(OutpostPlayerRank.BANNER_BEARER)) {
+			return;
+		}
+
+		AABB bounds = player.getBoundingBox().inflate(ALLY_DEFENSE_RADIUS_BLOCKS);
+		for (Raider raider : level.getEntitiesOfClass(Raider.class, bounds, raider -> raider.isAlive() && !raider.isRemoved())) {
+			if ((!isWithinOutpostInfluence(settlement, raider.blockPosition()) && !OutpostSettlementWork.isActiveRaidMember(raider, settlement))
+				|| raider.getTarget() == attacker) {
+				continue;
+			}
+
+			raider.setTarget(attacker);
+		}
+	}
+
+	private static SettlementState acceptedDefenseOutpostFor(ServerLevel level, LiveVillagesSavedData savedData, ServerPlayer player) {
+		SettlementState localOutpost = savedData.findNearestSettlement(
 			level.dimension(),
 			player.blockPosition(),
 			OUTPOST_INTERACTION_RADIUS_BLOCKS,
@@ -353,18 +371,23 @@ public final class OutpostTrust {
 			.filter(candidate -> isWithinOutpostInfluence(candidate, player.blockPosition()))
 			.orElse(null);
 
-		if (settlement == null || !rankFor(savedData, settlement, player).atLeast(OutpostPlayerRank.BANNER_BEARER)) {
-			return;
+		if (localOutpost != null) {
+			return localOutpost;
 		}
 
 		AABB bounds = player.getBoundingBox().inflate(ALLY_DEFENSE_RADIUS_BLOCKS);
 		for (Raider raider : level.getEntitiesOfClass(Raider.class, bounds, raider -> raider.isAlive() && !raider.isRemoved())) {
-			if (!isWithinOutpostInfluence(settlement, raider.blockPosition()) || raider.getTarget() == attacker) {
-				continue;
+			for (SettlementState settlement : savedData.getSettlements()) {
+				if (settlement.kind() == SettlementKind.OUTPOST
+					&& settlement.dimension().equals(level.dimension())
+					&& OutpostSettlementWork.isActiveRaidMember(raider, settlement)
+					&& rankFor(savedData, settlement, player).atLeast(OutpostPlayerRank.BANNER_BEARER)) {
+					return settlement;
+				}
 			}
-
-			raider.setTarget(attacker);
 		}
+
+		return null;
 	}
 
 	private static boolean hasNearbyRaider(ServerLevel level, BlockPos position) {

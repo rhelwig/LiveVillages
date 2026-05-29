@@ -31,7 +31,6 @@ import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 public final class SettlementVillagers {
-	private static final int STANDARD_RADIUS_BLOCKS = 64;
 	private static final int VILLAGE_RADIUS_BLOCKS = 96;
 	private static final int FIELD_WORK_RADIUS_NUMERATOR = 3;
 	private static final int FIELD_WORK_RADIUS_DENOMINATOR = 2;
@@ -3369,8 +3368,7 @@ public final class SettlementVillagers {
 
 	private static int villagerRadius(SettlementState settlement) {
 		return switch (settlement.kind()) {
-			case VILLAGE, HARBOR, CUSTOM -> VILLAGE_RADIUS_BLOCKS;
-			case OUTPOST -> STANDARD_RADIUS_BLOCKS;
+			case VILLAGE, HARBOR, CUSTOM, OUTPOST -> VILLAGE_RADIUS_BLOCKS;
 		};
 	}
 

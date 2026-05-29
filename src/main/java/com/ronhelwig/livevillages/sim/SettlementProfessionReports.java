@@ -835,6 +835,7 @@ public final class SettlementProfessionReports {
 			case SettlementRoleKeys.FLETCHER -> "Fletcher";
 			case SettlementRoleKeys.ROADWRIGHT -> "Roadwright";
 			case SettlementRoleKeys.PORTMASTER -> "Portmaster";
+			case SettlementRoleKeys.THRALL -> "Thrall";
 			case SettlementRoleKeys.TRADEMASTER -> "Trademaster";
 			case SettlementRoleKeys.UNEMPLOYED -> "Unemployed";
 			case SettlementRoleKeys.GUARD -> "Guard";
