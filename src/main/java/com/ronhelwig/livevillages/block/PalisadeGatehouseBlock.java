@@ -20,9 +20,6 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.HorizontalDirectionalBlock;
-import net.minecraft.world.level.block.Mirror;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -32,22 +29,26 @@ import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.BlockHitResult;
 
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementState;
 
-public abstract class ShelterAnchorBlock extends HorizontalDirectionalBlock {
+public class PalisadeGatehouseBlock extends Block {
+	public static final MapCodec<PalisadeGatehouseBlock> CODEC = simpleCodec(properties -> new PalisadeGatehouseBlock(properties, false));
 	public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
-	private final String structureName;
+	private final boolean copperBars;
 
-	protected ShelterAnchorBlock(BlockBehaviour.Properties properties, String structureName) {
+	public PalisadeGatehouseBlock(BlockBehaviour.Properties properties, boolean copperBars) {
 		super(properties);
-		this.structureName = structureName;
+		this.copperBars = copperBars;
 		registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
 	}
 
 	@Override
-	protected abstract MapCodec<? extends HorizontalDirectionalBlock> codec();
+	public MapCodec<PalisadeGatehouseBlock> codec() {
+		return CODEC;
+	}
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
@@ -56,17 +57,14 @@ public abstract class ShelterAnchorBlock extends HorizontalDirectionalBlock {
 
 	@Override
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
-		return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
-	}
-
-	@Override
-	protected BlockState rotate(BlockState state, Rotation rotation) {
-		return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
-	}
-
-	@Override
-	protected BlockState mirror(BlockState state, Mirror mirror) {
-		return state.rotate(mirror.getRotation(state.getValue(FACING)));
+		Direction facing = context.getHorizontalDirection().getOpposite();
+		if (context.getLevel() instanceof ServerLevel serverLevel) {
+			Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(serverLevel, context.getClickedPos());
+			if (settlement.isPresent()) {
+				facing = SettlementConstruction.facingAwayFrom(settlement.get().center(), context.getClickedPos());
+			}
+		}
+		return defaultBlockState().setValue(FACING, facing);
 	}
 
 	@Override
@@ -83,25 +81,26 @@ public abstract class ShelterAnchorBlock extends HorizontalDirectionalBlock {
 		}
 
 		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(serverLevel, pos);
-
 		if (settlement.isEmpty()) {
 			if (placer instanceof ServerPlayer serverPlayer) {
-				serverPlayer.sendSystemMessage(Component.literal("No settlement found near this " + structureName + " marker."));
+				serverPlayer.sendSystemMessage(Component.literal("No settlement found near this Palisade Gatehouse marker."));
 			}
-
 			return;
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.get().stock());
-		Optional<com.ronhelwig.livevillages.sim.SettlementBuildSite> existingBuildSite = savedData.findBuildSite(settlement.get().id(), buildSiteType(), pos);
+		SettlementBuildSiteType buildSiteType = copperBars
+			? SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE
+			: SettlementBuildSiteType.PALISADE_GATEHOUSE;
+		Optional<SettlementBuildSite> existingBuildSite = savedData.findBuildSite(settlement.get().id(), buildSiteType, pos);
 		boolean contributeRecipeGoods = !(placer instanceof ServerPlayer serverPlayer) || !serverPlayer.getAbilities().instabuild;
-
-		SettlementConstruction.WorkstationBuildResult buildResult = tryStartShelterBuild(
+		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartPalisadeGatehouseAtDoor(
 			serverLevel,
 			pos,
 			state.getValue(FACING),
 			settlement.get().id(),
+			copperBars,
 			stock,
 			existingBuildSite
 		);
@@ -121,17 +120,21 @@ public abstract class ShelterAnchorBlock extends HorizontalDirectionalBlock {
 			savedData.putSettlement(settlement.get().withStock(stock));
 			savedData.putBuildSite(buildResult.buildSite());
 			savedData.surveyCache.remove(settlement.get().id());
-
-			if (placer instanceof ServerPlayer serverPlayer) {
-				serverPlayer.sendSystemMessage(Component.literal(
-					buildResult.isStarted()
-						? structureName + " construction started for " + settlement.get().name() + "."
-						: structureName + " construction is already planned for " + settlement.get().name() + "."
-				));
-			}
-		} else if (placer instanceof ServerPlayer serverPlayer) {
-			serverPlayer.sendSystemMessage(Component.literal("The settlement can't fit a " + structureName + " here."));
 		}
+
+		if (placer instanceof ServerPlayer serverPlayer) {
+			serverPlayer.sendSystemMessage(Component.literal(
+				buildResult.isStarted()
+					? "Palisade Gatehouse construction started for " + settlement.get().name() + "."
+					: buildResult.isResumed()
+					? "Palisade Gatehouse construction is already planned for " + settlement.get().name() + "."
+					: "The settlement can't fit a Palisade Gatehouse here."
+			));
+		}
+	}
+
+	private Map<String, Integer> recipeGoods() {
+		return Map.of("logs", 6, "door", 1, copperBars ? "copper_bars" : "iron_bars", 2);
 	}
 
 	@Override
@@ -148,17 +151,4 @@ public abstract class ShelterAnchorBlock extends HorizontalDirectionalBlock {
 	public boolean isCollisionShapeFullBlock(BlockState state, BlockGetter level, BlockPos pos) {
 		return true;
 	}
-
-	protected abstract SettlementConstruction.WorkstationBuildResult tryStartShelterBuild(
-		ServerLevel level,
-		BlockPos doorPos,
-		Direction facing,
-		String settlementId,
-		Map<String, Integer> stock,
-		Optional<com.ronhelwig.livevillages.sim.SettlementBuildSite> existingBuildSite
-	);
-
-	protected abstract Map<String, Integer> recipeGoods();
-
-	protected abstract SettlementBuildSiteType buildSiteType();
 }

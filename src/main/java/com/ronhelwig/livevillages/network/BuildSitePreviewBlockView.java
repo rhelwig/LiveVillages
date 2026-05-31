@@ -68,6 +68,8 @@ public record BuildSitePreviewBlockView(
 			case "cobblestone" -> isStoneFamilyItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "glass" -> stack.is(Items.GLASS) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "glass_display_case" -> blockItem != null && LiveVillagesBlocks.isGlassDisplayCase(blockItem.getBlock().defaultBlockState()) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "iron_bars" -> stack.is(Items.IRON_BARS) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "copper_bars" -> blockItem != null && isCopperBars(blockItem) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "stairs" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_STAIRS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "slab" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_SLABS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "door" -> blockItem != null && blockItem.getBlock() instanceof DoorBlock && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_DOORS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
@@ -99,5 +101,9 @@ public record BuildSitePreviewBlockView(
 			|| blockItem.getBlock().defaultBlockState().is(Blocks.SANDSTONE)
 			|| blockItem.getBlock().defaultBlockState().is(Blocks.RED_SANDSTONE)
 			|| blockItem.getBlock().defaultBlockState().is(BlockTags.BASE_STONE_OVERWORLD);
+	}
+
+	private static boolean isCopperBars(BlockItem blockItem) {
+		return BuiltInRegistries.BLOCK.getKey(blockItem.getBlock()).getPath().endsWith("copper_bars");
 	}
 }

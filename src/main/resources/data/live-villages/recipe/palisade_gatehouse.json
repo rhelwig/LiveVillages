@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "L": "#minecraft:logs",
+    "B": "minecraft:iron_bars",
+    "D": "#minecraft:wooden_doors"
+  },
+  "pattern": [
+    "LLL",
+    "BLB",
+    "LDL"
+  ],
+  "result": {
+    "id": "live-villages:palisade_gatehouse"
+  }
+}

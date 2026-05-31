@@ -1494,6 +1494,14 @@ public class LiveVillagesSavedData extends SavedData {
 
 		for (BlockPos markerPos : SettlementConstruction.findPlacedLighthouses(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIGHTHOUSE, markerPos);
+			Map<String, Integer> stockBeforeLighthouse = new LinkedHashMap<>(stock);
+			boolean contributedRecipeGoods = existingBuildSite.isEmpty();
+
+			if (contributedRecipeGoods) {
+				SettlementGoods.addGoods(stock, "cobblestone", 8);
+				SettlementGoods.addGoods(stock, "campfire", 1);
+			}
+
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLighthouseAtMarker(
 				level,
 				markerPos,
@@ -1503,8 +1511,17 @@ public class LiveVillagesSavedData extends SavedData {
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
+				if (buildResult.isStarted() || !stock.equals(stockBeforeLighthouse)) {
+					SettlementState updatedSettlement = settlement.withStock(stock);
+					settlements.put(settlement.id(), updatedSettlement.withTier(SettlementTiers.unlockedTier(updatedSettlement)));
+					changed = true;
+				}
+
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
+			} else if (contributedRecipeGoods) {
+				SettlementGoods.consumeGoods(stock, "cobblestone", 8);
+				SettlementGoods.consumeGoods(stock, "campfire", 1);
 			}
 		}
 

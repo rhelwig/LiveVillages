@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "live-villages:block/copper_palisade_gatehouse" },
+    "facing=east": { "model": "live-villages:block/copper_palisade_gatehouse", "y": 90 },
+    "facing=south": { "model": "live-villages:block/copper_palisade_gatehouse", "y": 180 },
+    "facing=west": { "model": "live-villages:block/copper_palisade_gatehouse", "y": 270 }
+  }
+}

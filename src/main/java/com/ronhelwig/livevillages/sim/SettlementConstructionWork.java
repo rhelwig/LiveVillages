@@ -272,6 +272,7 @@ public final class SettlementConstructionWork {
 	private static SettlementBuildSite reconcileBuildSiteWithWorld(ServerLevel level, SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks().size());
 		Set<String> retainedPositions = new HashSet<>();
+		boolean preservePlayerImprovements = shouldPreservePlayerImprovements(level, buildSite);
 		boolean changed = false;
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
@@ -287,6 +288,18 @@ public final class SettlementConstructionWork {
 			char currentSymbol = SettlementConstruction.currentBlueprintSymbol(buildSite, block);
 
 			if (currentSymbol == 'A') {
+				if (preservePlayerImprovements) {
+					SettlementBuildBlockState updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
+
+					if (!updatedBlock.equals(block)) {
+						changed = true;
+					}
+
+					updatedBlocks.add(updatedBlock);
+					retainedPositions.add(updatedBlock.position());
+					continue;
+				}
+
 				if (SettlementConstruction.isStructureMarginGroundBackfillBlock(block)) {
 					SettlementBuildBlockState updatedBlock = block;
 
@@ -379,6 +392,11 @@ public final class SettlementConstructionWork {
 				continue;
 			}
 
+			if (preservePlayerImprovements
+				&& "A".equals(currentBlueprintBlock.blueprintSymbol())) {
+				continue;
+			}
+
 			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, currentBlueprintBlock);
 			BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, currentBlueprintBlock);
 
@@ -395,6 +413,49 @@ public final class SettlementConstructionWork {
 		}
 
 		return changed ? buildSite.withBlocks(updatedBlocks, isComplete(updatedBlocks), tick) : buildSite;
+	}
+
+	private static boolean shouldPreservePlayerImprovements(ServerLevel level, SettlementBuildSite buildSite) {
+		if (buildSite.complete() || requiredStructureBlockStatusesComplete(buildSite)) {
+			return true;
+		}
+
+		int requiredBlocks = 0;
+		int matchingBlocks = 0;
+
+		for (SettlementBuildBlockState block : SettlementConstruction.currentBlueprintBlocks(buildSite)) {
+			if (SettlementConstruction.currentBlueprintSymbol(buildSite, block) == 'A') {
+				continue;
+			}
+
+			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+			BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+
+			if (blockPos.isEmpty() || plannedState == null || !level.hasChunkAt(blockPos.get())) {
+				continue;
+			}
+
+			requiredBlocks++;
+			if (statesMatchBuildSiteIntent(buildSite, block, level.getBlockState(blockPos.get()), plannedState)) {
+				matchingBlocks++;
+			}
+		}
+
+		return requiredBlocks > 0 && matchingBlocks * 100 >= requiredBlocks * 85;
+	}
+
+	private static boolean requiredStructureBlockStatusesComplete(SettlementBuildSite buildSite) {
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (SettlementConstruction.currentBlueprintSymbol(buildSite, block) == 'A') {
+				continue;
+			}
+
+			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private static boolean cleanupDeliveries(
@@ -737,6 +798,10 @@ public final class SettlementConstructionWork {
 
 	private static boolean shouldPickUpSuppliesFirst(ServerLevel level, ConstructionTask task) {
 		if (task.block().expectedMaterialKey().isBlank()) {
+			return false;
+		}
+
+		if (canSupplyFromSiteMaterials(task.buildSite(), task.block())) {
 			return false;
 		}
 
@@ -1221,13 +1286,13 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		SettlementConstructionMaterials.ConstructionMaterialResult materialResult = hasDelivery
-			? SettlementConstructionMaterials.ConstructionMaterialResult.supplied(0)
-			: SettlementConstructionMaterials.consumeForBlock(stock, new LinkedHashMap<>(), block);
+		MaterialConsumption materialResult = hasDelivery
+			? MaterialConsumption.supplied(task.buildSite())
+			: consumeConstructionMaterial(stock, task.buildSite(), block, tick);
 
-		if (!materialResult.supplied()) {
+		if (!materialResult.result().supplied()) {
 			return ConstructionActionResult.blockStatusChanged(
-				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.missingMaterialKey(), tick),
+				updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.result().missingMaterialKey(), tick),
 				false
 			);
 		}
@@ -1235,8 +1300,8 @@ public final class SettlementConstructionWork {
 		level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
 		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 		return ConstructionActionResult.placed(
-			updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
-			!hasDelivery
+			updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
+			materialResult.stockChanged()
 		);
 	}
 
@@ -1374,13 +1439,13 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		SettlementConstructionMaterials.ConstructionMaterialResult materialResult = hasDelivery
-			? SettlementConstructionMaterials.ConstructionMaterialResult.supplied(0)
-			: SettlementConstructionMaterials.consumeForBlock(stock, new LinkedHashMap<>(), block);
+		MaterialConsumption materialResult = hasDelivery
+			? MaterialConsumption.supplied(task.buildSite())
+			: consumeConstructionMaterial(stock, task.buildSite(), block, tick);
 
-		if (!materialResult.supplied()) {
+		if (!materialResult.result().supplied()) {
 			return ConstructionActionResult.blockStatusChanged(
-				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.missingMaterialKey(), tick),
+				updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.result().missingMaterialKey(), tick),
 				false
 			);
 		}
@@ -1391,7 +1456,7 @@ public final class SettlementConstructionWork {
 		SettlementConstruction.updateChestStateAfterPlacement(level, pairedPos.get());
 		return ConstructionActionResult.placed(
 			updateTwoBlockStatuses(
-				task.buildSite(),
+				materialResult.buildSite(),
 				task.blockIndex(),
 				SettlementBuildBlockStatus.PLACED,
 				"",
@@ -1400,8 +1465,37 @@ public final class SettlementConstructionWork {
 				"",
 				tick
 			),
-			!hasDelivery
+			materialResult.stockChanged()
 		);
+	}
+
+	private static boolean canSupplyFromSiteMaterials(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		if (buildSite.siteMaterials().isEmpty()) {
+			return false;
+		}
+
+		return SettlementConstructionMaterials.consumeForBlock(
+			new LinkedHashMap<>(),
+			new LinkedHashMap<>(buildSite.siteMaterials()),
+			block
+		).supplied();
+	}
+
+	private static MaterialConsumption consumeConstructionMaterial(
+		Map<String, Integer> stock,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		long tick
+	) {
+		Map<String, Integer> stockBefore = new LinkedHashMap<>(stock);
+		Map<String, Integer> siteMaterials = new LinkedHashMap<>(buildSite.siteMaterials());
+		SettlementConstructionMaterials.ConstructionMaterialResult result =
+			SettlementConstructionMaterials.consumeForBlock(stock, siteMaterials, block);
+
+		SettlementBuildSite updatedBuildSite = siteMaterials.equals(buildSite.siteMaterials())
+			? buildSite
+			: buildSite.withSiteMaterials(siteMaterials, tick);
+		return new MaterialConsumption(result, updatedBuildSite, !stock.equals(stockBefore));
 	}
 
 	private static boolean canWorkBlockStatus(SettlementBuildBlockStatus status, boolean hasDelivery) {
@@ -1420,8 +1514,14 @@ public final class SettlementConstructionWork {
 		String pairedPosition = null;
 		char symbol = block.blueprintSymbol().charAt(0);
 
-		if (symbol == 'D' && relativePos.up() == 1) {
+		if (symbol == 'D'
+			&& ((isPalisadeGatehouse(buildSite) && relativePos.up() == 0)
+				|| (!isPalisadeGatehouse(buildSite) && relativePos.up() == 1))) {
+			if (isPalisadeGatehouse(buildSite)) {
+				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 1);
+			} else {
 			pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
+			}
 		} else if (isBedFoot(buildSite, relativePos)) {
 				pairedPosition = switch (buildSite.blueprintId()) {
 					case BAKERY -> relativePosition(-1, -3, 1);
@@ -1435,6 +1535,7 @@ public final class SettlementConstructionWork {
 					case LIGHTHOUSE -> null;
 					case MASON_WORKSHOP -> relativePosition(-1, -3, 1);
 					case MINE_ENTRANCE -> null;
+					case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
 					case TRADING_POST -> relativePosition(-1, -3, 1);
@@ -1454,6 +1555,11 @@ public final class SettlementConstructionWork {
 		}
 
 		return Optional.empty();
+	}
+
+	private static boolean isPalisadeGatehouse(SettlementBuildSite buildSite) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
+			|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE;
 	}
 
 	private static boolean isPairedContinuation(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
@@ -1890,6 +1996,16 @@ public final class SettlementConstructionWork {
 
 		private static DeliveryPickupResult blockStatusChanged(SettlementBuildSite buildSite) {
 			return new DeliveryPickupResult(buildSite, true, false, false);
+		}
+	}
+
+	private record MaterialConsumption(
+		SettlementConstructionMaterials.ConstructionMaterialResult result,
+		SettlementBuildSite buildSite,
+		boolean stockChanged
+	) {
+		private static MaterialConsumption supplied(SettlementBuildSite buildSite) {
+			return new MaterialConsumption(SettlementConstructionMaterials.ConstructionMaterialResult.supplied(0), buildSite, false);
 		}
 	}
 

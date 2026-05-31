@@ -48,6 +48,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
 import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
+import com.ronhelwig.livevillages.block.PalisadeGatehouseBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.ShelterAnchorBlock;
@@ -96,6 +97,7 @@ public final class SettlementConstruction {
 	 * F = fence
 	 * G = fence gate
 	 * H = chest
+	 * I = iron/copper bars
 	 * L = log
 	 * M = stone / cobblestone-family block
 	 * N = hanging lantern
@@ -811,7 +813,7 @@ public final class SettlementConstruction {
 		new String[][] {
 			{
 				"MMM",
-				"MWM",
+				"MMM",
 				"MMM"
 			},
 			{
@@ -1287,6 +1289,64 @@ public final class SettlementConstruction {
 				".....",
 				".....",
 				"..f.."
+			}
+		}
+	);
+	// Facing points away from the settlement center; rows run from inside (-forward) to outside (+forward).
+	private static final StructureBlueprint PALISADE_GATEHOUSE_BLUEPRINT = new StructureBlueprint(
+		-3,
+		-1,
+		4,
+		new String[][] {
+			{
+				"AAAAAAA",
+				"LLLDLLL",
+				"ALAAALA",
+				"AAAAAAA"
+			},
+			{
+				"AAAAAAA",
+				"LLIDILL",
+				"ALAAALA",
+				"AAAAAAA"
+			},
+			{
+				"BBBBBBB",
+				"LLLLLLL",
+				"ALLLLLA",
+				"ATAAATA"
+			},
+			{
+				"AAAAAAA",
+				"LLLLLLL",
+				"AAAAAAA",
+				"AAAAAAA"
+			}
+		},
+		new String[][] {
+			{
+				".......",
+				".......",
+				".......",
+				"......."
+			},
+			{
+				".......",
+				".......",
+				".......",
+				"......."
+			},
+			{
+				".......",
+				"lllllll",
+				"..lll..",
+				".F...F."
+			},
+			{
+				".......",
+				"lllllll",
+				".......",
+				"......."
 			}
 		}
 	);
@@ -2050,6 +2110,10 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		if (hasCompletedDockNearPortmasterAnchor(level, anchorPos, facing)) {
+			return WorkstationBuildResult.completed();
+		}
+
 		DockSite site = findDockPreviewSiteNearPortmasterAnchor(level, anchorPos, facing);
 		if (site == null) {
 			return WorkstationBuildResult.blocked();
@@ -2067,7 +2131,14 @@ public final class SettlementConstruction {
 		Optional<SettlementBuildSite> existingBuildSite
 	) {
 		if (existingBuildSite.isPresent()) {
-			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+			SettlementBuildSite buildSite = existingBuildSite.get();
+			long tick = level.getServer().getTickCount();
+
+			if (lighthouseMarkerRecipeCreditMissing(buildSite)) {
+				buildSite = buildSite.withAddedSiteMaterials(Map.of("cobblestone", 8, "campfire", 1), tick);
+			}
+
+			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(buildSite, stock, tick));
 		}
 
 		LighthouseSite site = evaluateLighthouseMarkerSite(level, markerPos);
@@ -2329,9 +2400,61 @@ public final class SettlementConstruction {
 		);
 	}
 
+	public static StructurePreview previewPalisadeGatehouseAtDoor(
+		ServerLevel level,
+		String settlementId,
+		BlockPos doorPos,
+		Direction facing,
+		boolean copperBars
+	) {
+		return previewDoorAnchoredStructure(
+			level,
+			settlementId,
+			copperBars ? StructureKind.COPPER_PALISADE_GATEHOUSE : StructureKind.PALISADE_GATEHOUSE,
+			PALISADE_GATEHOUSE_BLUEPRINT,
+			"Palisade Gatehouse",
+			doorPos,
+			facing,
+			MAX_SITE_LANDSCAPING_BLOCKS
+		);
+	}
+
+	public static WorkstationBuildResult tryStartPalisadeGatehouseAtDoor(
+		ServerLevel level,
+		BlockPos doorPos,
+		Direction facing,
+		String settlementId,
+		boolean copperBars,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartDoorAnchoredStructure(
+			level,
+			copperBars ? StructureKind.COPPER_PALISADE_GATEHOUSE : StructureKind.PALISADE_GATEHOUSE,
+			PALISADE_GATEHOUSE_BLUEPRINT,
+			doorPos,
+			facing,
+			settlementId,
+			stock,
+			existingBuildSite,
+			MAX_SITE_LANDSCAPING_BLOCKS
+		);
+	}
+
 	public static StructurePreview previewDockAtPortmasterAnchor(ServerLevel level, String settlementId, BlockPos anchorPos, Direction facing) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		Direction dockFacing = horizontalFacing.getOpposite();
+		if (hasCompletedDockNearPortmasterAnchor(level, anchorPos, horizontalFacing)) {
+			return new StructurePreview(
+				settlementId + ":dock:" + anchorPos.getX() + "_" + anchorPos.getY() + "_" + anchorPos.getZ(),
+				"Dock",
+				true,
+				"",
+				List.of(),
+				List.of()
+			);
+		}
+
 		DockSite site = findDockPreviewSiteNearPortmasterAnchor(level, anchorPos, horizontalFacing);
 		BlockPos origin = site != null ? site.origin() : previewDockOrigin(level, anchorPos, dockFacing);
 		return new StructurePreview(
@@ -2464,6 +2587,10 @@ public final class SettlementConstruction {
 		return facingToward(settlement.center(), tablePos);
 	}
 
+	public static Direction facingAwayFrom(BlockPos center, BlockPos pos) {
+		return facingToward(center, pos).getOpposite();
+	}
+
 	public static Direction portmasterAnchorFacingFor(ServerLevel level, BlockPos anchorPos) {
 		BlockState state = level.getBlockState(anchorPos);
 		if (state.is(LiveVillagesBlocks.PORTMASTER_ANCHOR)) {
@@ -2471,6 +2598,31 @@ public final class SettlementConstruction {
 		}
 
 		return Direction.NORTH;
+	}
+
+	public static boolean hasCompletedDockNearPortmasterAnchor(ServerLevel level, BlockPos anchorPos, Direction facing) {
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		Direction dockFacing = horizontalFacing.getOpposite();
+
+		for (int step = 1; step <= 10; step++) {
+			BlockPos columnPos = anchorPos.relative(dockFacing, step);
+
+			if (!level.hasChunkAt(columnPos)) {
+				continue;
+			}
+
+			int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, columnPos.getX(), columnPos.getZ()) - 1;
+			if (surfaceY < level.getMinY()) {
+				continue;
+			}
+
+			BlockPos candidateOrigin = new BlockPos(columnPos.getX(), surfaceY, columnPos.getZ());
+			if (isMinimalDock(level, candidateOrigin, dockFacing)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static List<BlockPos> findDockOrigins(ServerLevel level, SettlementState settlement) {
@@ -2690,7 +2842,7 @@ public final class SettlementConstruction {
 		int maxLandscapingBlocks
 	) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
-		BlockPos origin = shelterOriginForDoor(doorPos, horizontalFacing);
+		BlockPos origin = doorAnchoredOriginFor(structureKind, doorPos, horizontalFacing);
 		PlacementPreviewResult placement = evaluateAnchoredStructureSite(
 			level,
 			origin,
@@ -2726,11 +2878,13 @@ public final class SettlementConstruction {
 		int maxLandscapingBlocks
 	) {
 		if (existingBuildSite.isPresent()) {
-			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+			long tick = level.getServer().getTickCount();
+			SettlementBuildSite buildSite = withPalisadeGatehouseDoorMarkerBlock(existingBuildSite.get(), structureKind, tick);
+			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(buildSite, stock, tick));
 		}
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
-		BlockPos origin = shelterOriginForDoor(doorPos, horizontalFacing);
+		BlockPos origin = doorAnchoredOriginFor(structureKind, doorPos, horizontalFacing);
 		AnchoredStructureSite site = findAnchoredStructureSite(
 			level,
 			origin,
@@ -3062,6 +3216,8 @@ public final class SettlementConstruction {
 			case "fence_gate" -> currentState.is(BlockTags.FENCE_GATES) && plannedState.getBlock() instanceof FenceGateBlock;
 			case "glass" -> currentState.is(plannedState.getBlock());
 			case "glass_display_case" -> LiveVillagesBlocks.isGlassDisplayCase(currentState) && LiveVillagesBlocks.isGlassDisplayCase(plannedState);
+			case "iron_bars" -> currentState.is(Blocks.IRON_BARS) && plannedState.is(Blocks.IRON_BARS);
+			case "copper_bars" -> isCopperBars(currentState) && isCopperBars(plannedState);
 			case "lantern" -> currentState.hasProperty(LanternBlock.HANGING) && plannedState.hasProperty(LanternBlock.HANGING);
 			case "logs" -> currentState.is(BlockTags.LOGS) && plannedState.is(BlockTags.LOGS);
 			case "planks" -> currentState.is(BlockTags.PLANKS) && plannedState.is(BlockTags.PLANKS);
@@ -3654,6 +3810,34 @@ public final class SettlementConstruction {
 		return doorPos.below().relative(facing.getOpposite(), 2);
 	}
 
+	private static BlockPos doorAnchoredOriginFor(StructureKind structureKind, BlockPos doorPos, Direction facing) {
+		if (isPalisadeGatehouseKind(structureKind)) {
+			return doorPos.immutable();
+		}
+		return shelterOriginForDoor(doorPos, facing);
+	}
+
+	private static boolean isPalisadeGatehouseKind(StructureKind structureKind) {
+		return structureKind == StructureKind.PALISADE_GATEHOUSE || structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE;
+	}
+
+	private static SettlementBuildSite withPalisadeGatehouseDoorMarkerBlock(SettlementBuildSite buildSite, StructureKind structureKind, long tick) {
+		if (!isPalisadeGatehouseKind(structureKind)) {
+			return buildSite;
+		}
+
+		String doorPosition = relativeBlueprintPosition(0, 0, 0);
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (doorPosition.equals(block.position())) {
+				return buildSite;
+			}
+		}
+
+		List<SettlementBuildBlockState> blocks = new ArrayList<>(buildSite.blocks());
+		blocks.add(SettlementBuildBlockState.pending(doorPosition, 'D', "door"));
+		return buildSite.withBlocks(blocks, false, tick);
+	}
+
 	private static void placeStructureBlueprint(
 		ServerLevel level,
 		BlockPos origin,
@@ -3802,6 +3986,9 @@ public final class SettlementConstruction {
 				? stoneBlock(stoneMaterial).defaultBlockState()
 				: woodPlankBlock(woodFamily).defaultBlockState();
 			case 'H' -> chestStateFor(blueprint, facing, right, forward, up);
+			case 'I' -> structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE
+				? Blocks.COPPER_BARS.unaffected().defaultBlockState()
+				: Blocks.IRON_BARS.defaultBlockState();
 			case 'L' -> logStateFor(blueprint, facing, woodFamily, right, forward, up);
 			case 'M' -> stoneBlock(stoneMaterial).defaultBlockState();
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
@@ -3994,6 +4181,10 @@ public final class SettlementConstruction {
 
 		if ((structureKind == StructureKind.HOUSING_SHELTER && up == 4)
 			|| (structureKind == StructureKind.SIMPLE_HOUSING_SHELTER && up == 3)) {
+			return state.setValue(SlabBlock.TYPE, SlabType.TOP);
+		}
+
+		if (isPalisadeGatehouseKind(structureKind) && up == 2) {
 			return state.setValue(SlabBlock.TYPE, SlabType.TOP);
 		}
 
@@ -4453,6 +4644,8 @@ public final class SettlementConstruction {
 					if (worldPos.equals(anchorPos)
 						&& anchorPos.equals(workstationPos)
 						&& !isAnchoredWorkstationSymbol(structureKind, symbol, up)
+						&& structureKind != StructureKind.LIGHTHOUSE
+						&& !isPalisadeGatehouseKind(structureKind)
 						&& structureKind != StructureKind.HOUSING_SHELTER
 						&& structureKind != StructureKind.SIMPLE_HOUSING_SHELTER) {
 						continue;
@@ -4492,6 +4685,7 @@ public final class SettlementConstruction {
 			facing,
 			palette.woodFamily(),
 			palette.stoneMaterial(),
+			Map.of(),
 			blocks,
 			false,
 			tick,
@@ -4653,6 +4847,7 @@ public final class SettlementConstruction {
 
 	public static SettlementBuildSite updateBuildSiteMaterialStatus(SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
 		Map<String, Integer> reservedStock = new java.util.LinkedHashMap<>(stock);
+		Map<String, Integer> reservedSiteMaterials = new java.util.LinkedHashMap<>(buildSite.siteMaterials());
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>();
 		boolean changed = false;
 
@@ -4671,7 +4866,7 @@ public final class SettlementConstruction {
 			}
 
 			SettlementConstructionMaterials.ConstructionMaterialResult materialResult =
-				SettlementConstructionMaterials.consumeForBlock(reservedStock, new java.util.LinkedHashMap<>(), normalizedBlock);
+				SettlementConstructionMaterials.consumeForBlock(reservedStock, reservedSiteMaterials, normalizedBlock);
 			SettlementBuildBlockState updatedBlock = materialResult.supplied()
 				? normalizedBlock.withStatus(SettlementBuildBlockStatus.PENDING, "")
 				: normalizedBlock.withStatus(SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.missingMaterialKey());
@@ -4762,11 +4957,12 @@ public final class SettlementConstruction {
 		return switch (symbol) {
 			case 'B' -> isBedSymbol(structureKind, symbol, up) ? (isBedFootBlock(structureKind, right, forward, up) ? "bed" : "") : "slab";
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP ? "logs" : (structureKind == StructureKind.CARPENTER_WORKSHOP || structureKind == StructureKind.ROADWRIGHT_WORKSHOP) ? "planks" : "cobblestone";
-			case 'D' -> up == 1 ? "door" : "";
+			case 'D' -> isPalisadeGatehouseKind(structureKind) ? (up == 0 ? "door" : "") : (up == 1 ? "door" : "");
 			case 'E' -> "";
 			case 'F' -> "fence";
 			case 'G' -> "fence_gate";
 			case 'H' -> "chest";
+			case 'I' -> structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE ? "copper_bars" : "iron_bars";
 			case 'K' -> "campfire";
 			case 'L' -> "logs";
 			case 'M' -> "cobblestone";
@@ -4788,11 +4984,21 @@ public final class SettlementConstruction {
 				case ROADWRIGHT_WORKSHOP -> "surveyor_table";
 				case CARTOGRAPHER_HOUSE -> "cartography_table";
 				case CARPENTER_WORKSHOP -> "carpenter_bench";
-				case HOUSING_SHELTER, LIGHTHOUSE, SIMPLE_HOUSING_SHELTER -> "";
+				case LIGHTHOUSE -> "lighthouse_marker";
+				case HOUSING_SHELTER, PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE, SIMPLE_HOUSING_SHELTER -> "";
 				case DOCK -> "";
 			};
 			default -> "";
 		};
+	}
+
+	private static boolean lighthouseMarkerRecipeCreditMissing(SettlementBuildSite buildSite) {
+		if (buildSite.blueprintId() != SettlementBuildSiteType.LIGHTHOUSE) {
+			return false;
+		}
+
+		return buildSite.blocks().stream()
+			.anyMatch(block -> "lighthouse_marker".equals(block.expectedMaterialKey()));
 	}
 
 	private static String relativeBlueprintPosition(int right, int forward, int up) {
@@ -4853,13 +5059,18 @@ public final class SettlementConstruction {
 		}
 
 		if (symbol == 'D') {
-			if (up != 1 && up != 2) {
+			boolean palisadeGatehouse = structureKind == StructureKind.PALISADE_GATEHOUSE
+				|| structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE;
+			int lowerUp = palisadeGatehouse ? 0 : 1;
+			int upperUp = palisadeGatehouse ? 1 : 2;
+
+			if (up != lowerUp && up != upperUp) {
 				return null;
 			}
 
 			return woodDoorBlock(woodFamily).defaultBlockState()
 				.setValue(DoorBlock.FACING, blueprintDoorFacing(structureKind, facing))
-				.setValue(DoorBlock.HALF, up == 1 ? DoubleBlockHalf.LOWER : DoubleBlockHalf.UPPER);
+				.setValue(DoorBlock.HALF, up == lowerUp ? DoubleBlockHalf.LOWER : DoubleBlockHalf.UPPER);
 		}
 
 		if (isBedSymbol(structureKind, symbol, up)) {
@@ -4994,6 +5205,7 @@ public final class SettlementConstruction {
 			case LIGHTHOUSE -> LIGHTHOUSE_BLUEPRINT;
 			case MASON_WORKSHOP -> MASON_WORKSHOP_BLUEPRINT;
 			case MINE_ENTRANCE -> MINE_ENTRANCE_BLUEPRINT;
+			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> PALISADE_GATEHOUSE_BLUEPRINT;
 			case ROADWRIGHT_WORKSHOP -> ROADWRIGHT_WORKSHOP_BLUEPRINT;
 			case SIMPLE_HOUSING_SHELTER -> SIMPLE_HOUSING_SHELTER_BLUEPRINT;
 			case TRADING_POST -> TRADING_POST_BLUEPRINT;
@@ -5013,6 +5225,8 @@ public final class SettlementConstruction {
 			case LIGHTHOUSE -> StructureKind.LIGHTHOUSE;
 			case MASON_WORKSHOP -> StructureKind.MASON_WORKSHOP;
 			case MINE_ENTRANCE -> StructureKind.MINE_ENTRANCE;
+			case PALISADE_GATEHOUSE -> StructureKind.PALISADE_GATEHOUSE;
+			case COPPER_PALISADE_GATEHOUSE -> StructureKind.COPPER_PALISADE_GATEHOUSE;
 			case ROADWRIGHT_WORKSHOP -> StructureKind.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> StructureKind.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> StructureKind.TRADING_POST;
@@ -5032,6 +5246,8 @@ public final class SettlementConstruction {
 			case LIGHTHOUSE -> SettlementBuildSiteType.LIGHTHOUSE;
 			case MASON_WORKSHOP -> SettlementBuildSiteType.MASON_WORKSHOP;
 			case MINE_ENTRANCE -> SettlementBuildSiteType.MINE_ENTRANCE;
+			case PALISADE_GATEHOUSE -> SettlementBuildSiteType.PALISADE_GATEHOUSE;
+			case COPPER_PALISADE_GATEHOUSE -> SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE;
 			case ROADWRIGHT_WORKSHOP -> SettlementBuildSiteType.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> SettlementBuildSiteType.TRADING_POST;
@@ -5753,6 +5969,7 @@ public final class SettlementConstruction {
 			site.facing(),
 			palette.woodFamily(),
 			"",
+			Map.of(),
 			blocks,
 			false,
 			tick,
@@ -6306,6 +6523,14 @@ public final class SettlementConstruction {
 			return "lantern";
 		}
 
+		if (state.is(Blocks.IRON_BARS)) {
+			return "iron_bars";
+		}
+
+		if (isCopperBars(state)) {
+			return "copper_bars";
+		}
+
 		if (state.is(Blocks.CHEST)) {
 			return "chest";
 		}
@@ -6454,6 +6679,10 @@ public final class SettlementConstruction {
 
 	private static boolean isInTag(BlockState state, TagKey<Block> tag) {
 		return state.is(tag, blockState -> true);
+	}
+
+	private static boolean isCopperBars(BlockState state) {
+		return BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath().endsWith("copper_bars");
 	}
 
 	private static boolean isShovelPathSurface(BlockState state) {
@@ -6798,6 +7027,10 @@ public final class SettlementConstruction {
 		};
 	}
 
+	public static int buildRadiusBlocks(SettlementState settlement) {
+		return buildRadius(settlement);
+	}
+
 	private static int clamp(int value, int min, int max) {
 		return Math.max(min, Math.min(max, value));
 	}
@@ -6976,6 +7209,8 @@ public final class SettlementConstruction {
 		LIGHTHOUSE,
 		MASON_WORKSHOP,
 		MINE_ENTRANCE,
+		PALISADE_GATEHOUSE,
+		COPPER_PALISADE_GATEHOUSE,
 		ROADWRIGHT_WORKSHOP,
 		SIMPLE_HOUSING_SHELTER,
 		TRADING_POST

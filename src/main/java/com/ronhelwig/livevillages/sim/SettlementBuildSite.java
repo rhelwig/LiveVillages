@@ -1,6 +1,8 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -20,6 +22,7 @@ public record SettlementBuildSite(
 	Direction facing,
 	String woodFamily,
 	String stoneMaterial,
+	Map<String, Integer> siteMaterials,
 	List<SettlementBuildBlockState> blocks,
 	boolean complete,
 	long createdTick,
@@ -35,6 +38,7 @@ public record SettlementBuildSite(
 		Direction.CODEC.fieldOf("facing").forGetter(SettlementBuildSite::facing),
 		Codec.STRING.optionalFieldOf("wood_family", "oak").forGetter(SettlementBuildSite::woodFamily),
 		Codec.STRING.optionalFieldOf("stone_material", "cobblestone").forGetter(SettlementBuildSite::stoneMaterial),
+		Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("site_materials", Map.of()).forGetter(SettlementBuildSite::siteMaterials),
 		SettlementBuildBlockState.CODEC.listOf().optionalFieldOf("blocks", List.of()).forGetter(SettlementBuildSite::blocks),
 		Codec.BOOL.optionalFieldOf("complete", false).forGetter(SettlementBuildSite::complete),
 		Codec.LONG.optionalFieldOf("created_tick", 0L).forGetter(SettlementBuildSite::createdTick),
@@ -51,6 +55,7 @@ public record SettlementBuildSite(
 		Direction facing,
 		String woodFamily,
 		String stoneMaterial,
+		Map<String, Integer> siteMaterials,
 		List<SettlementBuildBlockState> blocks,
 		boolean complete,
 		long createdTick,
@@ -66,6 +71,7 @@ public record SettlementBuildSite(
 			facing,
 			woodFamily,
 			stoneMaterial,
+			siteMaterials,
 			blocks,
 			complete,
 			createdTick,
@@ -83,6 +89,8 @@ public record SettlementBuildSite(
 		Objects.requireNonNull(facing, "facing");
 		Objects.requireNonNull(woodFamily, "woodFamily");
 		Objects.requireNonNull(stoneMaterial, "stoneMaterial");
+		Objects.requireNonNull(siteMaterials, "siteMaterials");
+		siteMaterials = copyPositiveMaterials(siteMaterials);
 		blocks = List.copyOf(blocks);
 	}
 
@@ -97,6 +105,7 @@ public record SettlementBuildSite(
 			facing,
 			woodFamily,
 			stoneMaterial,
+			siteMaterials,
 			newBlocks,
 			newComplete,
 			createdTick,
@@ -115,6 +124,7 @@ public record SettlementBuildSite(
 			facing,
 			newWoodFamily,
 			newStoneMaterial,
+			siteMaterials,
 			blocks,
 			complete,
 			createdTick,
@@ -122,7 +132,46 @@ public record SettlementBuildSite(
 		);
 	}
 
+	public SettlementBuildSite withSiteMaterials(Map<String, Integer> newSiteMaterials, long tick) {
+		return new SettlementBuildSite(
+			id,
+			settlementId,
+			blueprintId,
+			origin,
+			workstationPos,
+			anchorPos,
+			facing,
+			woodFamily,
+			stoneMaterial,
+			newSiteMaterials,
+			blocks,
+			complete,
+			createdTick,
+			tick
+		);
+	}
+
+	public SettlementBuildSite withAddedSiteMaterials(Map<String, Integer> addedSiteMaterials, long tick) {
+		Map<String, Integer> merged = new LinkedHashMap<>(siteMaterials);
+		addedSiteMaterials.forEach((goodsKey, amount) -> {
+			if (goodsKey != null && !goodsKey.isBlank() && amount != null && amount > 0) {
+				merged.merge(goodsKey, amount, Integer::sum);
+			}
+		});
+		return withSiteMaterials(merged, tick);
+	}
+
 	public boolean referencesWorkstation(BlockPos pos) {
 		return anchorPos.equals(pos) || workstationPos.equals(pos);
+	}
+
+	private static Map<String, Integer> copyPositiveMaterials(Map<String, Integer> materials) {
+		Map<String, Integer> copy = new LinkedHashMap<>();
+		materials.forEach((goodsKey, amount) -> {
+			if (goodsKey != null && !goodsKey.isBlank() && amount != null && amount > 0) {
+				copy.put(goodsKey, amount);
+			}
+		});
+		return Map.copyOf(copy);
 	}
 }

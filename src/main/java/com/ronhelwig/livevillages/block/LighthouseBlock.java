@@ -24,6 +24,7 @@ import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.BlockHitResult;
 
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
+import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementState;
@@ -65,15 +66,30 @@ public class LighthouseBlock extends Block {
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(serverLevel.getServer());
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.get().stock());
+		Optional<SettlementBuildSite> existingBuildSite = savedData.findBuildSite(settlement.get().id(), SettlementBuildSiteType.LIGHTHOUSE, pos);
+		boolean contributeRecipeGoods = !(placer instanceof ServerPlayer serverPlayer) || !serverPlayer.getAbilities().instabuild;
+
 		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLighthouseAtMarker(
 			serverLevel,
 			pos,
 			settlement.get().id(),
 			stock,
-			savedData.findBuildSite(settlement.get().id(), SettlementBuildSiteType.LIGHTHOUSE, pos)
+			existingBuildSite
 		);
 
+		if (buildResult.isStarted() && contributeRecipeGoods && existingBuildSite.isEmpty()) {
+			long tick = serverLevel.getServer().getTickCount();
+			buildResult = SettlementConstruction.WorkstationBuildResult.started(
+				SettlementConstruction.updateBuildSiteMaterialStatus(
+					buildResult.buildSite().withAddedSiteMaterials(recipeGoods(), tick),
+					stock,
+					tick
+				)
+			);
+		}
+
 		if (buildResult.isStarted() || buildResult.isResumed()) {
+			savedData.putSettlement(settlement.get().withStock(stock));
 			savedData.putBuildSite(buildResult.buildSite());
 			savedData.surveyCache.remove(settlement.get().id());
 		}
@@ -89,6 +105,13 @@ public class LighthouseBlock extends Block {
 				? "Lighthouse construction is already planned from this marker."
 				: "The settlement cannot fit a Lighthouse here."
 		));
+	}
+
+	private static Map<String, Integer> recipeGoods() {
+		return Map.of(
+			"cobblestone", 8,
+			"campfire", 1
+		);
 	}
 
 	@Override

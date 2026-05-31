@@ -167,6 +167,8 @@ public final class BuildSiteWireframePreview {
 			|| state.is(LiveVillagesBlocks.FORESTER_TABLE)
 			|| state.is(LiveVillagesBlocks.TRADE_BOARD)
 			|| state.is(LiveVillagesBlocks.LIGHTHOUSE)
+			|| state.is(LiveVillagesBlocks.PALISADE_GATEHOUSE)
+			|| state.is(LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE)
 			|| state.is(Blocks.CARTOGRAPHY_TABLE)
 			|| state.is(Blocks.SMOKER)
 			|| state.is(Blocks.STONECUTTER)

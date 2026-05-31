@@ -527,6 +527,7 @@ public final class SettlementLoadedObservation {
 			case CARTOGRAPHER_HOUSE -> "Cartographer";
 			case FORESTER_WORKSHOP -> "Forester";
 			case HOUSING_SHELTER -> "Housing";
+			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Gatehouse";
 			case SIMPLE_HOUSING_SHELTER -> "Shelter";
 		};
 	}

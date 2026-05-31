@@ -23,6 +23,7 @@ import com.ronhelwig.livevillages.block.HousingShelterBlock;
 import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
 import com.ronhelwig.livevillages.block.MinerWorkstationBlock;
+import com.ronhelwig.livevillages.block.PalisadeGatehouseBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
 import com.ronhelwig.livevillages.block.SurveyorTableBlock;
@@ -235,6 +236,34 @@ public final class LiveVillagesBlocks {
 	public static final Item HOUSING_SHELTER_ITEM = registerItem(
 		"housing_shelter",
 		new BlockItem(HOUSING_SHELTER, new Item.Properties().setId(itemKey("housing_shelter")).useBlockDescriptionPrefix())
+	);
+	public static final PalisadeGatehouseBlock PALISADE_GATEHOUSE = registerBlock(
+		"palisade_gatehouse",
+		new PalisadeGatehouseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+				.setId(blockKey("palisade_gatehouse"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD),
+			false
+		)
+	);
+	public static final Item PALISADE_GATEHOUSE_ITEM = registerItem(
+		"palisade_gatehouse",
+		new BlockItem(PALISADE_GATEHOUSE, new Item.Properties().setId(itemKey("palisade_gatehouse")).useBlockDescriptionPrefix())
+	);
+	public static final PalisadeGatehouseBlock COPPER_PALISADE_GATEHOUSE = registerBlock(
+		"copper_palisade_gatehouse",
+		new PalisadeGatehouseBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+				.setId(blockKey("copper_palisade_gatehouse"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD),
+			true
+		)
+	);
+	public static final Item COPPER_PALISADE_GATEHOUSE_ITEM = registerItem(
+		"copper_palisade_gatehouse",
+		new BlockItem(COPPER_PALISADE_GATEHOUSE, new Item.Properties().setId(itemKey("copper_palisade_gatehouse")).useBlockDescriptionPrefix())
 	);
 
 	private LiveVillagesBlocks() {

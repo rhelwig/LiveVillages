@@ -562,19 +562,21 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static BuildSitePreviewSnapshot buildBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
-		Optional<BuildSitePreviewSnapshot> infrastructurePreview = buildPlacedInfrastructurePreviewSnapshot(player, targetPos);
-
-		if (infrastructurePreview.isPresent()) {
-			return infrastructurePreview.get();
-		}
-
 		Optional<BuildSitePreviewSnapshot> workstationPreview = buildProspectiveWorkstationPreviewSnapshot(player, targetPos);
 
 		if (workstationPreview.isPresent()) {
 			return workstationPreview.get();
 		}
 
-		return buildNearestBuildSitePreviewSnapshot(player, targetPos);
+		Optional<BuildSitePreviewSnapshot> buildSitePreview = buildNearestBuildSitePreviewSnapshot(player, targetPos);
+
+		if (buildSitePreview.isPresent()) {
+			return buildSitePreview.get();
+		}
+
+		Optional<BuildSitePreviewSnapshot> infrastructurePreview = buildPlacedInfrastructurePreviewSnapshot(player, targetPos);
+
+		return infrastructurePreview.orElseGet(() -> BuildSitePreviewSnapshot.unavailable("No active build site nearby."));
 	}
 
 	private static Optional<BuildSitePreviewSnapshot> buildProspectiveWorkstationPreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
@@ -638,8 +640,12 @@ public final class LiveVillagesNetworking {
 		}
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition())));
+		String statusMessage = preview.statusMessage();
+		if (item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM || item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM) {
+			statusMessage = palisadeGatehouseRadiusStatus(statusMessage, settlement.orElse(null), placementPos);
+		}
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
-			preview.statusMessage(),
+			statusMessage,
 			settlementName,
 			preview.previewId(),
 			preview.previewType(),
@@ -650,6 +656,25 @@ public final class LiveVillagesNetworking {
 				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
 				.toList()
 			));
+	}
+
+	private static String palisadeGatehouseRadiusStatus(String statusMessage, SettlementState settlement, BlockPos placementPos) {
+		if (settlement == null) {
+			return statusMessage;
+		}
+
+		double distance = Math.sqrt(horizontalDistanceSqr(settlement.center(), placementPos));
+		int radius = Math.max(1, SettlementVillagers.settlementRadiusBlocks(settlement));
+		int percent = (int) Math.round(distance * 100.0D / radius);
+		int targetBlocks = (int) Math.round(radius * 0.8D);
+		String radiusMessage = "Palisade radius: " + percent + "% (" + Math.round(distance) + " of " + radius + "b; target about " + targetBlocks + "b).";
+		return statusMessage == null || statusMessage.isBlank() ? radiusMessage : statusMessage + " " + radiusMessage;
+	}
+
+	private static double horizontalDistanceSqr(BlockPos left, BlockPos right) {
+		double dx = left.getX() - right.getX();
+		double dz = left.getZ() - right.getZ();
+		return dx * dx + dz * dz;
 	}
 
 	private static Optional<BuildSitePreviewSnapshot> buildPlacedInfrastructurePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
@@ -673,6 +698,13 @@ public final class LiveVillagesNetworking {
 				if (savedData.findBuildSite(settlement.id(), SettlementBuildSiteType.DOCK, anchorPos).isPresent()) {
 					continue;
 				}
+				if (SettlementConstruction.hasCompletedDockNearPortmasterAnchor(
+					level,
+					anchorPos,
+					SettlementConstruction.portmasterAnchorFacingFor(level, anchorPos)
+				)) {
+					continue;
+				}
 
 				double distanceSquared = anchorPos.distSqr(player.blockPosition());
 
@@ -691,6 +723,10 @@ public final class LiveVillagesNetworking {
 				}
 
 				boolean targeted = targetPos.filter(pos -> placedInfrastructureContains(anchorPos, preview, pos)).isPresent();
+				if (!targeted && !preview.placementValid()) {
+					continue;
+				}
+
 				PlacedInfrastructurePreviewCandidate candidate = new PlacedInfrastructurePreviewCandidate(
 					settlement,
 					anchorPos.immutable(),
@@ -798,6 +834,8 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
 			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
+			|| item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM
+			|| item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM
 			|| item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM
 			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
 			|| item == Items.CARTOGRAPHY_TABLE
@@ -848,6 +886,14 @@ public final class LiveVillagesNetworking {
 			return SettlementConstruction.previewDockAtPortmasterAnchor(level, settlement.id(), placementPos, placementFacing);
 		}
 
+		if (item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM) {
+			return SettlementConstruction.previewPalisadeGatehouseAtDoor(level, settlement.id(), placementPos, SettlementConstruction.facingAwayFrom(settlement.center(), placementPos), false);
+		}
+
+		if (item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM) {
+			return SettlementConstruction.previewPalisadeGatehouseAtDoor(level, settlement.id(), placementPos, SettlementConstruction.facingAwayFrom(settlement.center(), placementPos), true);
+		}
+
 		if (item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM) {
 			return SettlementConstruction.previewSimpleHousingShelterAtDoor(level, settlement.id(), placementPos, placementFacing);
 		}
@@ -875,7 +921,7 @@ public final class LiveVillagesNetworking {
 		return null;
 	}
 
-	private static BuildSitePreviewSnapshot buildNearestBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
+	private static Optional<BuildSitePreviewSnapshot> buildNearestBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
 		double maxDistanceSquared = BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS * BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS;
 		BuildSitePreviewCandidate bestCandidate = null;
@@ -921,17 +967,17 @@ public final class LiveVillagesNetworking {
 		}
 
 		if (bestCandidate == null) {
-			return BuildSitePreviewSnapshot.unavailable("No active build site nearby.");
+			return Optional.empty();
 		}
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(bestCandidate.distanceSquared()));
-		return BuildSitePreviewSnapshot.active(
+		return Optional.of(BuildSitePreviewSnapshot.active(
 			bestCandidate.settlement().name(),
 			bestCandidate.buildSite().id(),
 			buildSiteTypeLabel(bestCandidate.buildSite().blueprintId()),
 			distanceBlocks,
 			bestCandidate.previewBlocks()
-		);
+		));
 	}
 
 	private static boolean isBetterPreviewCandidate(BuildSitePreviewCandidate candidate, BuildSitePreviewCandidate bestCandidate) {
@@ -1012,22 +1058,8 @@ public final class LiveVillagesNetworking {
 			return true;
 		}
 
-		if ("Dock".equals(preview.previewType()) && dockPreviewContains(preview, pos)) {
-			return true;
-		}
-
 		for (SettlementConstruction.StructurePreviewBlock block : preview.blocks()) {
 			if (block.pos().equals(pos)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private static boolean dockPreviewContains(SettlementConstruction.StructurePreview preview, BlockPos pos) {
-		for (SettlementConstruction.StructurePreviewBlock block : preview.blocks()) {
-			if (block.pos().getX() == pos.getX() && block.pos().getZ() == pos.getZ()) {
 				return true;
 			}
 		}
@@ -1045,6 +1077,7 @@ public final class LiveVillagesNetworking {
 			case LIGHTHOUSE -> "Lighthouse";
 			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
+			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Palisade Gatehouse";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
 			case HOUSING_SHELTER -> "Housing Shelter";
