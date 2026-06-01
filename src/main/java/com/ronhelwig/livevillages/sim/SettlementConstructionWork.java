@@ -367,13 +367,14 @@ public final class SettlementConstructionWork {
 
 			boolean exactMatch = currentState.equals(plannedState);
 			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState);
+			boolean playerOverride = isSatisfiedByPalisadePlayerOverride(level, buildSite, block, blockPos.get(), matchesIntent);
 			SettlementBuildBlockState updatedBlock = block;
 
 			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
-				if (!matchesIntent) {
+				if (!matchesIntent && !playerOverride) {
 					updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
 				}
-			} else if (matchesIntent) {
+			} else if (matchesIntent || playerOverride) {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
 			} else if (block.status() == SettlementBuildBlockStatus.BLOCKED && SettlementConstruction.isBuildSiteReplaceable(currentState)) {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
@@ -405,7 +406,9 @@ public final class SettlementConstructionWork {
 			}
 
 			BlockState currentState = level.getBlockState(blockPos.get());
-			SettlementBuildBlockState addedBlock = statesMatchBuildSiteIntent(buildSite, currentBlueprintBlock, currentState, plannedState)
+			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, currentBlueprintBlock, currentState, plannedState);
+			SettlementBuildBlockState addedBlock = matchesIntent
+				|| isSatisfiedByPalisadePlayerOverride(level, buildSite, currentBlueprintBlock, blockPos.get(), matchesIntent)
 				? currentBlueprintBlock.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "")
 				: currentBlueprintBlock;
 			updatedBlocks.add(addedBlock);
@@ -436,12 +439,23 @@ public final class SettlementConstructionWork {
 			}
 
 			requiredBlocks++;
-			if (statesMatchBuildSiteIntent(buildSite, block, level.getBlockState(blockPos.get()), plannedState)) {
+			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, block, level.getBlockState(blockPos.get()), plannedState);
+			if (matchesIntent || isSatisfiedByPalisadePlayerOverride(level, buildSite, block, blockPos.get(), matchesIntent)) {
 				matchingBlocks++;
 			}
 		}
 
 		return requiredBlocks > 0 && matchingBlocks * 100 >= requiredBlocks * 85;
+	}
+
+	private static boolean isSatisfiedByPalisadePlayerOverride(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos plannedPos,
+		boolean matchesIntent
+	) {
+		return !matchesIntent && SettlementConstruction.isPalisadeWallLogOverride(level, buildSite, block, plannedPos);
 	}
 
 	private static boolean requiredStructureBlockStatusesComplete(SettlementBuildSite buildSite) {
@@ -1536,6 +1550,7 @@ public final class SettlementConstructionWork {
 					case MASON_WORKSHOP -> relativePosition(-1, -3, 1);
 					case MINE_ENTRANCE -> null;
 					case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> null;
+					case PALISADE_WALL -> null;
 					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
 					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
 					case TRADING_POST -> relativePosition(-1, -3, 1);
@@ -1753,6 +1768,10 @@ public final class SettlementConstructionWork {
 			return true;
 		}
 
+		if (SettlementConstruction.isPalisadePointWallControlBlock(buildSite, block, currentState)) {
+			return true;
+		}
+
 		if (SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())) {
 			return true;
 		}
@@ -1785,6 +1804,7 @@ public final class SettlementConstructionWork {
 		}
 
 		return !currentState.equals(plannedState)
+			&& !SettlementConstruction.isPalisadePointWallControlBlock(buildSite, block, currentState)
 			&& !SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
 	}

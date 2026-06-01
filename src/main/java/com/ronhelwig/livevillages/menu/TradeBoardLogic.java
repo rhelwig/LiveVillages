@@ -619,6 +619,7 @@ public final class TradeBoardLogic {
 			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Palisade Gatehouse";
+			case PALISADE_WALL -> "Palisade Wall";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
 			case HOUSING_SHELTER -> "Housing Shelter";

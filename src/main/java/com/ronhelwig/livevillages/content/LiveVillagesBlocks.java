@@ -24,6 +24,7 @@ import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
 import com.ronhelwig.livevillages.block.MinerWorkstationBlock;
 import com.ronhelwig.livevillages.block.PalisadeGatehouseBlock;
+import com.ronhelwig.livevillages.block.PalisadePointBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
 import com.ronhelwig.livevillages.block.SurveyorTableBlock;
@@ -264,6 +265,19 @@ public final class LiveVillagesBlocks {
 	public static final Item COPPER_PALISADE_GATEHOUSE_ITEM = registerItem(
 		"copper_palisade_gatehouse",
 		new BlockItem(COPPER_PALISADE_GATEHOUSE, new Item.Properties().setId(itemKey("copper_palisade_gatehouse")).useBlockDescriptionPrefix())
+	);
+	public static final PalisadePointBlock PALISADE_POINT = registerBlock(
+		"palisade_point",
+		new PalisadePointBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+				.setId(blockKey("palisade_point"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item PALISADE_POINT_ITEM = registerItem(
+		"palisade_point",
+		new BlockItem(PALISADE_POINT, new Item.Properties().setId(itemKey("palisade_point")).useBlockDescriptionPrefix())
 	);
 
 	private LiveVillagesBlocks() {

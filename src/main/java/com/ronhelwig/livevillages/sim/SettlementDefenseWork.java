@@ -85,9 +85,9 @@ public final class SettlementDefenseWork {
 		);
 	}
 
-	public static void maintainLoadedDefense(ServerLevel level, SettlementState settlement) {
+	public static void maintainLoadedDefense(ServerLevel level, SettlementState settlement, java.util.Collection<SettlementBuildSite> buildSites) {
 		Optional<ActiveBellAlarm> activeAlarm = resolveActiveAlarm(level, settlement);
-		SettlementFletcherWork.maintainLoadedDefense(level, settlement, activeAlarm);
+		SettlementFletcherWork.maintainLoadedDefense(level, settlement, activeAlarm, buildSites);
 
 		List<Villager> defenders = SettlementVillagers.nearbyAdultVillagers(level, settlement).stream()
 			.filter(SettlementDefenseWork::canJoinBellDefense)

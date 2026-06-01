@@ -19,9 +19,11 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -29,12 +31,15 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.tags.BiomeTags;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.LiveVillagesGameRules;
+import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 
 public class LiveVillagesSavedData extends SavedData {
 	private static final long CUSTOM_SETTLEMENT_BOOTSTRAP_DELAY_TICKS = (long) SettlementEconomyRules.TICKS_PER_DAY;
@@ -48,6 +53,10 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int SHARED_MAP_MAX_SAMPLES_PER_UPDATE = 1_200;
 	private static final int SHARED_MAP_REFRESH_TICKS = 600;
 	private static final int SHARED_MAP_MAX_CELLS_PER_DIMENSION = 40_000;
+	private static final long VIRTUAL_TRADING_POST_MIN_AGE_TICKS = Math.round(2.0D * SettlementEconomyRules.TICKS_PER_DAY);
+	private static final int VIRTUAL_TRADING_POST_MIN_POPULATION = 2;
+	private static final int VIRTUAL_TRADING_POST_MIN_STOCK = 48;
+	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18 };
 	private static final com.mojang.serialization.MapCodec<OutpostPersistence> OUTPOST_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(OutpostPersistence::playerStandings),
 		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(OutpostPersistence::raids)
@@ -800,9 +809,53 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public void removeBuildSite(String buildSiteId) {
-		if (buildSites.remove(buildSiteId) != null) {
-			setDirty();
+		SettlementBuildSite removedBuildSite = buildSites.remove(buildSiteId);
+		if (removedBuildSite == null) {
+			return;
 		}
+
+		Map<String, Integer> returnedGoods = new LinkedHashMap<>();
+		for (var iterator = constructionDeliveries.entrySet().iterator(); iterator.hasNext();) {
+			SettlementConstructionDelivery delivery = iterator.next().getValue();
+
+			if (!delivery.buildSiteId().equals(buildSiteId)) {
+				continue;
+			}
+
+			if (!delivery.materialKey().isBlank()) {
+				SettlementGoods.addGoods(returnedGoods, delivery.materialKey(), delivery.amount());
+			}
+
+			iterator.remove();
+		}
+
+		if (!returnedGoods.isEmpty()) {
+			SettlementState settlement = settlements.get(removedBuildSite.settlementId());
+
+			if (settlement != null) {
+				Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
+				returnedGoods.forEach((goodsKey, amount) -> SettlementGoods.addGoods(stock, goodsKey, amount));
+				putSettlement(settlement.withStock(stock));
+			}
+		}
+
+		setDirty();
+	}
+
+	private boolean retireObsoleteLoadedPalisadeWallBuildSites(ServerLevel level, SettlementState settlement) {
+		Set<String> obsoleteBuildSiteIds = SettlementConstruction.loadedWorldObsoletePalisadeWallBuildSiteIds(
+			level,
+			getBuildSitesForSettlement(settlement.id())
+		);
+		if (obsoleteBuildSiteIds.isEmpty()) {
+			return false;
+		}
+
+		for (String buildSiteId : obsoleteBuildSiteIds) {
+			removeBuildSite(buildSiteId);
+		}
+
+		return true;
 	}
 
 	public int advanceRoundRobin(MinecraftServer server, long currentTick, int regionsPerCycle) {
@@ -1131,7 +1184,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
 				: settlement.withPopulation(actualPopulation);
-			SettlementDefenseWork.maintainLoadedDefense(level, workingSettlement);
+			SettlementDefenseWork.maintainLoadedDefense(level, workingSettlement, getBuildSitesForSettlement(workingSettlement.id()));
 
 			if (!workingSettlement.equals(settlement)) {
 				entry.setValue(workingSettlement);
@@ -1180,6 +1233,7 @@ public class LiveVillagesSavedData extends SavedData {
 				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
 				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 				SettlementConstructionWork.ConstructionWorkResult constructionResult = SettlementConstructionWork.maintainLoadedOutpostConstruction(
 					level,
@@ -1226,6 +1280,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (homesTime > 100_000_000) { // >100ms
 				LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());
 			}
+			changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
@@ -1236,6 +1291,7 @@ public class LiveVillagesSavedData extends SavedData {
 			changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+			changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
 			changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
@@ -1415,6 +1471,103 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		return changed;
+	}
+
+	private boolean tryMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		if (settlement.kind() == SettlementKind.OUTPOST
+			|| findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST).isPresent()
+			|| !SettlementConstruction.findPlacedTradeBoards(level, settlement).isEmpty()
+			|| !shouldMaterializeVirtualTradingPost(level, settlement)) {
+			return false;
+		}
+
+		for (VirtualTradeBoardSite site : virtualTradeBoardSites(level, settlement)) {
+			BlockState boardState = LiveVillagesBlocks.TRADE_BOARD.defaultBlockState().setValue(TradeBoardBlock.FACING, site.facing());
+			level.setBlock(site.pos(), boardState, 3);
+			if (level.getBlockEntity(site.pos()) instanceof TradeBoardBlockEntity tradeBoard) {
+				tradeBoard.linkSettlement(settlement);
+			}
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartTradingPostAtWorkstation(
+				level,
+				site.pos(),
+				site.facing(),
+				settlement.id(),
+				stock,
+				Optional.empty(),
+				false
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				boolean changed = !buildResult.buildSite().equals(previousBuildSite);
+				return ensureWorkforceIfNeeded(level, settlement) || changed;
+			}
+
+			level.setBlock(site.pos(), Blocks.AIR.defaultBlockState(), 3);
+		}
+
+		return false;
+	}
+
+	private boolean shouldMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement) {
+		long ageTicks = Math.max(0L, level.getServer().getTickCount() - settlement.createdTick());
+		if (ageTicks < VIRTUAL_TRADING_POST_MIN_AGE_TICKS) {
+			return false;
+		}
+
+		int totalStock = settlement.stock().values().stream().mapToInt(Integer::intValue).sum();
+		return settlement.totalPopulation() >= VIRTUAL_TRADING_POST_MIN_POPULATION
+			|| totalStock >= VIRTUAL_TRADING_POST_MIN_STOCK;
+	}
+
+	private List<VirtualTradeBoardSite> virtualTradeBoardSites(ServerLevel level, SettlementState settlement) {
+		List<VirtualTradeBoardSite> sites = new ArrayList<>();
+
+		for (int radius : VIRTUAL_TRADING_POST_SEARCH_RADII) {
+			for (Direction facing : Direction.Plane.HORIZONTAL) {
+				Direction lateral = facing.getClockWise();
+
+				for (int sideOffset = 0; sideOffset <= 2; sideOffset++) {
+					for (int sign : sideOffset == 0 ? List.of(0) : List.of(-1, 1)) {
+						BlockPos columnPos = settlement.center()
+							.relative(facing, radius)
+							.relative(lateral, sideOffset * sign);
+						virtualTradeBoardPlacementPos(level, columnPos)
+							.ifPresent(pos -> sites.add(new VirtualTradeBoardSite(pos, facing)));
+					}
+				}
+			}
+		}
+
+		return sites;
+	}
+
+	private Optional<BlockPos> virtualTradeBoardPlacementPos(ServerLevel level, BlockPos columnPos) {
+		if (!level.hasChunkAt(columnPos)) {
+			return Optional.empty();
+		}
+
+		int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnPos.getX(), columnPos.getZ()) - 1;
+		if (groundY < level.getMinY() || groundY > level.getMaxY() - 2) {
+			return Optional.empty();
+		}
+
+		BlockPos groundPos = new BlockPos(columnPos.getX(), groundY, columnPos.getZ());
+		BlockState groundState = level.getBlockState(groundPos);
+		if (!groundState.isFaceSturdy(level, groundPos, Direction.UP)
+			|| level.getFluidState(groundPos).is(FluidTags.WATER)) {
+			return Optional.empty();
+		}
+
+		BlockPos boardPos = groundPos.above();
+		if (!level.getBlockState(boardPos).isAir()
+			|| !level.getBlockState(boardPos.above()).isAir()
+			|| level.getFluidState(boardPos).is(FluidTags.WATER)) {
+			return Optional.empty();
+		}
+
+		return Optional.of(boardPos.immutable());
 	}
 
 	private boolean tryStartVanillaButcherShopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -1891,6 +2044,9 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private record OutpostRecruitmentResult(int spawned, Map<String, Integer> stock) {
+	}
+
+	private record VirtualTradeBoardSite(BlockPos pos, Direction facing) {
 	}
 
 	private List<SettlementState> getSettlementsInDimension(MinecraftServer server, net.minecraft.resources.ResourceKey<Level> dimension) {

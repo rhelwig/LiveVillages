@@ -17,6 +17,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BedBlock;
@@ -79,6 +80,18 @@ public final class SettlementConstruction {
 	private static final int MAX_DOCK_SHORE_REPLACEMENT_BLOCKS = 2;
 	private static final int DOCK_SHORE_REPLACEMENT_ROWS = 2;
 	private static final int DOCK_DEEP_WATER_END_ROWS = 2;
+	private static final int PALISADE_WALL_HEIGHT_BLOCKS = 4;
+	private static final int PALISADE_POINT_SCAN_RADIUS_BLOCKS = 64;
+	private static final int PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS = 4;
+	private static final int PALISADE_POINT_REPLAN_RADIUS_BLOCKS = 10;
+	private static final int PALISADE_DUPLICATE_WALL_RADIUS_BLOCKS = 8;
+	private static final int PALISADE_DUPLICATE_WALL_MIN_COLUMNS = 6;
+	private static final int PALISADE_DUPLICATE_WALL_COVERAGE_PERCENT = 55;
+	private static final int PALISADE_ROUTE_GAP_MAX_DISTANCE_SQUARED = 8;
+	private static final int PALISADE_INVALID_WATER_MIN_COLUMNS = 2;
+	private static final int PALISADE_INVALID_WATER_COVERAGE_PERCENT = 15;
+	private static final int PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS = 3;
+	private static final int PALISADE_PLAYER_OVERRIDE_MIN_LOGS = 2;
 	private static final int LIGHTHOUSE_BASE_LEVELS = 4;
 	private static final int LIGHTHOUSE_TOWER_LEVELS = 4;
 	private static final int LIGHTHOUSE_WATER_RADIUS_BLOCKS = 6;
@@ -2441,6 +2454,45 @@ public final class SettlementConstruction {
 		);
 	}
 
+	public static PalisadeWallReplan planPalisadeWallsToPoint(
+		ServerLevel level,
+		SettlementState settlement,
+		BlockPos pointPos,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> existingBuildSites
+	) {
+		List<PalisadeControlPoint> controls = palisadeControlPoints(level, settlement, pointPos, existingBuildSites);
+		if (controls.isEmpty()) {
+			return PalisadeWallReplan.empty();
+		}
+
+		List<PalisadeControlPoint> selectedControls = nearestAngularPalisadeControls(settlement.center(), pointPos, controls);
+		if (selectedControls.isEmpty()) {
+			return PalisadeWallReplan.empty();
+		}
+
+		Set<String> obsoleteBuildSiteIds = obsoletePalisadeWallBuildSiteIds(pointPos, selectedControls, existingBuildSites);
+		List<SettlementBuildSite> plannedSites = new ArrayList<>();
+		List<SettlementBuildSite> workingBuildSites = existingBuildSites.stream()
+			.filter(buildSite -> !obsoleteBuildSiteIds.contains(buildSite.id()))
+			.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+		long tick = level.getServer().getTickCount();
+
+		for (PalisadeControlPoint control : selectedControls) {
+			BlockPos segmentStart = palisadeWallConnectionEndpoint(control.pos(), pointPos, workingBuildSites);
+			SettlementBuildSite buildSite = createPendingPalisadeWallBuildSite(level, settlement, segmentStart, pointPos, stock, workingBuildSites, tick);
+			if (buildSite == null || hasBuildSiteWithId(workingBuildSites, buildSite.id())) {
+				continue;
+			}
+
+			SettlementBuildSite updatedBuildSite = updateBuildSiteMaterialStatus(buildSite, stock, tick);
+			plannedSites.add(updatedBuildSite);
+			workingBuildSites.add(updatedBuildSite);
+		}
+
+		return new PalisadeWallReplan(List.copyOf(plannedSites), Set.copyOf(obsoleteBuildSiteIds));
+	}
+
 	public static StructurePreview previewDockAtPortmasterAnchor(ServerLevel level, String settlementId, BlockPos anchorPos, Direction facing) {
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		Direction dockFacing = horizontalFacing.getOpposite();
@@ -2536,14 +2588,27 @@ public final class SettlementConstruction {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.LIGHTHOUSE));
 	}
 
+	public static List<BlockPos> findPlacedPalisadePoints(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(
+			level,
+			settlement,
+			state -> state.is(LiveVillagesBlocks.PALISADE_POINT),
+			PALISADE_POINT_SCAN_RADIUS_BLOCKS
+		);
+	}
+
 	private static List<BlockPos> findPlacedWorkstations(ServerLevel level, SettlementState settlement, Predicate<BlockState> matcher) {
+		return findPlacedWorkstations(level, settlement, matcher, VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS);
+	}
+
+	private static List<BlockPos> findPlacedWorkstations(ServerLevel level, SettlementState settlement, Predicate<BlockState> matcher, int scanRadiusBlocks) {
 		List<BlockPos> tablePositions = new ArrayList<>();
 		BlockPos center = settlement.center();
-		int radiusSquared = VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS * VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS;
+		int radiusSquared = scanRadiusBlocks * scanRadiusBlocks;
 		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
 
-		for (int x = center.getX() - VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; x <= center.getX() + VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; x++) {
-			for (int z = center.getZ() - VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; z <= center.getZ() + VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; z++) {
+		for (int x = center.getX() - scanRadiusBlocks; x <= center.getX() + scanRadiusBlocks; x++) {
+			for (int z = center.getZ() - scanRadiusBlocks; z <= center.getZ() + scanRadiusBlocks; z++) {
 				if (center.distToCenterSqr(x + 0.5D, center.getY() + 0.5D, z + 0.5D) > radiusSquared) {
 					continue;
 				}
@@ -2711,6 +2776,10 @@ public final class SettlementConstruction {
 			return Optional.empty();
 		}
 
+		if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			relativePos = normalizedPalisadeWallRelativePos(buildSite, buildBlock, relativePos);
+		}
+
 		return Optional.of(offset(buildSite.origin(), buildSite.facing(), relativePos.right(), relativePos.forward(), relativePos.up()));
 	}
 
@@ -2750,6 +2819,10 @@ public final class SettlementConstruction {
 
 		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
 			return dockBuildState(buildBlock.blueprintSymbol().charAt(0), buildSite.woodFamily());
+		}
+
+		if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			return palisadeWallBuildState(buildBlock.blueprintSymbol().charAt(0), buildSite.woodFamily());
 		}
 
 		StructureKind structureKind = structureKindFor(buildSite.blueprintId());
@@ -3053,7 +3126,8 @@ public final class SettlementConstruction {
 	}
 
 	public static char currentBlueprintSymbol(SettlementBuildSite buildSite, SettlementBuildBlockState buildBlock) {
-		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
+		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK
+			|| buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
 			return buildBlock.blueprintSymbol().isBlank() ? 'A' : buildBlock.blueprintSymbol().charAt(0);
 		}
 
@@ -3072,6 +3146,10 @@ public final class SettlementConstruction {
 			return dockMaterialKey(symbol);
 		}
 
+		if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			return palisadeWallMaterialKey(symbol);
+		}
+
 		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(buildBlock.position());
 
 		if (relativePos == null) {
@@ -3088,7 +3166,8 @@ public final class SettlementConstruction {
 	}
 
 	public static List<SettlementBuildBlockState> currentBlueprintBlocks(SettlementBuildSite buildSite) {
-		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
+		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK
+			|| buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
 			return List.copyOf(buildSite.blocks());
 		}
 
@@ -3258,6 +3337,10 @@ public final class SettlementConstruction {
 
 		if (currentState.getBlock() instanceof StairBlock && plannedState.getBlock() instanceof StairBlock) {
 			return "shape".equals(name);
+		}
+
+		if (currentState.getBlock() instanceof CrossCollisionBlock && plannedState.getBlock() instanceof CrossCollisionBlock) {
+			return "north".equals(name) || "south".equals(name) || "east".equals(name) || "west".equals(name);
 		}
 
 		return false;
@@ -3826,16 +3909,7 @@ public final class SettlementConstruction {
 			return buildSite;
 		}
 
-		String doorPosition = relativeBlueprintPosition(0, 0, 0);
-		for (SettlementBuildBlockState block : buildSite.blocks()) {
-			if (doorPosition.equals(block.position())) {
-				return buildSite;
-			}
-		}
-
-		List<SettlementBuildBlockState> blocks = new ArrayList<>(buildSite.blocks());
-		blocks.add(SettlementBuildBlockState.pending(doorPosition, 'D', "door"));
-		return buildSite.withBlocks(blocks, false, tick);
+		return withPalisadeGatehouseDoorBlocks(buildSite, tick);
 	}
 
 	private static void placeStructureBlueprint(
@@ -4846,6 +4920,7 @@ public final class SettlementConstruction {
 	}
 
 	public static SettlementBuildSite updateBuildSiteMaterialStatus(SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
+		buildSite = normalizeBuildSiteDefinition(buildSite, tick);
 		Map<String, Integer> reservedStock = new java.util.LinkedHashMap<>(stock);
 		Map<String, Integer> reservedSiteMaterials = new java.util.LinkedHashMap<>(buildSite.siteMaterials());
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>();
@@ -4888,13 +4963,140 @@ public final class SettlementConstruction {
 	}
 
 	public static SettlementBuildSite applyBiomeMaterialPalette(ServerLevel level, SettlementState settlement, SettlementBuildSite buildSite, long tick) {
-		StructureMaterialPalette palette = materialPaletteFor(level, buildSite.anchorPos());
+		SettlementBuildSite normalizedBuildSite = normalizeBuildSiteForLoadedWorld(level, buildSite, tick);
+		StructureMaterialPalette palette = materialPaletteFor(level, normalizedBuildSite.anchorPos());
 		String tierLimitedStoneMaterial = SettlementTiers.clampStoneMaterialForTier(SettlementTiers.unlockedTier(settlement), palette.stoneMaterial());
-		if (palette.woodFamily().equals(buildSite.woodFamily()) && tierLimitedStoneMaterial.equals(buildSite.stoneMaterial())) {
-			return buildSite;
+		if (palette.woodFamily().equals(normalizedBuildSite.woodFamily()) && tierLimitedStoneMaterial.equals(normalizedBuildSite.stoneMaterial())) {
+			return normalizedBuildSite;
 		}
 
-		return buildSite.withMaterials(palette.woodFamily(), tierLimitedStoneMaterial, tick);
+		return normalizedBuildSite.withMaterials(palette.woodFamily(), tierLimitedStoneMaterial, tick);
+	}
+
+	private static SettlementBuildSite normalizeBuildSiteForLoadedWorld(ServerLevel level, SettlementBuildSite buildSite, long tick) {
+		SettlementBuildSite normalizedBuildSite = normalizeBuildSiteDefinition(buildSite, tick);
+
+		if (normalizedBuildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			normalizedBuildSite = withPalisadePointEndpointColumns(level, normalizedBuildSite, tick);
+		}
+
+		return normalizedBuildSite;
+	}
+
+	private static SettlementBuildSite normalizeBuildSiteDefinition(SettlementBuildSite buildSite, long tick) {
+		SettlementBuildSite normalizedBuildSite = buildSite;
+
+		if (isPalisadeGatehouseBuildSite(normalizedBuildSite)) {
+			normalizedBuildSite = withPalisadeGatehouseDoorBlocks(normalizedBuildSite, tick);
+		}
+
+		if (normalizedBuildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			normalizedBuildSite = withNormalizedPalisadeWallPositions(normalizedBuildSite, tick);
+		}
+
+		return normalizedBuildSite;
+	}
+
+	private static boolean isPalisadeGatehouseBuildSite(SettlementBuildSite buildSite) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
+			|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE;
+	}
+
+	private static SettlementBuildSite withPalisadeGatehouseDoorBlocks(SettlementBuildSite buildSite, long tick) {
+		List<SettlementBuildBlockState> blocks = new ArrayList<>(buildSite.blocks());
+		boolean changed = ensurePalisadeGatehouseDoorBlock(blocks, relativeBlueprintPosition(0, 0, 0), "door");
+		changed |= ensurePalisadeGatehouseDoorBlock(blocks, relativeBlueprintPosition(0, 0, 1), "");
+		return changed ? buildSite.withBlocks(blocks, false, tick) : buildSite;
+	}
+
+	private static boolean ensurePalisadeGatehouseDoorBlock(List<SettlementBuildBlockState> blocks, String position, String materialKey) {
+		for (int index = 0; index < blocks.size(); index++) {
+			SettlementBuildBlockState block = blocks.get(index);
+
+			if (!position.equals(block.position())) {
+				continue;
+			}
+
+			if ("D".equals(block.blueprintSymbol()) && materialKey.equals(block.expectedMaterialKey())) {
+				return false;
+			}
+
+			blocks.set(index, SettlementBuildBlockState.pending(position, 'D', materialKey));
+			return true;
+		}
+
+		blocks.add(SettlementBuildBlockState.pending(position, 'D', materialKey));
+		return true;
+	}
+
+	private static SettlementBuildSite withPalisadePointEndpointColumns(ServerLevel level, SettlementBuildSite buildSite, long tick) {
+		Map<String, SettlementBuildBlockState> blocks = new LinkedHashMap<>();
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			blocks.put(block.position(), block);
+		}
+
+		boolean changed = addPalisadePointEndpointColumn(level, buildSite, blocks, buildSite.anchorPos());
+		changed |= addPalisadePointEndpointColumn(level, buildSite, blocks, buildSite.workstationPos());
+
+		return changed ? buildSite.withBlocks(List.copyOf(blocks.values()), false, tick) : buildSite;
+	}
+
+	private static boolean addPalisadePointEndpointColumn(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		Map<String, SettlementBuildBlockState> blocks,
+		BlockPos endpointPos
+	) {
+		if (!level.hasChunkAt(endpointPos) || !level.getBlockState(endpointPos).is(LiveVillagesBlocks.PALISADE_POINT)) {
+			return false;
+		}
+
+		boolean changed = false;
+		for (int up = 0; up < PALISADE_WALL_HEIGHT_BLOCKS; up++) {
+			String position = relativeBlueprintPositionFromWorld(buildSite.origin(), buildSite.facing(), endpointPos.above(up));
+			if (blocks.containsKey(position)) {
+				continue;
+			}
+
+			blocks.put(position, SettlementBuildBlockState.pending(position, 'L', "logs"));
+			changed = true;
+		}
+
+		return changed;
+	}
+
+	private static SettlementBuildSite withNormalizedPalisadeWallPositions(SettlementBuildSite buildSite, long tick) {
+		Map<String, SettlementBuildBlockState> blocks = new LinkedHashMap<>();
+		boolean changed = false;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			SettlementBuildBlockState normalizedBlock = withNormalizedPalisadeWallPosition(buildSite, block);
+			changed |= !normalizedBlock.equals(block);
+			blocks.putIfAbsent(normalizedBlock.position(), normalizedBlock);
+		}
+
+		return changed ? buildSite.withBlocks(List.copyOf(blocks.values()), buildSite.complete(), tick) : buildSite;
+	}
+
+	private static SettlementBuildBlockState withNormalizedPalisadeWallPosition(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(block.position());
+
+		if (relativePos == null) {
+			return block;
+		}
+
+		BlueprintRelativePos normalizedRelativePos = normalizedPalisadeWallRelativePos(buildSite, block, relativePos);
+		if (normalizedRelativePos.equals(relativePos)) {
+			return block;
+		}
+
+		return new SettlementBuildBlockState(
+			relativeBlueprintPosition(normalizedRelativePos.right(), normalizedRelativePos.forward(), normalizedRelativePos.up()),
+			block.blueprintSymbol(),
+			block.expectedMaterialKey(),
+			block.status(),
+			block.blocker()
+		);
 	}
 
 	private static boolean buildSiteComplete(List<SettlementBuildBlockState> blocks) {
@@ -4916,6 +5118,11 @@ public final class SettlementConstruction {
 
 		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
 			String materialKey = dockMaterialKey(block.blueprintSymbol().charAt(0));
+			return materialKey.equals(block.expectedMaterialKey()) ? block : block.withExpectedMaterialKey(materialKey);
+		}
+
+		if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			String materialKey = palisadeWallMaterialKey(block.blueprintSymbol().charAt(0));
 			return materialKey.equals(block.expectedMaterialKey()) ? block : block.withExpectedMaterialKey(materialKey);
 		}
 
@@ -4945,6 +5152,10 @@ public final class SettlementConstruction {
 
 	public static boolean isAnchoredWorkstationBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
 		if (block.blueprintSymbol().isBlank()) {
+			return false;
+		}
+
+		if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
 			return false;
 		}
 
@@ -5227,6 +5438,7 @@ public final class SettlementConstruction {
 			case MINE_ENTRANCE -> StructureKind.MINE_ENTRANCE;
 			case PALISADE_GATEHOUSE -> StructureKind.PALISADE_GATEHOUSE;
 			case COPPER_PALISADE_GATEHOUSE -> StructureKind.COPPER_PALISADE_GATEHOUSE;
+			case PALISADE_WALL -> throw new IllegalArgumentException("Palisade wall build sites use custom block generation");
 			case ROADWRIGHT_WORKSHOP -> StructureKind.ROADWRIGHT_WORKSHOP;
 			case SIMPLE_HOUSING_SHELTER -> StructureKind.SIMPLE_HOUSING_SHELTER;
 			case TRADING_POST -> StructureKind.TRADING_POST;
@@ -5268,6 +5480,633 @@ public final class SettlementConstruction {
 			+ workstationPos.getY()
 			+ "_"
 			+ workstationPos.getZ();
+	}
+
+	private static String palisadeWallBuildSiteId(String settlementId, BlockPos startPos, BlockPos endPos) {
+		BlockPos first = compareBlockPos(startPos, endPos) <= 0 ? startPos : endPos;
+		BlockPos second = first.equals(startPos) ? endPos : startPos;
+		return settlementId
+			+ ":"
+			+ SettlementBuildSiteType.PALISADE_WALL.getSerializedName()
+			+ ":"
+			+ first.getX()
+			+ "_"
+			+ first.getY()
+			+ "_"
+			+ first.getZ()
+			+ ":"
+			+ second.getX()
+			+ "_"
+			+ second.getY()
+			+ "_"
+			+ second.getZ();
+	}
+
+	private static int compareBlockPos(BlockPos first, BlockPos second) {
+		if (first.getX() != second.getX()) {
+			return Integer.compare(first.getX(), second.getX());
+		}
+
+		if (first.getY() != second.getY()) {
+			return Integer.compare(first.getY(), second.getY());
+		}
+
+		return Integer.compare(first.getZ(), second.getZ());
+	}
+
+	private static boolean hasBuildSiteWithId(List<SettlementBuildSite> buildSites, String id) {
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.id().equals(id)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static List<PalisadeControlPoint> palisadeControlPoints(
+		ServerLevel level,
+		SettlementState settlement,
+		BlockPos pointPos,
+		List<SettlementBuildSite> existingBuildSites
+	) {
+		List<PalisadeControlPoint> controls = new ArrayList<>();
+		Set<BlockPos> seen = new HashSet<>();
+
+		for (SettlementBuildSite buildSite : existingBuildSites) {
+			if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
+				|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE) {
+				BlockPos pos = buildSite.anchorPos().immutable();
+				if (!sameColumn(pos, pointPos) && seen.add(pos)) {
+					controls.add(new PalisadeControlPoint(pos));
+				}
+			}
+		}
+
+		for (BlockPos placedPoint : findPlacedPalisadePoints(level, settlement)) {
+			if (!sameColumn(placedPoint, pointPos) && seen.add(placedPoint)) {
+				controls.add(new PalisadeControlPoint(placedPoint));
+			}
+		}
+
+		return controls;
+	}
+
+	private static boolean sameColumn(BlockPos first, BlockPos second) {
+		return first.getX() == second.getX() && first.getZ() == second.getZ();
+	}
+
+	private static List<PalisadeControlPoint> nearestAngularPalisadeControls(BlockPos center, BlockPos pointPos, List<PalisadeControlPoint> controls) {
+		if (controls.size() == 1) {
+			return List.of(controls.get(0));
+		}
+
+		double pointAngle = angleFromSettlementCenter(center, pointPos);
+		PalisadeControlPoint clockwise = null;
+		PalisadeControlPoint counterClockwise = null;
+		double clockwiseDistance = Double.POSITIVE_INFINITY;
+		double counterClockwiseDistance = Double.NEGATIVE_INFINITY;
+
+		for (PalisadeControlPoint control : controls) {
+			double distance = positiveAngleDistance(pointAngle, angleFromSettlementCenter(center, control.pos()));
+			if (distance <= 0.000001D) {
+				continue;
+			}
+
+			if (distance < clockwiseDistance) {
+				clockwise = control;
+				clockwiseDistance = distance;
+			}
+
+			if (distance > counterClockwiseDistance) {
+				counterClockwise = control;
+				counterClockwiseDistance = distance;
+			}
+		}
+
+		List<PalisadeControlPoint> selected = new ArrayList<>();
+		if (clockwise != null) {
+			selected.add(clockwise);
+		}
+
+		if (counterClockwise != null && !counterClockwise.equals(clockwise)) {
+			selected.add(counterClockwise);
+		}
+
+		return selected;
+	}
+
+	private static BlockPos palisadeWallConnectionEndpoint(BlockPos controlPos, BlockPos targetPos, List<SettlementBuildSite> buildSites) {
+		BlockPos bestEndpoint = controlPos;
+		double bestDistance = targetPos.distSqr(controlPos);
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL) {
+				continue;
+			}
+
+			boolean touchesControl = buildSite.anchorPos().distSqr(controlPos) <= PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS * PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS
+				|| buildSite.workstationPos().distSqr(controlPos) <= PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS * PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS;
+
+			if (!touchesControl) {
+				continue;
+			}
+
+			double anchorDistance = targetPos.distSqr(buildSite.anchorPos());
+			if (anchorDistance < bestDistance) {
+				bestEndpoint = buildSite.anchorPos();
+				bestDistance = anchorDistance;
+			}
+
+			double workstationDistance = targetPos.distSqr(buildSite.workstationPos());
+			if (workstationDistance < bestDistance) {
+				bestEndpoint = buildSite.workstationPos();
+				bestDistance = workstationDistance;
+			}
+		}
+
+		return bestEndpoint.immutable();
+	}
+
+	private static Set<String> obsoletePalisadeWallBuildSiteIds(BlockPos pointPos, List<PalisadeControlPoint> selectedControls, List<SettlementBuildSite> buildSites) {
+		Set<String> obsoleteIds = new HashSet<>();
+		PalisadeControlPoint firstControl = selectedControls.isEmpty() ? null : selectedControls.get(0);
+		PalisadeControlPoint secondControl = selectedControls.size() < 2 ? null : selectedControls.get(1);
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()
+				|| buildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL) {
+				continue;
+			}
+
+			boolean directSegmentBetweenSelectedControls = firstControl != null
+				&& secondControl != null
+				&& palisadeWallTouchesControl(buildSite, firstControl.pos())
+				&& palisadeWallTouchesControl(buildSite, secondControl.pos());
+			if (directSegmentBetweenSelectedControls || palisadeWallPassesNearPoint(buildSite, pointPos)) {
+				obsoleteIds.add(buildSite.id());
+			}
+		}
+
+		return obsoleteIds;
+	}
+
+	public static Set<String> duplicatePalisadeWallBuildSiteIds(ServerLevel level, List<SettlementBuildSite> buildSites) {
+		Set<String> duplicateIds = new HashSet<>();
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()
+				|| buildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL
+				|| !palisadeWallAlreadyCovered(level, buildSite, buildSites)) {
+				continue;
+			}
+
+			duplicateIds.add(buildSite.id());
+		}
+
+		return duplicateIds;
+	}
+
+	public static Set<String> loadedWorldObsoletePalisadeWallBuildSiteIds(ServerLevel level, List<SettlementBuildSite> buildSites) {
+		Set<String> obsoleteIds = new HashSet<>();
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()
+				|| buildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL) {
+				continue;
+			}
+
+			if (palisadeWallAlreadyCovered(level, buildSite, buildSites)
+				|| palisadeWallInvalidInLoadedWorld(level, buildSite)) {
+				obsoleteIds.add(buildSite.id());
+			}
+		}
+
+		return obsoleteIds;
+	}
+
+	private static boolean palisadeWallTouchesControl(SettlementBuildSite buildSite, BlockPos controlPos) {
+		int touchDistanceSquared = PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS * PALISADE_CONTROL_TOUCH_DISTANCE_BLOCKS;
+		return buildSite.anchorPos().distSqr(controlPos) <= touchDistanceSquared
+			|| buildSite.workstationPos().distSqr(controlPos) <= touchDistanceSquared;
+	}
+
+	private static boolean palisadeWallPassesNearPoint(SettlementBuildSite buildSite, BlockPos pointPos) {
+		int radiusSquared = PALISADE_POINT_REPLAN_RADIUS_BLOCKS * PALISADE_POINT_REPLAN_RADIUS_BLOCKS;
+
+		if (horizontalDistanceSquared(buildSite.anchorPos(), pointPos) <= radiusSquared
+			|| horizontalDistanceSquared(buildSite.workstationPos(), pointPos) <= radiusSquared) {
+			return true;
+		}
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (block.blueprintSymbol().isBlank()
+				|| block.blueprintSymbol().charAt(0) != 'L') {
+				continue;
+			}
+
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			if (blockPos.isPresent() && horizontalDistanceSquared(blockPos.get(), pointPos) <= radiusSquared) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static int horizontalDistanceSquared(BlockPos first, BlockPos second) {
+		int dx = first.getX() - second.getX();
+		int dz = first.getZ() - second.getZ();
+		return dx * dx + dz * dz;
+	}
+
+	private static boolean palisadeWallAlreadyCovered(ServerLevel level, SettlementBuildSite buildSite, List<SettlementBuildSite> existingBuildSites) {
+		List<BlockPos> plannedColumns = palisadeWallLogColumns(buildSite);
+		if (plannedColumns.size() < PALISADE_DUPLICATE_WALL_MIN_COLUMNS) {
+			return false;
+		}
+
+		Set<String> plannedColumnKeys = plannedColumns.stream()
+			.map(SettlementConstruction::columnKey)
+			.collect(java.util.stream.Collectors.toSet());
+		int coveredColumns = 0;
+
+		for (BlockPos plannedColumn : plannedColumns) {
+			if (nearCompletedPalisadeWallColumn(buildSite, existingBuildSites, plannedColumn)
+				|| nearBuiltWorldPalisadeColumn(level, plannedColumn, plannedColumnKeys)) {
+				coveredColumns++;
+			}
+		}
+
+		return coveredColumns * 100 >= plannedColumns.size() * PALISADE_DUPLICATE_WALL_COVERAGE_PERCENT;
+	}
+
+	private static boolean palisadeWallInvalidInLoadedWorld(ServerLevel level, SettlementBuildSite buildSite) {
+		List<BlockPos> plannedColumns = palisadeWallLogColumns(buildSite);
+		return palisadeWallHasLargeColumnGap(plannedColumns)
+			|| palisadeWallCrossesWater(level, plannedColumns);
+	}
+
+	private static boolean palisadeWallHasLargeColumnGap(List<BlockPos> columns) {
+		if (columns.size() < 2) {
+			return false;
+		}
+
+		BlockPos previousColumn = columns.get(0);
+		for (int index = 1; index < columns.size(); index++) {
+			BlockPos column = columns.get(index);
+			if (horizontalDistanceSquared(previousColumn, column) > PALISADE_ROUTE_GAP_MAX_DISTANCE_SQUARED) {
+				return true;
+			}
+			previousColumn = column;
+		}
+
+		return false;
+	}
+
+	private static boolean palisadeWallCrossesWater(ServerLevel level, List<BlockPos> columns) {
+		if (columns.size() < 2) {
+			return false;
+		}
+
+		int waterColumns = 0;
+		for (BlockPos column : columns) {
+			if (palisadeColumnIntersectsWater(level, column)) {
+				waterColumns++;
+			}
+		}
+
+		return waterColumns >= PALISADE_INVALID_WATER_MIN_COLUMNS
+			|| waterColumns * 100 >= columns.size() * PALISADE_INVALID_WATER_COVERAGE_PERCENT;
+	}
+
+	private static boolean palisadeColumnIntersectsWater(ServerLevel level, BlockPos basePos) {
+		for (int up = -1; up < PALISADE_WALL_HEIGHT_BLOCKS; up++) {
+			BlockPos pos = basePos.above(up);
+			if (level.hasChunkAt(pos) && level.getFluidState(pos).is(FluidTags.WATER)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean nearCompletedPalisadeWallColumn(
+		SettlementBuildSite buildSite,
+		List<SettlementBuildSite> existingBuildSites,
+		BlockPos plannedColumn
+	) {
+		int radiusSquared = PALISADE_DUPLICATE_WALL_RADIUS_BLOCKS * PALISADE_DUPLICATE_WALL_RADIUS_BLOCKS;
+
+		for (SettlementBuildSite existingBuildSite : existingBuildSites) {
+			if (existingBuildSite.id().equals(buildSite.id())
+				|| !existingBuildSite.complete()
+				|| existingBuildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL) {
+				continue;
+			}
+
+			for (BlockPos existingColumn : palisadeWallLogColumns(existingBuildSite)) {
+				if (horizontalDistanceSquared(existingColumn, plannedColumn) <= radiusSquared) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean nearBuiltWorldPalisadeColumn(ServerLevel level, BlockPos plannedColumn, Set<String> plannedColumnKeys) {
+		int radius = PALISADE_DUPLICATE_WALL_RADIUS_BLOCKS;
+		int radiusSquared = radius * radius;
+
+		for (int dx = -radius; dx <= radius; dx++) {
+			for (int dz = -radius; dz <= radius; dz++) {
+				if (dx == 0 && dz == 0) {
+					continue;
+				}
+
+				BlockPos candidateColumn = plannedColumn.offset(dx, 0, dz);
+				if (horizontalDistanceSquared(candidateColumn, plannedColumn) > radiusSquared
+					|| plannedColumnKeys.contains(columnKey(candidateColumn))) {
+					continue;
+				}
+
+				for (int dy = -4; dy <= 4; dy++) {
+					BlockPos candidatePos = candidateColumn.offset(0, dy, 0);
+					if (level.hasChunkAt(candidatePos) && isLogColumnAtLeast(level, candidatePos, PALISADE_WALL_HEIGHT_BLOCKS)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static List<BlockPos> palisadeWallLogColumns(SettlementBuildSite buildSite) {
+		Map<String, BlockPos> columns = new LinkedHashMap<>();
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (block.blueprintSymbol().isBlank()
+				|| block.blueprintSymbol().charAt(0) != 'L') {
+				continue;
+			}
+
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			if (blockPos.isEmpty()) {
+				continue;
+			}
+
+			String key = columnKey(blockPos.get());
+			BlockPos previous = columns.get(key);
+			if (previous == null || blockPos.get().getY() < previous.getY()) {
+				columns.put(key, blockPos.get().immutable());
+			}
+		}
+
+		return List.copyOf(columns.values());
+	}
+
+	private static String columnKey(BlockPos pos) {
+		return pos.getX() + "," + pos.getZ();
+	}
+
+	private static SettlementBuildSite createPendingPalisadeWallBuildSite(
+		ServerLevel level,
+		SettlementState settlement,
+		BlockPos startPos,
+		BlockPos endPos,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> existingBuildSites,
+		long tick
+	) {
+		List<PalisadeWallColumn> columns = palisadeWallColumns(level, settlement.center(), startPos, endPos);
+		if (columns.size() < 2) {
+			return null;
+		}
+		List<BlockPos> columnPositions = columns.stream()
+			.map(PalisadeWallColumn::basePos)
+			.toList();
+		if (palisadeWallHasLargeColumnGap(columnPositions)
+			|| palisadeWallCrossesWater(level, columnPositions)) {
+			return null;
+		}
+
+		BlockPos origin = columns.get(0).basePos();
+		StructureMaterialPalette palette = materialPaletteFor(level, origin);
+		Map<String, SettlementBuildBlockState> blocks = new LinkedHashMap<>();
+		int[] slabHeights = smoothedPalisadeSlabHeights(columns);
+
+		for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
+			PalisadeWallColumn column = columns.get(columnIndex);
+			BlockPos basePos = column.basePos();
+
+			for (int up = 0; up < PALISADE_WALL_HEIGHT_BLOCKS; up++) {
+				addPalisadeWallBlock(blocks, origin, basePos.above(up), 'L', "logs");
+			}
+
+			BlockPos slabPos = basePos.offset(column.inwardStep().right(), 0, column.inwardStep().forward());
+			int halfHeight = slabHeights[columnIndex];
+			int slabY = halfHeight / 2;
+			char slabSymbol = (halfHeight % 2) == 0 ? 'C' : 'B';
+			addPalisadeWallBlock(blocks, origin, new BlockPos(slabPos.getX(), slabY, slabPos.getZ()), slabSymbol, "slab");
+		}
+
+		if (blocks.isEmpty()) {
+			return null;
+		}
+
+		SettlementBuildSite buildSite = new SettlementBuildSite(
+			palisadeWallBuildSiteId(settlement.id(), startPos, endPos),
+			settlement.id(),
+			SettlementBuildSiteType.PALISADE_WALL,
+			origin.immutable(),
+			endPos.immutable(),
+			startPos.immutable(),
+			Direction.NORTH,
+			palette.woodFamily(),
+			palette.stoneMaterial(),
+			Map.of(),
+			List.copyOf(blocks.values()),
+			false,
+			tick,
+			tick
+		);
+
+		if (palisadeWallAlreadyCovered(level, buildSite, existingBuildSites)) {
+			return null;
+		}
+
+		return buildSite.withBlocks(reconciledInitialPalisadeWallBlocks(level, buildSite, stock), false, tick);
+	}
+
+	private static List<SettlementBuildBlockState> reconciledInitialPalisadeWallBlocks(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		Map<String, Integer> stock
+	) {
+		List<SettlementBuildBlockState> blocks = new ArrayList<>();
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			BlockState plannedState = plannedBuildSiteBlockState(buildSite, block);
+
+			if (blockPos.isPresent()
+				&& plannedState != null
+				&& level.hasChunkAt(blockPos.get())
+				&& isFlexibleMaterialMatch(level.getBlockState(blockPos.get()), plannedState, block.expectedMaterialKey())) {
+				blocks.add(block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, ""));
+			} else {
+				blocks.add(block);
+			}
+		}
+
+		return blocks;
+	}
+
+	private static void addPalisadeWallBlock(
+		Map<String, SettlementBuildBlockState> blocks,
+		BlockPos origin,
+		BlockPos worldPos,
+		char symbol,
+		String materialKey
+	) {
+		String position = relativeBlueprintPositionFromWorld(origin, Direction.NORTH, worldPos);
+		blocks.putIfAbsent(position, SettlementBuildBlockState.pending(position, symbol, materialKey));
+	}
+
+	private static List<PalisadeWallColumn> palisadeWallColumns(ServerLevel level, BlockPos center, BlockPos startPos, BlockPos endPos) {
+		double startAngle = angleFromSettlementCenter(center, startPos);
+		double endAngle = angleFromSettlementCenter(center, endPos);
+		double angleDelta = signedAngleDelta(startAngle, endAngle);
+		double startRadius = horizontalDistance(center, startPos);
+		double endRadius = horizontalDistance(center, endPos);
+		int steps = Math.max(1, (int) Math.ceil(Math.abs(angleDelta) * Math.max(startRadius, endRadius)));
+		List<PalisadeWallColumn> columns = new ArrayList<>();
+		Set<String> seenColumns = new HashSet<>();
+
+		for (int step = 0; step <= steps; step++) {
+			double t = step / (double) steps;
+			double angle = startAngle + angleDelta * t;
+			double radius = startRadius + (endRadius - startRadius) * t;
+			int x = step == 0
+				? startPos.getX()
+				: step == steps
+				? endPos.getX()
+				: center.getX() + (int) Math.round(Math.sin(angle) * radius);
+			int z = step == 0
+				? startPos.getZ()
+				: step == steps
+				? endPos.getZ()
+				: center.getZ() - (int) Math.round(Math.cos(angle) * radius);
+			String key = x + "," + z;
+
+			if (!seenColumns.add(key)) {
+				continue;
+			}
+
+			BlockPos basePos = palisadeWallBasePos(level, new BlockPos(x, center.getY(), z));
+			if (basePos == null) {
+				continue;
+			}
+
+			BlueprintRelativeStep inwardStep = inwardStepTowardCenter(center, basePos);
+			columns.add(new PalisadeWallColumn(basePos, inwardStep));
+		}
+
+		return columns;
+	}
+
+	private static BlockPos palisadeWallBasePos(ServerLevel level, BlockPos columnPos) {
+		if (!level.hasChunkAt(columnPos)) {
+			return null;
+		}
+
+		int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnPos.getX(), columnPos.getZ()) - 1;
+		if (groundY < level.getMinY()) {
+			return null;
+		}
+
+		BlockPos groundPos = new BlockPos(columnPos.getX(), groundY, columnPos.getZ());
+		if (level.getBlockState(groundPos).is(LiveVillagesBlocks.PALISADE_POINT)) {
+			return groundPos;
+		}
+
+		if (!hasStableBuildGround(level, groundPos)) {
+			return null;
+		}
+
+		BlockPos basePos = groundPos.above();
+		if (level.getFluidState(basePos).is(FluidTags.WATER)) {
+			return null;
+		}
+
+		return basePos;
+	}
+
+	private static BlueprintRelativeStep inwardStepTowardCenter(BlockPos center, BlockPos wallPos) {
+		int dx = center.getX() - wallPos.getX();
+		int dz = center.getZ() - wallPos.getZ();
+
+		if (Math.abs(dx) >= Math.abs(dz)) {
+			return new BlueprintRelativeStep(dx >= 0 ? 1 : -1, 0);
+		}
+
+		return new BlueprintRelativeStep(0, dz >= 0 ? 1 : -1);
+	}
+
+	private static int[] smoothedPalisadeSlabHeights(List<PalisadeWallColumn> columns) {
+		int[] heights = new int[columns.size()];
+
+		for (int index = 0; index < columns.size(); index++) {
+			heights[index] = columns.get(index).basePos().getY() * 2 + 5;
+			if (index > 0 && heights[index] > heights[index - 1] + 1) {
+				heights[index] = heights[index - 1] + 1;
+			}
+		}
+
+		for (int index = columns.size() - 2; index >= 0; index--) {
+			if (heights[index] > heights[index + 1] + 1) {
+				heights[index] = heights[index + 1] + 1;
+			}
+		}
+
+		for (int index = 0; index < columns.size(); index++) {
+			int minHalfHeight = columns.get(index).basePos().getY() * 2;
+			int maxHalfHeight = columns.get(index).basePos().getY() * 2 + 5;
+			heights[index] = clamp(heights[index], minHalfHeight, maxHalfHeight);
+		}
+
+		return heights;
+	}
+
+	private static double angleFromSettlementCenter(BlockPos center, BlockPos pos) {
+		return normalizeAngle(Math.atan2(pos.getX() - center.getX(), center.getZ() - pos.getZ()));
+	}
+
+	private static double horizontalDistance(BlockPos center, BlockPos pos) {
+		double dx = pos.getX() - center.getX();
+		double dz = pos.getZ() - center.getZ();
+		return Math.sqrt(dx * dx + dz * dz);
+	}
+
+	private static double positiveAngleDistance(double fromAngle, double toAngle) {
+		double distance = normalizeAngle(toAngle - fromAngle);
+		return distance == 0.0D ? Math.PI * 2.0D : distance;
+	}
+
+	private static double signedAngleDelta(double fromAngle, double toAngle) {
+		double delta = normalizeAngle(toAngle - fromAngle);
+		if (delta > Math.PI) {
+			delta -= Math.PI * 2.0D;
+		}
+		return delta;
+	}
+
+	private static double normalizeAngle(double angle) {
+		double fullTurn = Math.PI * 2.0D;
+		double normalized = angle % fullTurn;
+		return normalized < 0.0D ? normalized + fullTurn : normalized;
 	}
 
 	private static CompletionResult tryBuildDock(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -5985,6 +6824,15 @@ public final class SettlementConstruction {
 		};
 	}
 
+	private static BlockState palisadeWallBuildState(char symbol, String woodFamily) {
+		return switch (symbol) {
+			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
+			case 'B' -> woodSlabBlock(woodFamily).defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP);
+			case 'C' -> woodSlabBlock(woodFamily).defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+			default -> null;
+		};
+	}
+
 	private static String dockWoodFamilyForSite(ServerLevel level, DockSite site) {
 		BlockPos shorelinePos = site.origin().relative(site.facing().getOpposite());
 		return materialPaletteFor(level, shorelinePos).woodFamily();
@@ -5996,6 +6844,103 @@ public final class SettlementConstruction {
 			case 'P' -> "planks";
 			default -> "";
 		};
+	}
+
+	private static String palisadeWallMaterialKey(char symbol) {
+		return switch (symbol) {
+			case 'L' -> "logs";
+			case 'B', 'C' -> "slab";
+			default -> "";
+		};
+	}
+
+	public static boolean isPalisadeWallBuildSite(SettlementBuildSite buildSite) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL;
+	}
+
+	public static boolean isPalisadePointWallControlBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block, BlockState currentState) {
+		return isPalisadeWallBuildSite(buildSite)
+			&& !block.blueprintSymbol().isBlank()
+			&& block.blueprintSymbol().charAt(0) == 'L'
+			&& currentState.is(LiveVillagesBlocks.PALISADE_POINT);
+	}
+
+	private static BlueprintRelativePos normalizedPalisadeWallRelativePos(
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlueprintRelativePos relativePos
+	) {
+		if (!isPalisadeWallBuildSite(buildSite)
+			|| block.blueprintSymbol().isBlank()
+			|| relativePos.up() <= 32) {
+			return relativePos;
+		}
+
+		char symbol = block.blueprintSymbol().charAt(0);
+		if (symbol != 'B' && symbol != 'C') {
+			return relativePos;
+		}
+
+		int correctedUp = relativePos.up() - buildSite.origin().getY();
+		if (correctedUp < -16 || correctedUp > 32) {
+			return relativePos;
+		}
+
+		return new BlueprintRelativePos(relativePos.right(), relativePos.forward(), correctedUp);
+	}
+
+	public static boolean isPalisadeWallLogOverride(ServerLevel level, SettlementBuildSite buildSite, SettlementBuildBlockState block, BlockPos plannedPos) {
+		char symbol = currentBlueprintSymbol(buildSite, block);
+		if (!isPalisadeWallBuildSite(buildSite)
+			|| (symbol != 'L' && symbol != 'B' && symbol != 'C')) {
+			return false;
+		}
+
+		for (int dx = -PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS; dx <= PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS; dx++) {
+			for (int dz = -PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS; dz <= PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS; dz++) {
+				if (dx == 0 && dz == 0) {
+					continue;
+				}
+
+				if (Math.max(Math.abs(dx), Math.abs(dz)) > PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS) {
+					continue;
+				}
+
+				BlockPos candidatePos = plannedPos.offset(dx, 0, dz);
+				if (!level.hasChunkAt(candidatePos) || !isPalisadeLogColumnPart(level, candidatePos)) {
+					continue;
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isPalisadeLogColumnPart(ServerLevel level, BlockPos pos) {
+		return isLogColumnAtLeast(level, pos, PALISADE_PLAYER_OVERRIDE_MIN_LOGS);
+	}
+
+	private static boolean isLogColumnAtLeast(ServerLevel level, BlockPos pos, int minimumLogs) {
+		if (!isInTag(level.getBlockState(pos), BlockTags.LOGS)) {
+			return false;
+		}
+
+		int logBlocks = 1;
+		BlockPos scanPos = pos.below();
+		while (scanPos.getY() >= level.getMinY() && isInTag(level.getBlockState(scanPos), BlockTags.LOGS)) {
+			logBlocks++;
+			scanPos = scanPos.below();
+		}
+
+		scanPos = pos.above();
+		while (scanPos.getY() < level.getMaxY() && isInTag(level.getBlockState(scanPos), BlockTags.LOGS)) {
+			logBlocks++;
+			scanPos = scanPos.above();
+		}
+
+		return logBlocks >= minimumLogs;
 	}
 
 	private static boolean isDockSupportRow(int forward) {
@@ -6620,7 +7565,8 @@ public final class SettlementConstruction {
 	}
 
 	private static boolean isDisposableConstructionAnchorBlock(BlockState state) {
-		return state.getBlock() instanceof ShelterAnchorBlock;
+		return state.getBlock() instanceof ShelterAnchorBlock
+			|| state.getBlock() instanceof PalisadeGatehouseBlock;
 	}
 
 	private static boolean isNaturalLandscapeBlock(BlockState state) {
@@ -7214,6 +8160,33 @@ public final class SettlementConstruction {
 		ROADWRIGHT_WORKSHOP,
 		SIMPLE_HOUSING_SHELTER,
 		TRADING_POST
+	}
+
+	private record PalisadeControlPoint(BlockPos pos) {
+		private PalisadeControlPoint {
+			pos = pos.immutable();
+		}
+	}
+
+	public record PalisadeWallReplan(List<SettlementBuildSite> plannedSites, Set<String> obsoleteBuildSiteIds) {
+		public static PalisadeWallReplan empty() {
+			return new PalisadeWallReplan(List.of(), Set.of());
+		}
+
+		public PalisadeWallReplan {
+			plannedSites = plannedSites == null ? List.of() : List.copyOf(plannedSites);
+			obsoleteBuildSiteIds = obsoleteBuildSiteIds == null ? Set.of() : Set.copyOf(obsoleteBuildSiteIds);
+		}
+
+		public boolean emptyPlan() {
+			return plannedSites.isEmpty() && obsoleteBuildSiteIds.isEmpty();
+		}
+	}
+
+	private record PalisadeWallColumn(BlockPos basePos, BlueprintRelativeStep inwardStep) {
+		private PalisadeWallColumn {
+			basePos = basePos.immutable();
+		}
 	}
 
 	private record StorageSite(BlockPos pos, Direction facing) {

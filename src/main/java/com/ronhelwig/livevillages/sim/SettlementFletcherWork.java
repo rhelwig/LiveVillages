@@ -3,14 +3,17 @@ package com.ronhelwig.livevillages.sim;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
@@ -26,11 +29,16 @@ public final class SettlementFletcherWork {
 	private static final double DEFENSE_RANGE_BLOCKS = 40.0D;
 	private static final double DEFENSE_RANGE_SQUARED = DEFENSE_RANGE_BLOCKS * DEFENSE_RANGE_BLOCKS;
 	private static final int DEFENSE_SCAN_RADIUS_BLOCKS = 48;
+	private static final int WALL_POST_SEARCH_RADIUS_BLOCKS = 64;
 	private static final long TASK_MEMORY_TICKS = 40L;
 	private static final long FLETCHING_DECIDE_INTERVAL_TICKS = 320L;
+	private static final long WALL_PATROL_DECIDE_INTERVAL_TICKS = 640L;
 	private static final long DEFENSE_ATTACK_COOLDOWN_TICKS = 20L;
+	private static final long DEFENSE_RETREAT_TICKS = 120L;
+	private static final int RECENT_INJURY_TICKS = 60;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, Long> LAST_ATTACK_TICKS = new HashMap<>();
+	private static final Map<String, Long> RETREAT_UNTIL_TICKS = new HashMap<>();
 
 	private SettlementFletcherWork() {
 	}
@@ -107,7 +115,8 @@ public final class SettlementFletcherWork {
 	public static void maintainLoadedDefense(
 		ServerLevel level,
 		SettlementState settlement,
-		Optional<SettlementDefenseWork.ActiveBellAlarm> activeAlarm
+		Optional<SettlementDefenseWork.ActiveBellAlarm> activeAlarm,
+		Collection<SettlementBuildSite> buildSites
 	) {
 		List<Villager> fletchers = SettlementVillagers.nearbyFletchers(level, settlement);
 
@@ -118,19 +127,38 @@ public final class SettlementFletcherWork {
 		long tick = level.getServer().getTickCount();
 
 		for (Villager fletcher : fletchers) {
+			String fletcherId = fletcher.getUUID().toString();
+			if (wasRecentlyInjured(fletcher)) {
+				RETREAT_UNTIL_TICKS.put(fletcherId, tick + DEFENSE_RETREAT_TICKS);
+			}
+
+			if (RETREAT_UNTIL_TICKS.getOrDefault(fletcherId, 0L) > tick) {
+				retreatFromWall(level, settlement, fletcher, buildSites, tick);
+				continue;
+			}
+
 			List<Monster> hostiles = nearbyHostiles(level, settlement, fletcher);
 			Optional<Monster> target = bellAlarmTarget(fletcher, activeAlarm)
 				.or(() -> nearestHostile(fletcher, hostiles));
+			List<BlockPos> wallPosts = palisadeWallPostsNear(level, buildSites, fletcher.blockPosition());
 			showBow(fletcher);
 			fletcher.setAggressive(target.isPresent() || !hostiles.isEmpty());
 
 			if (target.isEmpty()) {
+				patrolWallIfAvailable(level, fletcher, wallPosts, tick);
 				continue;
 			}
 
 			Monster hostile = target.get();
-			ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("defending_village", tick));
+			ACTIVE_TASKS.put(fletcherId, new TimedTask("defending_village", tick));
 			fletcher.lookAt(hostile, 30.0F, 30.0F);
+
+			Optional<BlockPos> firingPost = bestWallPostForTarget(fletcher, hostile, wallPosts);
+			if (firingPost.isPresent() && !isWithinWorkReach(fletcher, firingPost.get())) {
+				ACTIVE_TASKS.put(fletcherId, new TimedTask("taking_wall_position", tick));
+				moveTo(level, fletcher, firingPost.get(), DEFENSE_WALK_SPEED);
+				continue;
+			}
 
 			if (!fletcher.hasLineOfSight(hostile) || fletcher.distanceToSqr(hostile) > DEFENSE_RANGE_SQUARED) {
 				fletcher.getNavigation().moveTo(hostile.getX(), hostile.getY(), hostile.getZ(), DEFENSE_WALK_SPEED);
@@ -222,6 +250,81 @@ public final class SettlementFletcherWork {
 			.filter(hostile -> hostile.isAlive() && !hostile.isRemoved());
 	}
 
+	private static List<BlockPos> palisadeWallPostsNear(ServerLevel level, Collection<SettlementBuildSite> buildSites, BlockPos nearPos) {
+		if (buildSites.isEmpty()) {
+			return List.of();
+		}
+
+		double maxDistanceSquared = WALL_POST_SEARCH_RADIUS_BLOCKS * WALL_POST_SEARCH_RADIUS_BLOCKS;
+		List<BlockPos> posts = new ArrayList<>();
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.blueprintId() != SettlementBuildSiteType.PALISADE_WALL) {
+				continue;
+			}
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (block.blueprintSymbol().isBlank()
+					|| (block.blueprintSymbol().charAt(0) != 'B' && block.blueprintSymbol().charAt(0) != 'C')) {
+					continue;
+				}
+
+				Optional<BlockPos> slabPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				if (slabPos.isEmpty() || slabPos.get().distSqr(nearPos) > maxDistanceSquared || !level.hasChunkAt(slabPos.get())) {
+					continue;
+				}
+
+				BlockPos standPos = slabPos.get().above();
+				if (!level.getBlockState(slabPos.get()).is(BlockTags.WOODEN_SLABS)
+					|| !level.getBlockState(standPos).isAir()) {
+					continue;
+				}
+
+				posts.add(standPos.immutable());
+			}
+		}
+
+		return posts;
+	}
+
+	private static Optional<BlockPos> bestWallPostForTarget(Villager fletcher, Monster hostile, List<BlockPos> wallPosts) {
+		return wallPosts.stream()
+			.min(Comparator.comparingDouble(post -> post.distSqr(hostile.blockPosition()) + post.distSqr(fletcher.blockPosition()) * 0.35D));
+	}
+
+	private static void patrolWallIfAvailable(ServerLevel level, Villager fletcher, List<BlockPos> wallPosts, long tick) {
+		if (wallPosts.isEmpty()
+			|| !SettlementVillagerWorkSchedule.shouldStartNewWork(level, fletcher, "wall_patrol", WALL_PATROL_DECIDE_INTERVAL_TICKS)) {
+			return;
+		}
+
+		BlockPos post = wallPosts.get(Math.floorMod(fletcher.getUUID().hashCode() + (int) (tick / WALL_PATROL_DECIDE_INTERVAL_TICKS), wallPosts.size()));
+		ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("patrolling_wall", tick));
+		moveTo(level, fletcher, post, DEFENSE_WALK_SPEED);
+	}
+
+	private static void retreatFromWall(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager fletcher,
+		Collection<SettlementBuildSite> buildSites,
+		long tick
+	) {
+		BlockPos retreatPos = SettlementVillagers.fletcherJobSite(level, fletcher)
+			.or(() -> SettlementStockAccess.findStockAccessPos(level, settlement, List.copyOf(buildSites)))
+			.orElse(settlement.center());
+		ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("retreating_from_wall", tick));
+		fletcher.setAggressive(false);
+		moveTo(level, fletcher, retreatPos, DEFENSE_WALK_SPEED);
+	}
+
+	private static boolean wasRecentlyInjured(Villager fletcher) {
+		LivingEntity attacker = fletcher.getLastHurtByMob();
+		return attacker != null
+			&& attacker.isAlive()
+			&& fletcher.tickCount - fletcher.getLastHurtByMobTimestamp() <= RECENT_INJURY_TICKS;
+	}
+
 	private static void fireSkeletonStrengthArrow(ServerLevel level, Villager fletcher, Monster hostile) {
 		ItemStack bow = fletcher.getMainHandItem().is(Items.BOW) ? fletcher.getMainHandItem() : new ItemStack(Items.BOW);
 		ItemStack projectileStack = new ItemStack(Items.ARROW);
@@ -240,6 +343,14 @@ public final class SettlementFletcherWork {
 
 	private static boolean isWithinWorkReach(Villager fletcher, BlockPos workPos) {
 		return fletcher.distanceToSqr(workPos.getX() + 0.5D, workPos.getY() + 0.5D, workPos.getZ() + 0.5D) <= FLETCHING_REACH_DISTANCE_SQUARED;
+	}
+
+	private static void moveTo(ServerLevel level, Villager fletcher, BlockPos pos, double speed) {
+		if (!level.hasChunkAt(pos)) {
+			return;
+		}
+
+		fletcher.getNavigation().moveTo(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, speed);
 	}
 
 	private static void showBow(Villager fletcher) {

@@ -69,7 +69,7 @@ public class PalisadeGatehouseBlock extends Block {
 
 	@Override
 	protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-		return level.isClientSide() ? InteractionResult.SUCCESS : InteractionResult.SUCCESS_SERVER;
+		return InteractionResult.PASS;
 	}
 
 	@Override

@@ -18,6 +18,7 @@ public enum SettlementBuildSiteType implements StringRepresentable {
 	MINE_ENTRANCE("mine_entrance"),
 	PALISADE_GATEHOUSE("palisade_gatehouse"),
 	COPPER_PALISADE_GATEHOUSE("copper_palisade_gatehouse"),
+	PALISADE_WALL("palisade_wall"),
 	ROADWRIGHT_WORKSHOP("roadwright_workshop"),
 	SIMPLE_HOUSING_SHELTER("simple_housing_shelter"),
 	TRADING_POST("trading_post");

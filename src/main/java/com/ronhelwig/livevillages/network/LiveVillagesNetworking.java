@@ -630,6 +630,8 @@ public final class LiveVillagesNetworking {
 					preview.blocks()
 				);
 			}
+		} else if (item == LiveVillagesBlocks.PALISADE_POINT_ITEM) {
+			return Optional.of(palisadePointPreviewSnapshot(player, settlement.get(), placementPos));
 		} else {
 			preview = structurePreviewForHeldWorkstation(level, settlement.get(), placementPos, player.getDirection(), previewStack);
 			settlementName = settlement.get().name();
@@ -642,7 +644,7 @@ public final class LiveVillagesNetworking {
 		int distanceBlocks = (int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition())));
 		String statusMessage = preview.statusMessage();
 		if (item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM || item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM) {
-			statusMessage = palisadeGatehouseRadiusStatus(statusMessage, settlement.orElse(null), placementPos);
+			statusMessage = palisadeRadiusStatus(statusMessage, settlement.orElse(null), placementPos);
 		}
 		return Optional.of(BuildSitePreviewSnapshot.prospective(
 			statusMessage,
@@ -658,7 +660,20 @@ public final class LiveVillagesNetworking {
 			));
 	}
 
-	private static String palisadeGatehouseRadiusStatus(String statusMessage, SettlementState settlement, BlockPos placementPos) {
+	private static BuildSitePreviewSnapshot palisadePointPreviewSnapshot(ServerPlayer player, SettlementState settlement, BlockPos placementPos) {
+		return BuildSitePreviewSnapshot.prospective(
+			palisadeRadiusStatus("", settlement, placementPos),
+			settlement.name(),
+			settlement.id() + ":palisade_point_preview:" + placementPos.getX() + "_" + placementPos.getY() + "_" + placementPos.getZ(),
+			"Palisade Point",
+			(int) Math.round(Math.sqrt(placementPos.distSqr(player.blockPosition()))),
+			true,
+			List.of(),
+			List.of()
+		);
+	}
+
+	private static String palisadeRadiusStatus(String statusMessage, SettlementState settlement, BlockPos placementPos) {
 		if (settlement == null) {
 			return statusMessage;
 		}
@@ -836,6 +851,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
 			|| item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM
 			|| item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM
+			|| item == LiveVillagesBlocks.PALISADE_POINT_ITEM
 			|| item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM
 			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
 			|| item == Items.CARTOGRAPHY_TABLE
@@ -936,25 +952,31 @@ public final class LiveVillagesNetworking {
 				continue;
 			}
 
-			List<BuildSitePreviewBlockView> previewBlocks = previewBlocks(buildSite);
+			SettlementBuildSite previewBuildSite = SettlementConstruction.applyBiomeMaterialPalette(
+				player.level(),
+				settlement.get(),
+				buildSite,
+				player.level().getServer().getTickCount()
+			);
+			List<BuildSitePreviewBlockView> previewBlocks = previewBlocks(previewBuildSite);
 			if (previewBlocks.isEmpty()) {
 				continue;
 			}
 
 			double distanceSquared = Math.min(
 				Math.min(
-					buildSite.origin().distSqr(player.blockPosition()),
-					buildSite.workstationPos().distSqr(player.blockPosition())
+					previewBuildSite.origin().distSqr(player.blockPosition()),
+					previewBuildSite.workstationPos().distSqr(player.blockPosition())
 				),
-				buildSite.anchorPos().distSqr(player.blockPosition())
+				previewBuildSite.anchorPos().distSqr(player.blockPosition())
 			);
 			if (distanceSquared > maxDistanceSquared) {
 				continue;
 			}
 
-			boolean targeted = targetPos.filter(pos -> buildSiteContains(buildSite, pos)).isPresent();
+			boolean targeted = targetPos.filter(pos -> buildSiteContains(previewBuildSite, pos)).isPresent();
 			BuildSitePreviewCandidate candidate = new BuildSitePreviewCandidate(
-				buildSite,
+				previewBuildSite,
 				settlement.get(),
 				previewBlocks,
 				distanceSquared,
@@ -1078,6 +1100,7 @@ public final class LiveVillagesNetworking {
 			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Palisade Gatehouse";
+			case PALISADE_WALL -> "Palisade Wall";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
 			case HOUSING_SHELTER -> "Housing Shelter";
