@@ -68,6 +68,7 @@ Server/debug utilities:
 - `/livevillages settlements inspect`
 - `/livevillages settlements rescan [radiusChunks]`
 - `/livevillages settlements validate`
+- `gamerule live-villages:daily_settlement_reports false|true` to toggle end-of-day report files; it defaults to `false`
 - `gamerule live-villages:surveyor_map_fog false|true` to toggle the surveyor fog-of-war rule; it currently defaults to `false` for playtesting
 
 ## Project Docs

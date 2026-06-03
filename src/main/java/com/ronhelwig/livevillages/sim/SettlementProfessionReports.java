@@ -35,6 +35,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.LiveVillagesGameRules;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 public final class SettlementProfessionReports {
@@ -242,7 +243,7 @@ public final class SettlementProfessionReports {
 	}
 
 	public static void recordTradeBatch(ServerLevel level, SettlementState from, SettlementState to, List<TradeShipment> shipments) {
-		if (level == null || from == null || to == null || shipments == null || shipments.isEmpty()) {
+		if (level == null || !reportsEnabled(level) || from == null || to == null || shipments == null || shipments.isEmpty()) {
 			return;
 		}
 
@@ -263,6 +264,7 @@ public final class SettlementProfessionReports {
 			ServerLevel level = server.getLevel(settlement.dimension());
 
 			if (level == null
+				|| !LiveVillagesGameRules.dailySettlementReportsEnabled(level)
 				|| !level.isLoaded(settlement.center())
 				|| !level.isPositionEntityTicking(settlement.center())) {
 				continue;
@@ -572,7 +574,7 @@ public final class SettlementProfessionReports {
 	}
 
 	private static void onAfterDeath(LivingEntity entity, DamageSource damageSource) {
-		if (!(entity instanceof Villager villager) || !(entity.level() instanceof ServerLevel level)) {
+		if (!(entity instanceof Villager villager) || !(entity.level() instanceof ServerLevel level) || !reportsEnabled(level)) {
 			return;
 		}
 
@@ -707,6 +709,7 @@ public final class SettlementProfessionReports {
 
 	private static boolean isValidRecord(ServerLevel level, SettlementState settlement, String roleKey, String goodsKey, int amount) {
 		return level != null
+			&& reportsEnabled(level)
 			&& settlement != null
 			&& roleKey != null
 			&& !roleKey.isBlank()
@@ -717,10 +720,15 @@ public final class SettlementProfessionReports {
 
 	private static boolean isValidWorkerRecord(ServerLevel level, SettlementState settlement, String roleKey, Villager villager) {
 		return level != null
+			&& reportsEnabled(level)
 			&& settlement != null
 			&& roleKey != null
 			&& !roleKey.isBlank()
 			&& villager != null;
+	}
+
+	private static boolean reportsEnabled(ServerLevel level) {
+		return LiveVillagesGameRules.dailySettlementReportsEnabled(level);
 	}
 
 	private static DailyReport reportFor(ServerLevel level, SettlementState settlement) {

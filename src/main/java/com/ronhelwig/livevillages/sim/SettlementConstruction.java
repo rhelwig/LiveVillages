@@ -92,6 +92,7 @@ public final class SettlementConstruction {
 	private static final int PALISADE_INVALID_WATER_COVERAGE_PERCENT = 15;
 	private static final int PALISADE_PLAYER_OVERRIDE_RADIUS_BLOCKS = 3;
 	private static final int PALISADE_PLAYER_OVERRIDE_MIN_LOGS = 2;
+	private static final double PALISADE_SECURITY_TARGET_RADIUS_RATIO = 0.80D;
 	private static final int LIGHTHOUSE_BASE_LEVELS = 4;
 	private static final int LIGHTHOUSE_TOWER_LEVELS = 4;
 	private static final int LIGHTHOUSE_WATER_RADIUS_BLOCKS = 6;
@@ -1467,7 +1468,10 @@ public final class SettlementConstruction {
 			buildSiteInfrastructure.incompleteLighthouses(),
 			buildSiteInfrastructure.completedTradingPosts(),
 			buildSiteInfrastructure.incompleteTradingPosts(),
-			buildSiteInfrastructure.incompleteCarpenterWorkshops()
+			buildSiteInfrastructure.incompleteCarpenterWorkshops(),
+			buildSiteInfrastructure.completedPalisadeGatehouses(),
+			buildSiteInfrastructure.completedPalisadeWallColumns(),
+			buildSiteInfrastructure.expectedPalisadeWallColumns()
 		);
 	}
 
@@ -1558,6 +1562,8 @@ public final class SettlementConstruction {
 		int incompleteLighthouses = 0;
 		int incompleteTradingPosts = 0;
 		int incompleteCarpenterWorkshops = 0;
+		int completedPalisadeGatehouses = 0;
+		Set<String> completedPalisadeWallColumns = new HashSet<>();
 
 		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
@@ -1582,6 +1588,13 @@ public final class SettlementConstruction {
 				incompleteCarpenterWorkshops++;
 				incompleteCarpenterWorkshopWorkstations.add(buildSite.workstationPos());
 				incompleteCarpenterWorkshopWorkstations.add(buildSite.anchorPos());
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
+				|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE) {
+				if (buildSite.complete()) {
+					completedPalisadeGatehouses++;
+				}
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+				addCompletedPalisadeWallColumns(completedPalisadeWallColumns, buildSite);
 			}
 		}
 
@@ -1593,8 +1606,52 @@ public final class SettlementConstruction {
 			incompleteDocks,
 			incompleteLighthouses,
 			incompleteTradingPosts,
-			incompleteCarpenterWorkshops
+			incompleteCarpenterWorkshops,
+			completedPalisadeGatehouses,
+			completedPalisadeWallColumns.size(),
+			expectedPalisadeWallColumns(settlement)
 		);
+	}
+
+	private static void addCompletedPalisadeWallColumns(Set<String> completedColumns, SettlementBuildSite buildSite) {
+		if (buildSite.complete()) {
+			palisadeWallLogColumns(buildSite).stream()
+				.map(SettlementConstruction::columnKey)
+				.forEach(completedColumns::add);
+			return;
+		}
+
+		Map<String, Integer> placedLogBlocksByColumn = new LinkedHashMap<>();
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (block.blueprintSymbol().isBlank()
+				|| block.blueprintSymbol().charAt(0) != 'L'
+				|| !isDefensivePalisadeBlockStatus(block.status())) {
+				continue;
+			}
+
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			if (blockPos.isEmpty()) {
+				continue;
+			}
+
+			String columnKey = columnKey(blockPos.get());
+			int placedLogBlocks = placedLogBlocksByColumn.getOrDefault(columnKey, 0) + 1;
+			placedLogBlocksByColumn.put(columnKey, placedLogBlocks);
+
+			if (placedLogBlocks >= PALISADE_WALL_HEIGHT_BLOCKS) {
+				completedColumns.add(columnKey);
+			}
+		}
+	}
+
+	private static boolean isDefensivePalisadeBlockStatus(SettlementBuildBlockStatus status) {
+		return status == SettlementBuildBlockStatus.PLACED || status == SettlementBuildBlockStatus.PLAYER_PLACED;
+	}
+
+	private static int expectedPalisadeWallColumns(SettlementState settlement) {
+		double targetRadius = SettlementVillagers.settlementRadiusBlocks(settlement) * PALISADE_SECURITY_TARGET_RADIUS_RATIO;
+		return Math.max(1, (int) Math.round(Math.PI * 2.0D * targetRadius));
 	}
 
 	public static WorkstationBuildResult tryStartCarpenterWorkshopAtWorkstation(
@@ -8083,10 +8140,13 @@ public final class SettlementConstruction {
 		int incompleteLighthouses,
 		int tradingPosts,
 		int incompleteTradingPosts,
-		int incompleteCarpenterWorkshops
+		int incompleteCarpenterWorkshops,
+		int palisadeGatehouses,
+		int palisadeWallColumns,
+		int expectedPalisadeWallColumns
 	) {
 		public static InfrastructureSurvey empty() {
-			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 		}
 
 		public boolean hasLargeWaterBody() {
@@ -8094,6 +8154,10 @@ public final class SettlementConstruction {
 			int adjustedSurfaceColumns = waterSurfaceColumns + dockFootprintColumns;
 			int adjustedDeepWaterColumns = deepWaterColumns + docks * DOCK_LENGTH_BLOCKS;
 			return adjustedSurfaceColumns >= MIN_HARBOR_WATER_SURFACE_COLUMNS && adjustedDeepWaterColumns >= MIN_HARBOR_DEEP_WATER_COLUMNS;
+		}
+
+		public double palisadeCoverage() {
+			return expectedPalisadeWallColumns <= 0 ? 0.0D : Math.min(1.0D, palisadeWallColumns / (double) expectedPalisadeWallColumns);
 		}
 	}
 
@@ -8111,7 +8175,10 @@ public final class SettlementConstruction {
 		int incompleteDocks,
 		int incompleteLighthouses,
 		int incompleteTradingPosts,
-		int incompleteCarpenterWorkshops
+		int incompleteCarpenterWorkshops,
+		int completedPalisadeGatehouses,
+		int completedPalisadeWallColumns,
+		int expectedPalisadeWallColumns
 	) {
 	}
 

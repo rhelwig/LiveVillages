@@ -34,29 +34,81 @@ public final class TradeBoardTrading {
 	public static final int DONATE_BUNDLE_INDEX = 1;
 	public static final int DONATE_ALL_INDEX = 2;
 
-	private static final int PLAYER_TRADE_BUTTON_BASE = 1_000;
-	private static final int VILLAGE_TRADE_BUTTON_BASE = 2_000;
-	private static final int DONATE_BUTTON_BASE = 3_000;
-	private static final int DONATE_CONTENTS_BUTTON_BASE = 4_000;
+	private static final int ACTION_HASH_MODULO = 8_192;
+	private static final int PLAYER_TRADE_BUTTON_BASE = 10_000_000;
+	private static final int VILLAGE_TRADE_BUTTON_BASE = 20_000_000;
+	private static final int DONATE_BUTTON_BASE = 30_000_000;
+	private static final int DONATE_CONTENTS_BUTTON_BASE = 40_000_000;
 	private static final int DONATE_OPTION_COUNT = 3;
+	private static final int DONATE_CONTENTS_ROW_LIMIT = 128;
 
 	private TradeBoardTrading() {
 	}
 
-	public static int playerTradeButtonId(int playerGoodsIndex, int payoutIndex) {
-		return PLAYER_TRADE_BUTTON_BASE + playerGoodsIndex * MAX_TRADE_OPTIONS + payoutIndex;
+	public static int playerTradeButtonId(int playerGoodsIndex, int payoutIndex, String actionKey) {
+		return encodeActionButton(PLAYER_TRADE_BUTTON_BASE, playerGoodsIndex, payoutIndex, MAX_TRADE_OPTIONS, actionKey);
 	}
 
-	public static int villageTradeButtonId(int villageGoodsIndex, int paymentIndex) {
-		return VILLAGE_TRADE_BUTTON_BASE + villageGoodsIndex * MAX_TRADE_OPTIONS + paymentIndex;
+	public static int villageTradeButtonId(int villageGoodsIndex, int paymentIndex, String actionKey) {
+		return encodeActionButton(VILLAGE_TRADE_BUTTON_BASE, villageGoodsIndex, paymentIndex, MAX_TRADE_OPTIONS, actionKey);
 	}
 
-	public static int donateButtonId(int playerGoodsIndex, int donationIndex) {
-		return DONATE_BUTTON_BASE + playerGoodsIndex * DONATE_OPTION_COUNT + donationIndex;
+	public static int donateButtonId(int playerGoodsIndex, int donationIndex, String actionKey) {
+		return encodeActionButton(DONATE_BUTTON_BASE, playerGoodsIndex, donationIndex, DONATE_OPTION_COUNT, actionKey);
 	}
 
-	public static int donateContentsButtonId(int playerGoodsIndex) {
-		return DONATE_CONTENTS_BUTTON_BASE + playerGoodsIndex;
+	public static int donateContentsButtonId(int playerGoodsIndex, String actionKey) {
+		return encodeActionButton(DONATE_CONTENTS_BUTTON_BASE, playerGoodsIndex, 0, 1, actionKey);
+	}
+
+	public static String playerTradeActionKey(TradeBoardInventoryEntryView selectedRow, GoodsTradeOption payout) {
+		return selectedRow == null || payout == null
+			? ""
+			: "player_trade|" + selectedRow.rowKey() + "|" + selectedRow.tradeGoodsKey() + "|" + payout.goodsKey() + "|" + payout.amount();
+	}
+
+	public static String villageTradeActionKey(TradeBoardGoodsView requestedGoods, GoodsTradeOption payment) {
+		return requestedGoods == null || payment == null
+			? ""
+			: "village_trade|" + requestedGoods.goodsKey() + "|" + requestedGoods.tradeBundleSize() + "|" + payment.goodsKey() + "|" + payment.amount();
+	}
+
+	public static String donationActionKey(TradeBoardInventoryEntryView selectedRow) {
+		return selectedRow == null
+			? ""
+			: "donation|" + selectedRow.rowKey() + "|" + selectedRow.stockKey();
+	}
+
+	public static String donateContentsActionKey(TradeBoardInventoryEntryView selectedRow) {
+		return selectedRow == null
+			? ""
+			: "donate_contents|" + selectedRow.rowKey() + "|" + selectedRow.exactItemKey();
+	}
+
+	private static int encodeActionButton(int base, int rowIndex, int optionIndex, int optionCount, String actionKey) {
+		return base + rowIndex * optionCount * ACTION_HASH_MODULO + optionIndex * ACTION_HASH_MODULO + actionHash(actionKey);
+	}
+
+	private static boolean isEncodedActionButton(int buttonId, int base, int rowLimit, int optionCount) {
+		return buttonId >= base && buttonId < base + rowLimit * optionCount * ACTION_HASH_MODULO;
+	}
+
+	private static EncodedActionButton decodeActionButton(int buttonId, int base, int optionCount) {
+		int encoded = buttonId - base;
+		int rowStride = optionCount * ACTION_HASH_MODULO;
+		int rowIndex = encoded / rowStride;
+		int remainder = encoded % rowStride;
+		int optionIndex = remainder / ACTION_HASH_MODULO;
+		int actionHash = remainder % ACTION_HASH_MODULO;
+		return new EncodedActionButton(rowIndex, optionIndex, actionHash);
+	}
+
+	private static boolean actionHashMatches(EncodedActionButton button, String actionKey) {
+		return button != null && button.actionHash() == actionHash(actionKey);
+	}
+
+	private static int actionHash(String actionKey) {
+		return Math.floorMod((actionKey == null ? "" : actionKey).hashCode(), ACTION_HASH_MODULO);
 	}
 
 	public static List<PlayerGoodsOption> playerGoodsOptions(Inventory inventory, TradeBoardSettlementView view) {
@@ -305,14 +357,10 @@ public final class TradeBoardTrading {
 			return false;
 		}
 
-		boolean isPlayerTrade = buttonId >= PLAYER_TRADE_BUTTON_BASE
-			&& buttonId < PLAYER_TRADE_BUTTON_BASE + MAX_TRADE_ROWS * MAX_TRADE_OPTIONS;
-		boolean isVillageTrade = buttonId >= VILLAGE_TRADE_BUTTON_BASE
-			&& buttonId < VILLAGE_TRADE_BUTTON_BASE + MAX_TRADE_ROWS * MAX_TRADE_OPTIONS;
-		boolean isDonation = buttonId >= DONATE_BUTTON_BASE
-			&& buttonId < DONATE_BUTTON_BASE + MAX_TRADE_ROWS * DONATE_OPTION_COUNT;
-		boolean isDonateContents = buttonId >= DONATE_CONTENTS_BUTTON_BASE
-			&& buttonId < DONATE_CONTENTS_BUTTON_BASE + 128;
+		boolean isPlayerTrade = isEncodedActionButton(buttonId, PLAYER_TRADE_BUTTON_BASE, MAX_TRADE_ROWS, MAX_TRADE_OPTIONS);
+		boolean isVillageTrade = isEncodedActionButton(buttonId, VILLAGE_TRADE_BUTTON_BASE, MAX_TRADE_ROWS, MAX_TRADE_OPTIONS);
+		boolean isDonation = isEncodedActionButton(buttonId, DONATE_BUTTON_BASE, MAX_TRADE_ROWS, DONATE_OPTION_COUNT);
+		boolean isDonateContents = isEncodedActionButton(buttonId, DONATE_CONTENTS_BUTTON_BASE, DONATE_CONTENTS_ROW_LIMIT, 1);
 
 		if (!isPlayerTrade && !isVillageTrade && !isDonation && !isDonateContents) {
 			return false;
@@ -326,13 +374,41 @@ public final class TradeBoardTrading {
 		TradeBoardSettlementView view = createTradeView(serverLevel, savedData, settlement);
 		TradeResult result;
 		if (isPlayerTrade) {
-			result = handlePlayerGoodsTrade(serverLevel, player, settlement, view, buttonId - PLAYER_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handlePlayerGoodsTrade(
+				serverLevel,
+				player,
+				settlement,
+				view,
+				decodeActionButton(buttonId, PLAYER_TRADE_BUTTON_BASE, MAX_TRADE_OPTIONS),
+				serverLevel.getServer().getTickCount()
+			);
 		} else if (isVillageTrade) {
-			result = handleVillageGoodsTrade(serverLevel, player, settlement, view, buttonId - VILLAGE_TRADE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleVillageGoodsTrade(
+				serverLevel,
+				player,
+				settlement,
+				view,
+				decodeActionButton(buttonId, VILLAGE_TRADE_BUTTON_BASE, MAX_TRADE_OPTIONS),
+				serverLevel.getServer().getTickCount()
+			);
 		} else if (isDonateContents) {
-			result = handleDonateContents(serverLevel, player, settlement, view, buttonId - DONATE_CONTENTS_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleDonateContents(
+				serverLevel,
+				player,
+				settlement,
+				view,
+				decodeActionButton(buttonId, DONATE_CONTENTS_BUTTON_BASE, 1),
+				serverLevel.getServer().getTickCount()
+			);
 		} else {
-			result = handleDonation(serverLevel, player, settlement, view, buttonId - DONATE_BUTTON_BASE, serverLevel.getServer().getTickCount());
+			result = handleDonation(
+				serverLevel,
+				player,
+				settlement,
+				view,
+				decodeActionButton(buttonId, DONATE_BUTTON_BASE, DONATE_OPTION_COUNT),
+				serverLevel.getServer().getTickCount()
+			);
 		}
 
 		if (!result.success()) {
@@ -355,17 +431,21 @@ public final class TradeBoardTrading {
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
-		int encodedButtonId,
+		EncodedActionButton button,
 		long currentTick
 	) {
-		int rowIndex = encodedButtonId / DONATE_OPTION_COUNT;
-		int donationIndex = encodedButtonId % DONATE_OPTION_COUNT;
+		int rowIndex = button.rowIndex();
+		int donationIndex = button.optionIndex();
 		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
 		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
 			return TradeResult.failure("That inventory row is no longer available.");
 		}
 
 		TradeBoardInventoryEntryView selectedRow = inventoryRows.get(rowIndex);
+		if (!actionHashMatches(button, donationActionKey(selectedRow))) {
+			return TradeResult.failure("That Trade Board row changed. Please try the refreshed button.");
+		}
+
 		if (selectedRow.hasStoredContents()) {
 			return TradeResult.failure("Use Donate contents for that container.");
 		}
@@ -404,15 +484,20 @@ public final class TradeBoardTrading {
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
-		int rowIndex,
+		EncodedActionButton button,
 		long currentTick
 	) {
+		int rowIndex = button.rowIndex();
 		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
 		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
 			return TradeResult.failure("That container is no longer available.");
 		}
 
 		TradeBoardInventoryEntryView selectedRow = inventoryRows.get(rowIndex);
+		if (!actionHashMatches(button, donateContentsActionKey(selectedRow))) {
+			return TradeResult.failure("That Trade Board row changed. Please try the refreshed button.");
+		}
+
 		int slotIndex = selectedRow.slotIndex();
 		if (!selectedRow.hasStoredContents() || slotIndex < 0 || slotIndex >= player.getInventory().getContainerSize()) {
 			return TradeResult.failure("That container does not have any stored contents.");
@@ -470,11 +555,11 @@ public final class TradeBoardTrading {
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
-		int encodedButtonId,
+		EncodedActionButton button,
 		long currentTick
 	) {
-		int rowIndex = encodedButtonId / MAX_TRADE_OPTIONS;
-		int payoutIndex = encodedButtonId % MAX_TRADE_OPTIONS;
+		int rowIndex = button.rowIndex();
+		int payoutIndex = button.optionIndex();
 		List<TradeBoardInventoryEntryView> inventoryRows = playerInventoryRows(player.getInventory(), view);
 		if (rowIndex < 0 || rowIndex >= inventoryRows.size()) {
 			return TradeResult.failure("That inventory row is no longer available.");
@@ -502,6 +587,10 @@ public final class TradeBoardTrading {
 		}
 
 		GoodsTradeOption payout = payoutOptions.get(payoutIndex);
+		if (!actionHashMatches(button, playerTradeActionKey(selectedRow, payout))) {
+			return TradeResult.failure("That trade offer changed. Please try the refreshed button.");
+		}
+
 		Map<String, Integer> stock = new LinkedHashMap<>(settlement.stock());
 		int availablePayout = Math.max(0, stock.getOrDefault(payout.goodsKey(), 0) - targetForGoods(view, payout.goodsKey()));
 		if (availablePayout < payout.amount()) {
@@ -538,11 +627,11 @@ public final class TradeBoardTrading {
 		ServerPlayer player,
 		SettlementState settlement,
 		TradeBoardSettlementView view,
-		int encodedButtonId,
+		EncodedActionButton button,
 		long currentTick
 	) {
-		int villageGoodsIndex = encodedButtonId / MAX_TRADE_OPTIONS;
-		int paymentIndex = encodedButtonId % MAX_TRADE_OPTIONS;
+		int villageGoodsIndex = button.rowIndex();
+		int paymentIndex = button.optionIndex();
 		List<TradeBoardGoodsView> villageGoods = villageGoodsOptions(view);
 
 		if (villageGoodsIndex < 0 || villageGoodsIndex >= villageGoods.size()) {
@@ -564,6 +653,10 @@ public final class TradeBoardTrading {
 		}
 
 		GoodsTradeOption payment = paymentOptions.get(paymentIndex);
+		if (!actionHashMatches(button, villageTradeActionKey(requestedGoods, payment))) {
+			return TradeResult.failure("That trade offer changed. Please try the refreshed button.");
+		}
+
 		if (!TradeBoardTradeRules.removePlayerGoods(player.getInventory(), payment.goodsKey(), payment.amount())) {
 			return TradeResult.failure("The trade failed while removing goods from your inventory.");
 		}
@@ -1044,6 +1137,9 @@ public final class TradeBoardTrading {
 	}
 
 	private record DeliveryResult(int stored, int equipped) {
+	}
+
+	private record EncodedActionButton(int rowIndex, int optionIndex, int actionHash) {
 	}
 
 	private record TradeResult(boolean success, SettlementState updatedSettlement, int supportPoints, String message) {

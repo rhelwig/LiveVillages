@@ -49,6 +49,8 @@
   "item.live-villages.simple_housing_shelter": "Simple Housing Shelter",
   "item.live-villages.surveyor_table": "Surveyor's Table",
   "item.live-villages.trade_board": "Trade Board",
+  "gamerule.live-villages.daily_settlement_reports": "Daily Settlement Reports",
+  "gamerule.live-villages.daily_settlement_reports.description": "Whether loaded settlements write end-of-day profession report files.",
   "gamerule.live-villages.surveyor_map_fog": "Surveyor Map Fog",
   "gamerule.live-villages.surveyor_map_fog.description": "Whether the Surveyor's Table map hides unexplored areas under fog of war.",
   "key.live-villages.capture_structure_blueprint": "Capture Structure Blueprint",

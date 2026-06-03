@@ -282,7 +282,13 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		if (selected != null && selectedIndex >= 0) {
 			if (selected.hasStoredContents()) {
 				addRenderableWidget(
-					Button.builder(Component.literal("Donate contents"), clicked -> sendTradeButton(TradeBoardTrading.donateContentsButtonId(selectedIndex)))
+					Button.builder(
+							Component.literal("Donate contents"),
+							clicked -> sendTradeButton(TradeBoardTrading.donateContentsButtonId(
+								selectedIndex,
+								TradeBoardTrading.donateContentsActionKey(selected)
+							))
+						)
 						.bounds(leftPos + RIGHT_COLUMN_X, topPos + DONATION_BUTTON_Y, DONATE_CONTENTS_BUTTON_WIDTH, ROW_BUTTON_HEIGHT)
 						.build()
 				);
@@ -296,7 +302,11 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			int optionCount = Math.min(DETAIL_OPTION_ROWS, payoutOptions.size());
 
 			for (int index = 0; index < optionCount; index++) {
-				int buttonId = TradeBoardTrading.playerTradeButtonId(selectedIndex, index);
+				int buttonId = TradeBoardTrading.playerTradeButtonId(
+					selectedIndex,
+					index,
+					TradeBoardTrading.playerTradeActionKey(selected, payoutOptions.get(index))
+				);
 				addRenderableWidget(
 					Button.builder(Component.literal("Take"), clicked -> sendTradeButton(buttonId))
 						.bounds(detailButtonX(), topPos + detailOptionRowY(index) - 5, ACTION_BUTTON_WIDTH, ROW_BUTTON_HEIGHT)
@@ -315,7 +325,11 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		int amount = donationAmount(selected, donationIndex);
 		Button button = Button.builder(
 				Component.literal(label),
-				clicked -> sendTradeButton(TradeBoardTrading.donateButtonId(selectedIndex, donationIndex))
+				clicked -> sendTradeButton(TradeBoardTrading.donateButtonId(
+					selectedIndex,
+					donationIndex,
+					TradeBoardTrading.donationActionKey(selected)
+				))
 			)
 			.bounds(
 				leftPos + RIGHT_COLUMN_X + buttonColumn * (DONATION_BUTTON_WIDTH + 4),

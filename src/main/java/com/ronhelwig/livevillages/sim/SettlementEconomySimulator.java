@@ -550,8 +550,9 @@ public final class SettlementEconomySimulator {
 		double defenderPressure = population <= 0 ? 0.0D : ((guards * 0.7D) + (fletchers * 0.45D)) / population;
 		double routeSupport = Math.min(0.18D, routes.size() * 0.03D);
 		double fortificationSupport = defenseLevel * 0.08D;
+		double palisadeSupport = palisadeSecurityBonus(infrastructure);
 		double lighthouseSupport = lighthouseSecurityBonus(infrastructure);
-		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport + lighthouseSupport, 0.05D, 0.95D);
+		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport + palisadeSupport + lighthouseSupport, 0.05D, 0.95D);
 		double blend = clamp(elapsedDays * 0.4D, 0.15D, 1.0D);
 		return clamp(settlement.security() + (targetSecurity - settlement.security()) * blend, 0.0D, 1.0D);
 	}
@@ -911,6 +912,16 @@ public final class SettlementEconomySimulator {
 		}
 
 		return 0.03D + Math.min(0.03D, Math.max(0, infrastructure.lighthouses() - 1) * 0.01D);
+	}
+
+	private static double palisadeSecurityBonus(SettlementConstruction.InfrastructureSurvey infrastructure) {
+		if (!infrastructure.available()) {
+			return 0.0D;
+		}
+
+		double coverageBonus = infrastructure.palisadeCoverage() * 0.18D;
+		double gatehouseBonus = Math.min(0.04D, Math.max(0, infrastructure.palisadeGatehouses()) * 0.01D);
+		return Math.min(0.22D, coverageBonus + gatehouseBonus);
 	}
 
 	private static double scaledLighthouseCount(int lighthouseCount) {

@@ -13,7 +13,8 @@ Ordered implementation work is tracked in [IMPLEMENTATION-PLAN.md](IMPLEMENTATIO
 
 - Every profession should matter in two layers: visible work in loaded chunks and abstract contribution to settlement simulation.
 - Workstations are both job-site anchors and infrastructure signals. A settlement should care whether the right stations exist, and when a player places a recognized workstation the settlement should try to grow the matching structure around or beside that exact block.
-- If a recognized workstation cannot support its associated structure because the site is blocked or invalid, villagers should leave a nearby temporary sign saying `can't build here` instead of silently failing.
+- If a player placed recognized workstation cannot support its associated structure because the site is blocked or invalid, villagers should leave a nearby temporary sign saying `can't build here` instead of silently failing.
+- When a workstation-associated structure includes beds, matching professionals should have first claim on those beds and should be able to reclaim them from non-matching residents when needed, while still letting players displace or reassign beds through normal play.
 - Bulk goods stay in settlement stock. Villagers should carry only small task loads, tools, finished deliveries, or equipment.
 - Vanilla professions should remain useful even before every one receives bespoke AI.
 - New professions should be introduced only when vanilla professions cannot cleanly cover the required behavior.
@@ -21,6 +22,8 @@ Ordered implementation work is tracked in [IMPLEMENTATION-PLAN.md](IMPLEMENTATIO
 - Loaded-world profession work must be bounded and measurable. Cache broad scans, keep villagers committed to a selected task for a short interval, and add timing logs around new tick-driven systems so server lag can be diagnosed before it becomes visible in play.
 - Field professions can work beyond the base settlement radius when their job requires it, but assigned villagers should still keep settlement membership for census, gathering, and bed assignment. Current bounds are `150%` radius for `Miner`, `Fisherman`, and `Forester`, and `200%` radius for `Roadwright`.
 - Terrain-changing workers should share greenspace constraints. Roads, forestry, farming expansion, and future gardening should leave usable grass, flowers, saplings, and trees inside the village instead of optimizing every nearby block for production or travel.
+- Loaded settlement navigation should prefer established roads, paths, bridges, and gate approaches when the detour is reasonable, especially for routine work, gathering, patrols, and route traffic.
+- Villagers and settlement-owned illagers may open doors or gates in palisades and other defensive walls only for their own settlement, and should close those doors after passing through.
 
 ## Vanilla Baseline
 
@@ -64,8 +67,8 @@ Until every vanilla profession has distinct job AI, the simulation can group the
 
 ### Outpost Role Bias
 
-- Pillager outposts should favor offensive or coercive roles such as `Guard`, `Armorer`, `Weaponsmith`, and other raid-support labor.
-- Outposts generally should not spend scarce labor on civilian comfort or village-beautification roles such as `Farmer` or `Gardener` unless a future special-case variant explicitly needs them.
+- Pillager outposts should favor offensive or coercive roles such as `Guard`, `Armorer`, `Weaponsmith`, `Fletcher`, and other raid-support labor.
+- Outposts generally should not spend *scarce* labor on civilian comfort or village-beautification roles such as `Farmer` or `Gardener` unless a future special-case variant explicitly needs them.
 - Outposts may still build required structures without the exact matching profession, but that fallback construction should be slower and less efficient than specialist village labor.
 
 ### Shared Equipment and Defense Rules
@@ -76,7 +79,7 @@ Until every vanilla profession has distinct job AI, the simulation can group the
 - `Sling`: a weaker bow-style ranged weapon with built-in unlimited ammunition.
 - `Crooked Staff`: an improvised melee weapon better than a stick but weaker than any proper vanilla weapon.
 - `Scythe`: a tool-weapon better than a `Crooked Staff` but still weaker than any proper vanilla weapon.
-- `Guards` should receive the first priority for combat upgrades, then `Roadwrights`, then other armed workers.
+- `Guards` and `Fletchers` should receive the first priority for combat upgrades, then `Roadwrights`, then other armed workers. `Fletchers` only wear leather armor at best.
 - `Leatherworkers`, `Weaponsmiths`, and `Armorers` should equip themselves appropriately before distributing spare upgrades to others.
 
 ### Priority Vanilla Role Expansions
@@ -108,6 +111,7 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Settlement behavior: aims for herd sizes that scale with settlement population, then grows them up to a capped trade buffer when active routes exist; first pass should allow as much as about `50%` surplus herd capacity above local needs when the village can actually export the excess. Produces beef, mutton, pork, leather, and husbandry value from culling and herd management, and should be able to export meat surpluses to other villages over active routes
 - Territory rule: the `Smoker` is the profession anchor, not the boundary of the work area; butchers should be able to shear sheep, feed animals, breed herds, and cull stock anywhere inside the settlement's managed livestock space
 - Pen definition: player-built fenced pasture expansions anywhere in the settlement should be claimable by the livestock-management system when they connect cleanly to an existing managed herd area or otherwise qualify as village pasture
+- Migration note: sheep shearing, sheep breeding, wool output, and sheep flock protection belong to `Shepherd` once that role is added; `Butcher` keeps sheep behavior only as a temporary first-pass livestock fallback
 
 ### Mason
 
@@ -121,16 +125,24 @@ These roles already exist in vanilla and should be expanded before adding unnece
 ### Cleric
 
 - Workstation: `Brewing Stand`
-- Loaded-world behavior: brews and maintains healing potions when materials allow, runs from hostiles by default, but will briefly rush in to heal injured defenders before retreating again
+- Loaded-world behavior: brews and maintains healing potions when materials allow, produces at least one healing potion per day when ingredients are available, runs from hostiles by default, but will briefly rush in to heal injured defenders before retreating again
 - Settlement behavior: converts brewing materials into healing support, rare alchemy, and defender recovery
 - Notes: `Cleric` is a deskworker profession and should stay unarmed even when healing in danger
 
 ### Fisherman
 
 - Workstation: `Barrel`
-- Loaded-world behavior: works shorelines, rivers, docks, and harbor edges up to `150%` of the owning settlement radius; periodically adds real `cod` to settlement stock while the loaded villager is actually fishing; uses a docked boat for a visible fishing trip when one is available; returns from that boat in time for the village gathering; and carries a fishing rod or spear/trident
+- Equipment: carries axes for shore defense and fishing gear such as a rod, spear, or trident for fishing work
+- Loaded-world behavior: works shorelines, rivers, docks, and harbor edges up to `150%` of the owning settlement radius; periodically adds real `cod` to settlement stock while the loaded villager is actually fishing; mounts a docked boat that it pilots for a visible fishing trip when one is available; returns from that boat in time for the village gathering; helps defend against hostile mobs approaching by water; and carries a fishing rod or spear/trident
 - Settlement behavior: adds fish and shoreline food output, especially in water-linked settlements; `Docks` and `Lighthouses` should both improve catch volume
 - Structure note: keep `Fisherman` close to vanilla for now. The `Barrel` remains the workstation, and no special Fisherman housing or bespoke staged workstation structure is required in this pass
+
+### Librarian
+
+- Workstation: `Lectern`
+- Loaded-world behavior: studies and copies records, produces at least one `book` or `bookshelf` per day when ingredients are available, and flees from hostile mobs rather than fighting
+- Settlement behavior: converts paper, leather, planks, and written knowledge into books, bookshelves, recordkeeping value, and early knowledge support
+- Notes: `Librarian` remains a vanilla deskworker and should overlap with, but not replace, later `Scribe` recipe-exchange work
 
 ### Fletcher
 
@@ -143,7 +155,7 @@ These roles already exist in vanilla and should be expanded before adding unnece
 ### Leatherworker
 
 - Workstation: `Cauldron`
-- Loaded-world behavior: processes hides, wears a full set of leather armor, and once per week equips one villager who lacks a breastplate with a leather breastplate when leather stock allows
+- Loaded-world behavior: processes hides, wears a full set of leather armor, produces at least one piece of leather armor per day when ingredients are available, and equips villagers who lack basic armor when spare leather armor stock allows
 - Settlement behavior: turns hides into early armor, utility goods, and transport-adjacent leather equipment
 
 ### Shepherd
@@ -151,6 +163,7 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Workstation: `Loom`
 - Loaded-world behavior: manages sheep flocks, maintains fences, feeds sheep, collects wool, and defends the flock from wolves or hostile mobs with a sling at range and a crooked staff up close
 - Settlement behavior: adds wool, flock stability, and future textile support while protecting pasture productivity
+- Migration note: when `Shepherd` is implemented, sheep-related functionality should move from `Butcher` to `Shepherd`, leaving `Butcher` focused on meat animals, culling, leather, and food trade
 
 ### Armorer
 
@@ -211,9 +224,9 @@ These are the professions the mod adds or explicitly plans beyond vanilla's base
 - Worker-profession workstations generally support one or two villagers rather than exactly one; their associated structures should prefer assigning internal beds to matching professionals and can use a second bed when the village needs another worker. Guard Posts are the larger exception and should support up to five Guards.
 - Construction material should come from settlement stock or villager inventories, with basic conversion from adaptable raw materials such as logs into planks, stairs, slabs, fences, gates, or doors.
 - Adult non-Nitwit villagers may help with general construction once higher-priority profession work is satisfied. Unemployed villagers should be available immediately, while specialists can later get faster placement or carry bonuses for matching materials.
-- Professional high-priority work outranks generic construction, except that a villager should finish the current single-block action before switching. Guards may interrupt immediately for imminent hostile threats.
+- Professional high-priority work outranks generic construction, except that a villager should finish the current single-block action before switching. Guards and Fletchers may interrupt immediately for imminent hostile threats.
 - Villagers in loaded chunks should visibly visit an adjacent access tile at the `Trade Board` or completed `Trading Post` to deposit collected items or retrieve needed construction materials, especially when their personal inventory is close to full. End-of-day deposits should happen before the evening gathering and can appear as `Depositing into Trading Post`. Villagers should not target the board block itself as a walking destination.
-- Loaded-settlement daily reports should be written near the end of each in-game day to the `livevillages_exports` folder, named `<village-name>-report-<day number>.txt`; if sleep skips the write window, the previous loaded day should still be written after the day rolls over. Reports should include a section for every vanilla and Live Villages profession, including professions with no assigned villagers or no matching workstation in the settlement. Assigned villagers should list actual completed work observed that day, include any custom nametag name, and summarize exact blocks mined or harvested, produced goods, mined drops, recovered goods, and work-consumed goods. Reports should also include inter-settlement trade batches that affected the loaded village, such as what it sent and what it received. Reports should not include observed intent states or simulated stock credits as villager work. Death/status notes should also appear.
+- Loaded-settlement daily reports are optional and controlled by the default-off `live-villages:daily_settlement_reports` game rule. When enabled, they should be written near the end of each in-game day to the `livevillages_exports` folder, named `<village-name>-report-<day number>.txt`; if sleep skips the write window, the previous loaded day should still be written after the day rolls over. Reports should include a section for every vanilla and Live Villages profession, including professions with no assigned villagers or no matching workstation in the settlement. Assigned villagers should list actual completed work observed that day, include any custom nametag name, and summarize exact blocks mined or harvested, produced goods, mined drops, recovered goods, and work-consumed goods. Reports should also include inter-settlement trade batches that affected the loaded village, such as what it sent and what it received. Reports should not include observed intent states or simulated stock credits as villager work. Death/status notes should also appear.
 - Villages should not queue duplicate staged structures, upgrades, or repairs while an equivalent build site is already in progress, and damaged completed structures should reopen as repair work rather than creating replacement duplicates.
 - Later housing expansion can add staged second-floor apartment upgrades to compatible completed workstation structures, with accessible stairs, a small door platform, and housing credit only after completion.
 
@@ -275,6 +288,7 @@ Workstation names such as `Miner Workstation` are current working names carried 
 - Donations: accepts weapons, armor, shields, ammunition, pillager banners, and similar spoils of war; donated pillager banners should become `Desecrated Enemy Banner` trophies for the associated Guard structure
 - Loaded-world behavior: patrols gates, warehouses, roads, docks, and raid approaches; escorts high-value traffic when needed; and fights with swords, armor, and shields when available
 - Settlement behavior: raises security, improves route safety, reduces raid losses, consumes weapons, armor, food, shield, and ammunition support, and displays `Desecrated Enemy Banners` as a visible record of defended raids or defeated pillager bands
+- Decoration rule: `Desecrated Enemy Banners` should look like regular pillager banners with a red circle and red slash painted over the existing design; Guard Posts may place them as optional exterior decoration in prominent locations that do not interfere with doors, paths, firing positions, storage, or other functionality
 - Change introduced by Live Villages: turns village defense into an explicit staffed profession
 
 ### Roadwright
@@ -294,7 +308,8 @@ Workstation names such as `Miner Workstation` are current working names carried 
 
 - Workstation: `Portmaster's Anchor`
 - Associated structure note: no dedicated house or office; the anchor is the job-site and shoreline placement signal, and nearby `Dock` construction should prefer that anchor's facing when the harbor allows it
-- Loaded-world behavior: patrols between the anchor, docks, and lighthouses; validates harbors; keeps dock-and-lighthouse infrastructure visibly staffed; extinguishes lighthouse fires in the morning; relights them shortly before the village gathering period; and uses threatened lighthouses as harbor-warning points when nearby hostiles approach
+- Equipment: carries a sword and should be treated as harbor-defense capable
+- Loaded-world behavior: patrols between the anchor, docks, and lighthouses; validates harbors; keeps dock-and-lighthouse infrastructure visibly staffed; defends against mobs entering the settlement via water; extinguishes lighthouse fires in the morning; relights them shortly before the village gathering period; toggles lighthouse-top campfires from ground level without needing to navigate up the lighthouse; and uses threatened lighthouses as harbor-warning points when nearby hostiles approach
 - Settlement behavior: improves harbor trade value and route throughput where docks or lighthouses already exist, and prepares the settlement-side role needed for later true water-route logic
 - Visual identity: should read immediately as harbor staff, with a blue-and-brass maritime palette that works with the wide hat and spyglass silhouette already used for the role
 - Change introduced by Live Villages: creates a true harbor-logistics role instead of treating water trade as ordinary villager travel
@@ -302,8 +317,10 @@ Workstation names such as `Miner Workstation` are current working names carried 
 ### Scribe
 
 - Workstation: `Scribe Desk`
-- Loaded-world behavior: works in archives or offices, studies books and maps, records settlement needs, and exchanges knowledge with visitors
-- Settlement behavior: stores and trades recipe knowledge, profession techniques, route intelligence, and civic records; may consume paper, books, or mapped data instead of bulk raw materials
+- Physical form: a wooden desk `3` blocks wide, `1` block tall, and `1` block deep
+- Loaded-world behavior: works in archives or offices, studies books and maps, records settlement needs, exchanges knowledge with visitors, and supports a player-facing recipe-trade interface at the `Scribe Desk`
+- Settlement behavior: stores and trades recipe knowledge, profession techniques, route intelligence, and civic records; may consume paper, books, or mapped data instead of bulk raw materials; can trade recipe knowledge with players and other settlements
+- Player-use behavior: using a `Scribe Desk` should open a recipe-trading interface. If the settlement knows a recipe, the player can obtain that recipe through the Scribe even without triggering the vanilla discovery condition, such as learning a boat recipe from a settlement before ever stepping into water.
 - Change introduced by Live Villages: gives knowledge exchange an explicit worker and workstation rather than leaving it implied inside other trade roles
 - Notes: `Scribe` should remain unarmed and flee like other deskworkers
 
@@ -357,9 +374,10 @@ Not every important workstation-like block needs to represent a separate village
 
 ## Immediate Planning Takeaways
 
-- Vanilla professions remain part of the workforce and should be mapped into useful settlement labor instead of being ignored.
-- `Trademaster` and `Carpenter` are real custom professions; `Mason` should still take on more explicit shared construction labor.
-- `Cartographer`, `Farmer`, `Butcher`, and `Mason` should all gain stronger settlement-specific behavior before adding redundant replacement professions.
-- `Roadwright` should own both route creation and route improvement, while `Cartographer` provides the long-range survey gate for distant trade.
-- The next wave of custom roles should cover the missing settlement-scale jobs that vanilla does not model well: timber, mining, beauty/comfort work, security, roads, harbors, and knowledge.
-- Every profession design should answer the same two questions: what the villager visibly does in the world, and what that job changes in the settlement ledger.
+- Finish vanilla profession expansion before inventing duplicate custom roles: `Cleric`, `Librarian`, and `Leatherworker` now need daily production loops, while `Shepherd` should take sheep work over from the temporary `Butcher` fallback.
+- Keep bed-bearing profession structures coupled to staffing and home assignment: matching workers get priority for those beds, and structure capacity should follow actual completed linked beds.
+- Make loaded movement settlement-aware: routine navigation should prefer roads and paths, defensive-wall doors should be used only by own-settlement villagers or illagers, and those doors should be closed after passage.
+- Keep defense visible and place-based: `Guard Posts` may display optional `Desecrated Enemy Banner` trophies, `Fishermen` and `Portmasters` help against waterborne threats, and harbor lighting can be operated from practical ground-level work.
+- Make reporting opt-in: daily settlement reports are controlled by `live-villages:daily_settlement_reports` and default off, even though the report format remains the same when enabled.
+- Treat `Scribe` as the recipe-knowledge role: the `Scribe Desk` is a three-block wooden desk with a player-facing recipe-trade interface and settlement-to-settlement recipe exchange hooks.
+- Every profession design should still answer the same two questions: what the villager visibly does in the world, and what that job changes in the settlement ledger.

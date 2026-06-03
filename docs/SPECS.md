@@ -397,7 +397,7 @@ Loaded settlements should reconcile abstract stock with visible villager behavio
 - Depositing transfers items out of the villager's inventory and into the settlement warehouse ledger. Retrieving transfers needed materials from the ledger or physical storage into the villager's inventory.
 - A villager nearing a full inventory should treat depositing as high-priority work. For example, a miner carrying too much cobblestone should visit the `Trade Board` before continuing low-priority work.
 - End-of-day deposits are valid visible behavior. For example, a farmer may harvest wheat and carrots during the day, then visit the `Trading Post` so settlement stock increases and personal inventory decreases at that moment.
-- Near the end of each in-game day, loaded settlements should write a daily village report to the `livevillages_exports` folder alongside structure-capture exports. If the player sleeps through the late-night write window, the previous loaded day should still be flushed on the next server tick after the day rolls over. The file name should be `<village-name>-report-<day number>.txt`, and the report should have a section for every vanilla and Live Villages profession even when no villagers are assigned or no matching workstation exists. Assigned villagers should list actual completed work observed that day, including any custom nametag name: exact blocks mined or harvested, settlement goods produced, mined, recovered, and consumed for work. Reports should also summarize inter-settlement trade batches that affected the loaded village, including goods sent and goods received. Reports should not list observed intent states or attribute abstract simulation stock credits to individual villagers. Death/status notes should also be included.
+- Daily settlement reports are optional and controlled by the `live-villages:daily_settlement_reports` game rule, which defaults to `false`. When enabled, loaded settlements should write a daily village report near the end of each in-game day to the `livevillages_exports` folder alongside structure-capture exports. If the player sleeps through the late-night write window, the previous loaded day should still be flushed on the next server tick after the day rolls over. The file name should be `<village-name>-report-<day number>.txt`, and the report should have a section for every vanilla and Live Villages profession even when no villagers are assigned or no matching workstation exists. Assigned villagers should list actual completed work observed that day, including any custom nametag name: exact blocks mined or harvested, settlement goods produced, mined, recovered, and consumed for work. Reports should also summarize inter-settlement trade batches that affected the loaded village, including goods sent and goods received. Reports should not list observed intent states or attribute abstract simulation stock credits to individual villagers. Death/status notes should also be included.
 - Loaded profession loops should emit throttled diagnostics when workers exist but do not complete work, including the settlement id, profession, reason, and concise stock/path/workstation context. These logs are for playtest debugging and should stay bounded rather than logging every tick.
 - Miner diagnostics should report no operational mine entrance, no matching mine site, no selected task, movement toward a chosen task, failed task execution, mine-escape/rescue movement, and daily mining cap conditions with concise shaft, ladder, stock, target, and reachability context.
 - Basic crafting from raw materials may happen automatically for construction. If a project needs oak stairs but stock has only oak logs, villagers may craft logs into planks and planks into stairs at a rate based on available villagers and relevant professions.
@@ -435,6 +435,7 @@ Settlements can trade both goods and knowledge.
 - Villages should be able to trade recipes, techniques, and profession knowledge as well as physical items.
 - Example: one settlement can teach another how to make iron pickaxes or brick.
 - A knowledge workstation such as a `Scribe Desk` can gate higher-level knowledge exchange.
+- The `Scribe Desk` should be a wooden `3x1x1` workstation. Using it should open a recipe-trading interface where players can buy or exchange for recipes the settlement already knows, even if the player has not triggered the corresponding vanilla recipe discovery condition.
 - A settlement may need matching knowledge infrastructure on both ends before some recipe trades are allowed.
 - This implies that villages track their known recipes. All villages should start out with enough recipes known to function and grow.
 
@@ -546,7 +547,7 @@ A lighthouse is a harbor structure rather than a workstation. It should be visua
 - Trade-range extensions should be cumulative so future harbor or knowledge infrastructure can stack with existing range bonuses.
 - Multiple lighthouses should be allowed in the same settlement, but only the first lighthouse should provide the major harbor-range and trade boost. Additional lighthouses should add only minor extra water-range and trade-value gains.
 - Lighthouses should also add a modest security benefit for harbor settlements and act as a visible harbor-warning point during nearby hostile pressure.
-- Loaded `Portmasters` should extinguish lighthouse fires in the morning, relight them shortly before the daily gathering window, and use threatened lighthouses as a raid-warning point when hostiles approach the harbor.
+- Loaded `Portmasters` should help defend against mobs entering by water, extinguish lighthouse fires in the morning, relight them shortly before the daily gathering window from ground level, and use threatened lighthouses as a raid-warning point when hostiles approach the harbor.
 
 ## Worker Roles and Workstations
 
@@ -732,7 +733,7 @@ Key planned settlement-specific roles:
   - Harbor-range bonuses from docks, cartographic knowledge, scribal knowledge, and lighthouses should widen the map's known-port coverage cumulatively.
   - Harbor terrain knowledge should accumulate over time from loaded exploration instead of being rebuilt only from the chunks currently loaded when the map opens.
   - Shared harbor charting should come from a saved dimension-wide knowledge cache so different anchors can benefit from previously explored coastlines and sea lanes.
-- `Scribe`: handles recipe and knowledge exchange, and preserves settlement tier knowledge so a settlement with `Scribe` support does not regress when temporary losses would otherwise drop it below an already reached tier threshold.
+- `Scribe`: handles recipe and knowledge exchange through the `Scribe Desk`, supports recipe trades with players and other settlements, and preserves settlement tier knowledge so a settlement with `Scribe` support does not regress when temporary losses would otherwise drop it below an already reached tier threshold.
 
 Additional shared or planned workstations and civic structures include:
 
@@ -910,7 +911,8 @@ Additional shared or planned workstations and civic structures include:
 - `Farmers` carry hoes and scythes.
 - `Gardeners` carry slings.
 - `Shepherds` carry slings and crooked staffs.
-- `Fishermen` carry spears or tridents.
+- `Fishermen` carry axes for shore defense and fishing gear such as rods, spears, or tridents for fishing work.
+- `Portmasters` carry swords and help defend harbor approaches.
 - `Foresters` carry axes and hoes.
 - `Miners` carry pickaxes.
 - `Beekeepers` wear mostly white protective suits and carry shears when available; their task loadout should also account for glass bottles and flowers.
@@ -927,6 +929,12 @@ Additional shared or planned workstations and civic structures include:
 - `Leatherworkers` should wear leather armor and slowly distribute spare leather breastplates when stock allows.
 - `Weaponsmiths` and `Armorers` should equip the best gear available to their role and then upgrade other villagers over time.
 - `Guards` should be first priority for sword, breastplate, shield, and similar combat upgrades; `Roadwrights` should be the next priority after guards.
+
+### Vanilla Profession Production Targets
+
+- `Clerics` should produce at least one healing potion per day when ingredients are available.
+- `Librarians` should produce at least one `book` or `bookshelf` per day when ingredients are available.
+- `Leatherworkers` should produce at least one piece of leather armor per day when ingredients are available.
 
 ### Fletching Table Use
 
@@ -1024,6 +1032,7 @@ The first-pass `Tier 1` settlement wall should be a simple wooden palisade that 
 - Players may also craft and place a dedicated `Palisade Point` marker block. It marks a non-gate wall control point that should be included in the settlement's planned palisade line.
 - The `Palisade Gatehouse` placement block contributes all recipe ingredients directly to that gatehouse build site. The logs, bars, and door are site-bound materials for the gatehouse, not general settlement stock.
 - The placed gatehouse block should be replaced by the door ingredient once the build is committed. If exact door-item preservation is not practical in the first pass, the implementation should record that limitation explicitly and keep the behavior ready for later exact-ingredient persistence.
+- Villagers and settlement-owned illagers may use palisade gatehouse doors and other settlement defensive-wall doors only for their own settlement, and should close the door after passing through.
 - Existing palisade gatehouse build sites from earlier saves should be normalized in loaded-world maintenance so their marker column is repaired into the expected lower and upper door blocks without requiring the player to replace the marker manually.
 - Gatehouse bars should preserve the crafted bar variant. A gatehouse crafted with copper bars should build with copper bars; one crafted with iron bars should build with iron bars. Copper bars remain acceptable as they oxidize or are waxed; oxidized copper bar blocks should not make a copper gatehouse read as incomplete. Separate marker blocks are acceptable if that is the simplest reliable persistence model.
 - A placed `Palisade Gatehouse` should support eight horizontal placement directions: north, south, east, west, northeast, northwest, southeast, and southwest. Diagonal placement is allowed so the gatehouse can sit along diagonal palisade runs.
@@ -1046,7 +1055,7 @@ The first-pass `Tier 1` settlement wall should be a simple wooden palisade that 
 - Vegetation handling: trees, leaves, brush, and similar removable natural blocks should be cleared or cut back as needed instead of preventing a valid palisade segment
 - Walkability: the stair access, landing, and interior slab run should be usable by guards or workers in loaded chunks so defenders can fire projectiles over the wall. The first pass does not need a perfectly continuous battlement-grade walkway everywhere, but it should clearly function as an interior fighting position. Interior slabs should be placed at the highest available position that still leaves at least one wall block above them, while smoothing adjacent slab heights so neighboring slabs differ by no more than one half block wherever terrain makes that physically possible.
 - Defense effect: the wall should physically slow or block ordinary hostile entry where the geometry is complete, not only raise an abstract security number
-- Simulation effect: a completed palisade should add a meaningful security bonus and a modest visible-settlement prestige / comfort benefit
+- Simulation effect: a completed palisade should add a meaningful security bonus and a modest visible-settlement prestige / comfort benefit. First-pass security should count completed gatehouses and proven palisade wall columns from staged wall build sites, scaling the wall bonus by coverage of the expected Tier 1 perimeter instead of granting a flat all-or-nothing reward.
 
 ## Security, Guards, and Hostile Outposts
 
@@ -1061,7 +1070,8 @@ Guard infrastructure should make defended history visible:
 
 - The `Guard Post` / Guard shack should accept donated weapons, armor, shields, ammunition, and spoils of war.
 - Donated pillager banners and similar raid trophies should be converted into `Desecrated Enemy Banner` display trophies rather than used as normal decoration.
-- Completed Guard structures should be able to mount `Desecrated Enemy Banners` as a visible count or record of raids and pillager bands the village has survived.
+- `Desecrated Enemy Banners` should visually read as regular pillager banners with a red circle and red slash painted over the banner design.
+- Completed Guard structures should be able to mount `Desecrated Enemy Banners` as optional exterior trophies in prominent places that do not interfere with doors, paths, firing positions, storage, or other functionality.
 - Spoils-of-war donations should contribute to security, morale, or guard equipment support, with tuning kept modest so trophies are meaningful without becoming required progression.
 
 Low-security settlements should suffer:
@@ -1144,6 +1154,7 @@ The abstract simulation still matters for unloaded or distant settlements, but i
 - When a managed composter has produced bone meal, or loose nearby `bone_meal` is available in the farm territory, farmers should collect it and spend it on the least-ready eligible crops, with a bias toward crop types the settlement needs most.
 - Loose nearby `leaf_litter` should be collected and deposited into the managed composter. Short and tall grass inside the farm territory should be trimmable by farmers; trimming can yield seeds and should also produce a small randomized amount of `leaf_litter` for composting. Zero remains a valid outcome if tuning lands there. Wheat harvests may also contribute a small virtual `leaf_litter` yield to keep the compost loop active.
 - Loaded workers should remember recently unreachable tasks for a short time so they do not repeatedly path into the same blocked or invalid target.
+- Loaded settlement movement should prefer established roads, paths, bridges, and gate approaches when the detour is reasonable, especially for routine work, patrols, evening gathering, and trade-route travel.
 - Non-urgent loaded-worker chores should respect time of day and bad weather rather than running with the same urgency at all times.
 - Late in the village day, villagers should keep the vanilla-feeling bell gathering routine as an explicit social task before returning to their claimed home beds for the night.
 - Evening gathering should resolve its anchor in this order: a real `Bell` / `MEETING` POI when present, otherwise the settlement's `Trade Board` or completed `Trading Post`, otherwise another non-home POI near the settlement center, and only then the raw settlement center as a last resort. When that anchor is a workstation-like or bell-like POI, villagers should target a standable nearby access tile rather than trying to occupy the exact POI block itself.
