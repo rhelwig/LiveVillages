@@ -38,26 +38,53 @@ public final class SettlementEconomyRules {
 		new TargetRule("mutton", population -> 3 + population),
 		new TargetRule("pork", population -> 3 + population),
 		new TargetRule("leather", population -> 0),
+		new TargetRule("wheat_seeds", population -> 0),
 		new TargetRule("cod", population -> 6 + population * 2),
 		new TargetRule("wheat", population -> 16 + population * 6),
 		new TargetRule("carrot", population -> 8 + population * 3),
 		new TargetRule("potato", population -> 8 + population * 3),
 		new TargetRule("beetroot", population -> 6 + population * 2),
 		new TargetRule("wool", population -> 0),
+		new TargetRule("paper", population -> 0),
+		new TargetRule("book", population -> 2 + population / 4),
+		new TargetRule("bookshelf", population -> 1 + population / 12),
+		new TargetRule("glass_bottle", population -> 0),
+		new TargetRule("nether_wart", population -> 0),
+		new TargetRule("glistering_melon_slice", population -> 0),
+		new TargetRule("honey_bottle", population -> 0),
+		new TargetRule("honeycomb", population -> 0),
+		new TargetRule("candle", population -> 0),
+		new TargetRule("shears", population -> 0),
+		new TargetRule("healing_potion", population -> 1 + population / 8),
+		new TargetRule("leather_helmet", population -> 0),
+		new TargetRule("leather_chestplate", population -> 1 + population / 8),
+		new TargetRule("leather_leggings", population -> 0),
+		new TargetRule("leather_boots", population -> 0),
+		new TargetRule("iron_sword", population -> 1 + population / 8),
+		new TargetRule("iron_pickaxe", population -> 1 + population / 8),
+		new TargetRule("iron_helmet", population -> 0),
+		new TargetRule("iron_chestplate", population -> 0),
+		new TargetRule("iron_leggings", population -> 0),
+		new TargetRule("iron_boots", population -> 0),
+		new TargetRule("shield", population -> 0),
+		new TargetRule("desecrated_enemy_banner", population -> 0),
 		new TargetRule("logs", population -> 12 + population * 6),
 		new TargetRule("planks", population -> 16 + population * 8),
 		new TargetRule("stairs", population -> 0),
 		new TargetRule("slab", population -> 0),
+		new TargetRule("trapdoor", population -> 0),
 		new TargetRule("stick", population -> 0),
 		new TargetRule("flint", population -> 0),
 		new TargetRule("feather", population -> 0),
 		new TargetRule("arrow", population -> 0),
 		new TargetRule("apple", population -> 0),
 		new TargetRule("egg", population -> 0),
+		new TargetRule("bone_meal", population -> 0),
 		new TargetRule("milk_bucket", population -> 0),
 		new TargetRule("sugar", population -> 0),
 		new TargetRule("cocoa_beans", population -> 0),
 		new TargetRule("pumpkin", population -> 0),
+		new TargetRule("flower", population -> 0),
 		new TargetRule("oak_sapling", population -> 0),
 		new TargetRule("spruce_sapling", population -> 0),
 		new TargetRule("birch_sapling", population -> 0),
@@ -71,6 +98,8 @@ public final class SettlementEconomyRules {
 		new TargetRule("dirt", population -> 0),
 		new TargetRule("ladder", population -> 0),
 		new TargetRule("milepost", population -> 0),
+		new TargetRule("campfire", population -> 0),
+		new TargetRule("bee_hive", population -> 0),
 		new TargetRule("iron_ingot", population -> 4 + population * 2),
 		new TargetRule("gold_ingot", population -> 0),
 		new TargetRule("emerald", population -> 4 + population)
@@ -320,6 +349,62 @@ public final class SettlementEconomyRules {
 			}
 
 			if (goodsKey.equals("flint") || goodsKey.equals("feather")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("copper_nugget")) {
+				return 8;
+			}
+		}
+
+		if (settlement.population().getOrDefault(SettlementRoleKeys.GARDENER, 0) > 0) {
+			if (goodsKey.equals("wheat_seeds")) {
+				return 16;
+			}
+
+			if (goodsKey.equals("bone_meal")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("dirt")) {
+				return 12;
+			}
+
+			if (goodsKey.equals("trapdoor")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("egg")) {
+				return 8;
+			}
+		}
+
+		if (settlement.population().getOrDefault(SettlementRoleKeys.BEEKEEPER, 0) > 0) {
+			if (goodsKey.equals("glass_bottle")) {
+				return 12;
+			}
+
+			if (goodsKey.equals("shears")) {
+				return 1;
+			}
+
+			if (goodsKey.equals("campfire")) {
+				return 2;
+			}
+
+			if (goodsKey.equals("honey_bottle") || goodsKey.equals("honeycomb")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("candle")) {
+				return 8;
+			}
+
+			if (goodsKey.equals("bee_hive")) {
+				return 3;
+			}
+
+			if (goodsKey.equals("flower")) {
 				return 8;
 			}
 		}

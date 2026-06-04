@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "F": "#minecraft:fences",
+    "I": "minecraft:iron_bars",
+    "P": "#minecraft:planks",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    "IFI",
+    "PPP",
+    "S S"
+  ],
+  "result": {
+    "id": "live-villages:guard_post"
+  }
+}

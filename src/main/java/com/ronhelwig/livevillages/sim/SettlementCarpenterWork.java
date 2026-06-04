@@ -62,7 +62,7 @@ public final class SettlementCarpenterWork {
 
 			BlockPos workPos = SettlementVillagers.carpenterJobSite(level, carpenter)
 				.orElseGet(() -> SettlementStockAccess.findStockAccessPos(level, settlement, buildSites.stream().toList()).orElse(settlement.center()));
-			steerCarpenterTowardWork(carpenter, workPos);
+			steerCarpenterTowardWork(level, settlement, carpenter, workPos);
 			showCarpenterTool(carpenter);
 			ACTIVE_CARPENTRY_TASKS.put(carpenter.getUUID().toString(), tick);
 
@@ -244,8 +244,8 @@ public final class SettlementCarpenterWork {
 			|| goodsKey.equals("door");
 	}
 
-	private static void steerCarpenterTowardWork(Villager carpenter, BlockPos workPos) {
-		carpenter.getNavigation().moveTo(workPos.getX() + 0.5D, workPos.getY(), workPos.getZ() + 0.5D, CARPENTRY_WALK_SPEED);
+	private static void steerCarpenterTowardWork(ServerLevel level, SettlementState settlement, Villager carpenter, BlockPos workPos) {
+		SettlementNavigation.moveToRoutineTarget(level, settlement, carpenter, workPos, CARPENTRY_WALK_SPEED);
 	}
 
 	private static boolean isWithinWorkReach(Villager carpenter, BlockPos workPos) {

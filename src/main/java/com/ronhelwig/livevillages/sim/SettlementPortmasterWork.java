@@ -7,9 +7,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -30,8 +33,13 @@ public final class SettlementPortmasterWork {
 	private static final long VILLAGE_GATHERING_START_TICK = 9_000L;
 	private static final long WARNING_BELL_INTERVAL_TICKS = 200L;
 	private static final int HARBOR_THREAT_SCAN_RADIUS_BLOCKS = 32;
+	private static final double HARBOR_DEFENSE_MELEE_RANGE_SQUARED = 4.0D;
+	private static final double HARBOR_DEFENSE_SPEED = 1.05D;
+	private static final long HARBOR_DEFENSE_ATTACK_COOLDOWN_TICKS = 20L;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<BlockPos, Long> LAST_WARNING_BELL_TICKS = new HashMap<>();
+	private static final Map<String, Long> LAST_DEFENSE_ATTACK_TICKS = new HashMap<>();
+	private static final Map<String, Long> LAST_REPORTED_TASK_DAY = new HashMap<>();
 
 	private SettlementPortmasterWork() {
 	}
@@ -57,6 +65,14 @@ public final class SettlementPortmasterWork {
 		}
 
 		for (Villager portmaster : portmasters) {
+			Optional<Monster> harborThreat = nearestHarborThreat(level, settlement, portmaster, docks, lighthouses);
+
+			if (harborThreat.isPresent()) {
+				ACTIVE_TASKS.put(portmaster.getUUID().toString(), new TimedTask("defending_harbor", tick));
+				engageHarborThreat(level, settlement, portmaster, harborThreat.get(), tick);
+				continue;
+			}
+
 			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, portmaster, "harbor", HARBOR_DECIDE_INTERVAL_TICKS)) {
 				if (SettlementVillagerWorkSchedule.isTakingBreak(level, portmaster)) {
 					portmaster.getNavigation().stop();
@@ -68,7 +84,14 @@ public final class SettlementPortmasterWork {
 			HarborTask task = chooseHarborTask(level, settlement, portmaster, docks, lighthouses, tick);
 			ACTIVE_TASKS.put(portmaster.getUUID().toString(), new TimedTask(task.taskKey(), tick));
 			showPortmasterTool(portmaster);
-			portmaster.getNavigation().moveTo(task.targetPos().getX() + 0.5D, task.targetPos().getY(), task.targetPos().getZ() + 0.5D, HARBOR_WALK_SPEED);
+			SettlementNavigation.moveToRoutineTarget(
+				level,
+				settlement,
+				portmaster,
+				task.targetPos(),
+				HARBOR_WALK_SPEED,
+				SettlementVillagers.professionWorkRadiusBlocks(settlement, SettlementRoleKeys.PORTMASTER)
+			);
 
 			if (portmaster.distanceToSqr(task.targetPos().getX() + 0.5D, task.targetPos().getY() + 0.5D, task.targetPos().getZ() + 0.5D) <= HARBOR_REACH_DISTANCE_SQUARED) {
 				portmaster.getNavigation().stop();
@@ -140,6 +163,7 @@ public final class SettlementPortmasterWork {
 
 	private static void handleArrivedTask(ServerLevel level, SettlementState settlement, Villager portmaster, HarborTask task, long tick) {
 		BlockState state = level.getBlockState(task.actionPos());
+		recordTaskAccomplished(level, settlement, portmaster, task.taskKey());
 
 		if (!state.hasProperty(CampfireBlock.LIT)) {
 			return;
@@ -225,6 +249,57 @@ public final class SettlementPortmasterWork {
 		);
 	}
 
+	private static Optional<Monster> nearestHarborThreat(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager portmaster,
+		List<BlockPos> docks,
+		List<BlockPos> lighthouses
+	) {
+		Monster bestThreat = null;
+		double bestDistance = Double.MAX_VALUE;
+		BlockPos jobSite = SettlementVillagers.portmasterJobSite(level, portmaster).orElse(settlement.center());
+
+		for (BlockPos targetPos : combinedHarborThreatTargets(jobSite, docks, lighthouses)) {
+			for (Monster monster : nearbyHostiles(level, settlement, targetPos)) {
+				if (!isWaterApproachThreat(level, monster.blockPosition())) {
+					continue;
+				}
+
+				double distance = portmaster.distanceToSqr(monster);
+
+				if (distance < bestDistance) {
+					bestDistance = distance;
+					bestThreat = monster;
+				}
+			}
+		}
+
+		return Optional.ofNullable(bestThreat);
+	}
+
+	private static List<BlockPos> combinedHarborThreatTargets(BlockPos jobSite, List<BlockPos> docks, List<BlockPos> lighthouses) {
+		java.util.ArrayList<BlockPos> targets = new java.util.ArrayList<>();
+		targets.add(jobSite.immutable());
+		targets.addAll(docks);
+		targets.addAll(lighthouses);
+		return targets;
+	}
+
+	private static boolean isWaterApproachThreat(ServerLevel level, BlockPos pos) {
+		if (level.getFluidState(pos).is(FluidTags.WATER) || level.getFluidState(pos.below()).is(FluidTags.WATER)) {
+			return true;
+		}
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (level.getFluidState(pos.relative(direction)).is(FluidTags.WATER)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private static Optional<BlockPos> nearestTarget(Villager villager, List<BlockPos> targets) {
 		return targets.stream()
 			.min(Comparator.comparingDouble(pos -> pos.distSqr(villager.blockPosition())))
@@ -232,9 +307,64 @@ public final class SettlementPortmasterWork {
 	}
 
 	private static void showPortmasterTool(Villager portmaster) {
-		if (!portmaster.getMainHandItem().is(Items.SPYGLASS)) {
-			portmaster.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.SPYGLASS));
+		portmaster.setAggressive(false);
+		portmaster.setTarget(null);
+
+		if (!portmaster.getMainHandItem().is(Items.IRON_SWORD)) {
+			portmaster.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
 		}
+	}
+
+	private static void engageHarborThreat(ServerLevel level, SettlementState settlement, Villager portmaster, Monster threat, long tick) {
+		showPortmasterSword(portmaster);
+		portmaster.setAggressive(true);
+		portmaster.setTarget(threat);
+		portmaster.lookAt(threat, 30.0F, 30.0F);
+
+		if (portmaster.distanceToSqr(threat) > HARBOR_DEFENSE_MELEE_RANGE_SQUARED) {
+			portmaster.getNavigation().moveTo(threat.getX(), threat.getY(), threat.getZ(), HARBOR_DEFENSE_SPEED);
+			return;
+		}
+
+		portmaster.getNavigation().stop();
+
+		if (!harborDefenseAttackReady(portmaster, tick)) {
+			return;
+		}
+
+		portmaster.swing(InteractionHand.MAIN_HAND);
+		threat.hurt(level.damageSources().mobAttack(portmaster), 4.0F);
+		LAST_DEFENSE_ATTACK_TICKS.put(portmaster.getUUID().toString(), tick);
+		recordTaskAccomplished(level, settlement, portmaster, "defending_harbor");
+	}
+
+	private static void recordTaskAccomplished(ServerLevel level, SettlementState settlement, Villager portmaster, String taskKey) {
+		long currentDay = Math.floorDiv(level.getOverworldClockTime(), DAY_TICKS);
+		String reportKey = settlement.id() + "|" + portmaster.getUUID() + "|" + taskKey;
+
+		if (LAST_REPORTED_TASK_DAY.getOrDefault(reportKey, Long.MIN_VALUE) == currentDay) {
+			return;
+		}
+
+		SettlementProfessionReports.recordAccomplished(
+			level,
+			settlement,
+			SettlementRoleKeys.PORTMASTER,
+			portmaster,
+			taskKey.replace('_', ' ')
+		);
+		LAST_REPORTED_TASK_DAY.put(reportKey, currentDay);
+	}
+
+	private static void showPortmasterSword(Villager portmaster) {
+		if (!portmaster.getMainHandItem().is(Items.IRON_SWORD)) {
+			portmaster.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		}
+	}
+
+	private static boolean harborDefenseAttackReady(Villager portmaster, long tick) {
+		Long lastAttackTick = LAST_DEFENSE_ATTACK_TICKS.get(portmaster.getUUID().toString());
+		return lastAttackTick == null || tick - lastAttackTick >= HARBOR_DEFENSE_ATTACK_COOLDOWN_TICKS;
 	}
 
 	private record HarborTask(BlockPos targetPos, BlockPos actionPos, String taskKey) {

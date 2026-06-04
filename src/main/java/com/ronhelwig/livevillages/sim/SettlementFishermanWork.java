@@ -1,21 +1,21 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.vehicle.boat.Boat;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -36,8 +36,13 @@ public final class SettlementFishermanWork {
 	private static final long FISHING_CATCH_INTERVAL_TICKS = 1_200L;
 	private static final int DOCK_LENGTH_BLOCKS = 8;
 	private static final int BOAT_SCAN_RADIUS_BLOCKS = 10;
+	private static final int WATER_THREAT_SCAN_RADIUS_BLOCKS = 18;
+	private static final double WATER_DEFENSE_MELEE_RANGE_SQUARED = 4.0D;
+	private static final double WATER_DEFENSE_SPEED = 1.0D;
+	private static final long WATER_DEFENSE_ATTACK_COOLDOWN_TICKS = 20L;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, Long> LAST_CATCH_TICKS = new HashMap<>();
+	private static final Map<String, Long> LAST_DEFENSE_ATTACK_TICKS = new HashMap<>();
 
 	private SettlementFishermanWork() {
 	}
@@ -59,6 +64,14 @@ public final class SettlementFishermanWork {
 			if (shouldRecallForVillageSchedule(dayTime)) {
 				recallFisherman(level, fisherman, docks);
 				ACTIVE_TASKS.remove(fisherman.getUUID().toString());
+				continue;
+			}
+
+			Optional<Monster> waterThreat = nearestWaterThreat(level, settlement, fisherman);
+
+			if (waterThreat.isPresent()) {
+				ACTIVE_TASKS.put(fisherman.getUUID().toString(), new TimedTask("defending_waterfront", tick));
+				engageWaterThreat(level, fisherman, waterThreat.get(), tick);
 				continue;
 			}
 
@@ -90,31 +103,6 @@ public final class SettlementFishermanWork {
 		}
 
 		return stockChanged;
-	}
-
-	public static void applyLoadedFishingWork(
-		ServerLevel level,
-		SettlementState settlement,
-		Map<String, Integer> stock,
-		int fishermanCount,
-		long previousTick,
-		long currentTick,
-		SettlementConstruction.InfrastructureSurvey infrastructure
-	) {
-		int fishermen = Math.max(0, fishermanCount);
-
-		if (fishermen <= 0 || currentTick <= previousTick) {
-			return;
-		}
-
-		int activeDockBoats = countActiveFishingBoats(level, settlement, SettlementConstruction.findDockOrigins(level, settlement));
-		int cod = SettlementEconomyRules.scaledPeriodicAmount(
-			settlement.id() + "|fisherman|cod",
-			SettlementEconomyRules.scaledWorkerDailyRate(dailyCatchRate(fishermen, infrastructure, activeDockBoats)),
-			previousTick,
-			currentTick
-		);
-		SettlementGoods.addGoods(stock, "cod", cod);
 	}
 
 	public static Optional<String> loadedFishermanTaskKey(ServerLevel level, Villager villager) {
@@ -207,11 +195,13 @@ public final class SettlementFishermanWork {
 
 		if (fisherman.getVehicle() != boat) {
 			fisherman.getLookControl().setLookAt(boat.getX(), boat.getY(), boat.getZ());
-			fisherman.getNavigation().moveTo(
-				dockSpot.standPos().getX() + 0.5D,
-				dockSpot.standPos().getY(),
-				dockSpot.standPos().getZ() + 0.5D,
-				FISHERMAN_WALK_SPEED
+			SettlementNavigation.moveToRoutineTarget(
+				level,
+				settlement,
+				fisherman,
+				dockSpot.standPos(),
+				FISHERMAN_WALK_SPEED,
+				fishingTravelRadius(settlement)
 			);
 
 			if (fisherman.distanceToSqr(boat) <= 6.25D) {
@@ -249,7 +239,14 @@ public final class SettlementFishermanWork {
 	) {
 		BlockPos standPos = task.standPos();
 		fisherman.getLookControl().setLookAt(task.lookPos().getX() + 0.5D, task.lookPos().getY() + 0.5D, task.lookPos().getZ() + 0.5D);
-		fisherman.getNavigation().moveTo(standPos.getX() + 0.5D, standPos.getY(), standPos.getZ() + 0.5D, FISHERMAN_WALK_SPEED);
+		SettlementNavigation.moveToRoutineTarget(
+			level,
+			settlement,
+			fisherman,
+			standPos,
+			FISHERMAN_WALK_SPEED,
+			fishingTravelRadius(settlement)
+		);
 
 		if (fisherman.blockPosition().distSqr(standPos) <= FISHING_REACH_DISTANCE_SQUARED) {
 			fisherman.getNavigation().stop();
@@ -280,6 +277,10 @@ public final class SettlementFishermanWork {
 		SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.FISHERMAN, fisherman, "cod", 1);
 		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FISHERMAN, fisherman, accomplishment);
 		return true;
+	}
+
+	private static int fishingTravelRadius(SettlementState settlement) {
+		return SettlementVillagers.professionWorkRadiusBlocks(settlement, SettlementRoleKeys.FISHERMAN);
 	}
 
 	private static void recallFisherman(ServerLevel level, Villager fisherman, List<BlockPos> docks) {
@@ -412,38 +413,6 @@ public final class SettlementFishermanWork {
 			.findFirst();
 	}
 
-	private static int countActiveFishingBoats(ServerLevel level, SettlementState settlement, List<BlockPos> docks) {
-		if (docks.isEmpty()) {
-			return 0;
-		}
-
-		Set<String> boatIds = new HashSet<>();
-
-		for (BlockPos dockOrigin : docks) {
-			Optional<Direction> facing = SettlementConstruction.dockFacing(level, dockOrigin);
-
-			if (facing.isEmpty()) {
-				continue;
-			}
-
-			BlockPos mooringPos = dockOrigin.relative(facing.get(), DOCK_LENGTH_BLOCKS + 1);
-
-			for (Boat boat : level.getEntitiesOfClass(Boat.class, new AABB(mooringPos).inflate(BOAT_SCAN_RADIUS_BLOCKS), candidate ->
-				candidate.isAlive() && !candidate.isRemoved()
-			)) {
-				boatIds.add(boat.getUUID().toString());
-			}
-		}
-
-		for (Villager fisherman : SettlementVillagers.nearbyFishermen(level, settlement)) {
-			if (fisherman.getVehicle() instanceof Boat boat) {
-				boatIds.add(boat.getUUID().toString());
-			}
-		}
-
-		return boatIds.size();
-	}
-
 	private static void moveBoatToward(Boat boat, BlockPos targetPos) {
 		double targetX = targetPos.getX() + 0.5D;
 		double targetZ = targetPos.getZ() + 0.5D;
@@ -467,9 +436,77 @@ public final class SettlementFishermanWork {
 	}
 
 	private static void showFishingTool(Villager fisherman) {
+		fisherman.setAggressive(false);
+		fisherman.setTarget(null);
+
 		if (!fisherman.getMainHandItem().is(Items.FISHING_ROD)) {
 			fisherman.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.FISHING_ROD));
 		}
+
+		if (fisherman.getOffhandItem().isEmpty()) {
+			fisherman.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.IRON_AXE));
+		}
+	}
+
+	private static Optional<Monster> nearestWaterThreat(ServerLevel level, SettlementState settlement, Villager fisherman) {
+		int settlementRadius = SettlementVillagers.settlementRadiusBlocks(settlement) + 8;
+		double settlementRadiusSqr = (double) settlementRadius * settlementRadius;
+		AABB bounds = new AABB(fisherman.blockPosition()).inflate(WATER_THREAT_SCAN_RADIUS_BLOCKS);
+		return level.getEntitiesOfClass(Monster.class, bounds, monster ->
+			!monster.isRemoved()
+				&& monster.isAlive()
+				&& monster.blockPosition().distSqr(settlement.center()) <= settlementRadiusSqr
+				&& isWaterApproachThreat(level, monster.blockPosition())
+		)
+			.stream()
+			.min(java.util.Comparator.comparingDouble(fisherman::distanceToSqr));
+	}
+
+	private static boolean isWaterApproachThreat(ServerLevel level, BlockPos pos) {
+		if (level.getFluidState(pos).is(FluidTags.WATER) || level.getFluidState(pos.below()).is(FluidTags.WATER)) {
+			return true;
+		}
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (level.getFluidState(pos.relative(direction)).is(FluidTags.WATER)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static void engageWaterThreat(ServerLevel level, Villager fisherman, Monster threat, long tick) {
+		showFishermanAxe(fisherman);
+		fisherman.setAggressive(true);
+		fisherman.setTarget(threat);
+		fisherman.lookAt(threat, 30.0F, 30.0F);
+
+		if (fisherman.distanceToSqr(threat) > WATER_DEFENSE_MELEE_RANGE_SQUARED) {
+			fisherman.getNavigation().moveTo(threat.getX(), threat.getY(), threat.getZ(), WATER_DEFENSE_SPEED);
+			return;
+		}
+
+		fisherman.getNavigation().stop();
+
+		if (!waterDefenseAttackReady(fisherman, tick)) {
+			return;
+		}
+
+		fisherman.swing(InteractionHand.MAIN_HAND);
+		threat.hurt(level.damageSources().mobAttack(fisherman), 5.0F);
+		LAST_DEFENSE_ATTACK_TICKS.put(fisherman.getUUID().toString(), tick);
+	}
+
+	private static void showFishermanAxe(Villager fisherman) {
+		if (!fisherman.getMainHandItem().is(Items.IRON_AXE)) {
+			fisherman.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+		}
+	}
+
+	private static boolean waterDefenseAttackReady(Villager fisherman, long tick) {
+		Long lastAttackTick = LAST_DEFENSE_ATTACK_TICKS.get(fisherman.getUUID().toString());
+		return lastAttackTick == null || tick - lastAttackTick >= WATER_DEFENSE_ATTACK_COOLDOWN_TICKS;
 	}
 
 	private static boolean shouldRecallForVillageSchedule(long dayTime) {

@@ -1,8 +1,9 @@
 package com.ronhelwig.livevillages.sim;
 
 public final class SettlementTradeRange {
-	private static final int BASE_LAND_ROUTE_RANGE_BLOCKS = 1_024;
-	private static final int CARTOGRAPHER_ROUTE_RANGE_BONUS_BLOCKS = 256;
+	private static final int LOCAL_LAND_ROUTE_RANGE_BLOCKS = 512;
+	private static final int BASE_LAND_ROUTE_RANGE_BLOCKS = LOCAL_LAND_ROUTE_RANGE_BLOCKS;
+	private static final int CARTOGRAPHER_ROUTE_RANGE_BONUS_BLOCKS = 512;
 	private static final int SCRIBE_ROUTE_RANGE_BONUS_BLOCKS = 256;
 	private static final int DOCK_WATER_ROUTE_RANGE_BLOCKS = 1_280;
 	private static final int LIGHTHOUSE_WATER_ROUTE_RANGE_BONUS_BLOCKS = 512;
@@ -34,6 +35,10 @@ public final class SettlementTradeRange {
 	private static final double LIGHTHOUSE_ADDITIONAL_ROUTE_TRADE_BONUS_CAP = 0.06D;
 
 	private SettlementTradeRange() {
+	}
+
+	public static int localLandRouteRangeBlocks() {
+		return LOCAL_LAND_ROUTE_RANGE_BLOCKS;
 	}
 
 	public static TradeRangeProfile profile(SettlementState settlement, SettlementConstruction.InfrastructureSurvey infrastructure) {

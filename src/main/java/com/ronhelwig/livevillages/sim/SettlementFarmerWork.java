@@ -13,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.sheep.Sheep;
@@ -30,6 +31,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.phys.AABB;
+
+import com.ronhelwig.livevillages.content.LiveVillagesItems;
 
 public final class SettlementFarmerWork {
 	private static final List<String> PLANTABLE_CROPS = List.of("wheat", "carrot", "potato", "beetroot");
@@ -296,7 +299,8 @@ public final class SettlementFarmerWork {
 				continue;
 			}
 
-			steerFarmerTowardTask(farmer, task.targetPos());
+			showFarmerTool(farmer, task);
+			steerFarmerTowardTask(level, settlement, farmer, task.targetPos());
 
 			if (isWithinWorkReach(farmer, task.targetPos())) {
 				Map<String, Integer> beforeStock = new HashMap<>(stock);
@@ -699,10 +703,23 @@ public final class SettlementFarmerWork {
 		return taskPriority(settlement, stock, cropKey) + 220;
 	}
 
-	private static void steerFarmerTowardTask(Villager farmer, BlockPos targetPos) {
+	private static void steerFarmerTowardTask(ServerLevel level, SettlementState settlement, Villager farmer, BlockPos targetPos) {
 		farmer.getLookControl().setLookAt(targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D);
-		farmer.getMoveControl().setWantedPosition(targetPos.getX() + 0.5D, targetPos.getY(), targetPos.getZ() + 0.5D, FARMER_WORK_SPEED);
-		farmer.getNavigation().moveTo(targetPos.getX() + 0.5D, targetPos.getY(), targetPos.getZ() + 0.5D, FARMER_WORK_SPEED);
+		SettlementNavigation.moveToRoutineTarget(level, settlement, farmer, targetPos, FARMER_WORK_SPEED);
+	}
+
+	private static void showFarmerTool(Villager farmer, GardenTask task) {
+		if (!farmer.getMainHandItem().isEmpty()) {
+			return;
+		}
+
+		farmer.setItemSlot(
+			EquipmentSlot.MAINHAND,
+			new ItemStack(switch (task.type()) {
+				case HARVEST, COLLECT_LEAF_LITTER_BLOCK, TRIM_GRASS -> LiveVillagesItems.SCYTHE;
+				default -> Items.WOODEN_HOE;
+			})
+		);
 	}
 
 	private static boolean isWithinWorkReach(Villager farmer, BlockPos targetPos) {

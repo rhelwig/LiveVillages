@@ -1,0 +1,64 @@
+{
+  "textures": {
+    "dark": "minecraft:block/dark_oak_planks",
+    "iron": "minecraft:block/iron_bars",
+    "particle": "minecraft:block/oak_planks",
+    "wood": "minecraft:block/oak_planks"
+  },
+  "elements": [
+    {
+      "from": [1, 0, 1],
+      "to": [15, 2, 15],
+      "faces": {
+        "down": {"texture": "#dark"},
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "up": {"texture": "#wood"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [2, 2, 2],
+      "to": [14, 12, 14],
+      "faces": {
+        "east": {"texture": "#wood"},
+        "north": {"texture": "#wood"},
+        "south": {"texture": "#wood"},
+        "west": {"texture": "#wood"}
+      }
+    },
+    {
+      "from": [0, 12, 0],
+      "to": [16, 15, 16],
+      "faces": {
+        "down": {"texture": "#dark"},
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "up": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [6, 15, 2],
+      "to": [10, 24, 6],
+      "faces": {
+        "east": {"texture": "#wood"},
+        "north": {"texture": "#wood"},
+        "south": {"texture": "#wood"},
+        "west": {"texture": "#wood"}
+      }
+    },
+    {
+      "from": [6, 20, 6],
+      "to": [10, 24, 14],
+      "faces": {
+        "east": {"texture": "#iron"},
+        "north": {"texture": "#iron"},
+        "south": {"texture": "#iron"},
+        "west": {"texture": "#iron"}
+      }
+    }
+  ]
+}

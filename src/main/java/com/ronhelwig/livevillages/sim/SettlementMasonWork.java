@@ -56,12 +56,7 @@ public final class SettlementMasonWork {
 
 			MasonryAssignment assignment = chooseAssignment(level, settlement, stock, buildSiteList, mason);
 			showMasonTool(mason);
-			mason.getNavigation().moveTo(
-				assignment.targetPos().getX() + 0.5D,
-				assignment.targetPos().getY(),
-				assignment.targetPos().getZ() + 0.5D,
-				MASONRY_WALK_SPEED
-			);
+			SettlementNavigation.moveToRoutineTarget(level, settlement, mason, assignment.targetPos(), MASONRY_WALK_SPEED);
 			ACTIVE_TASKS.put(mason.getUUID().toString(), new TimedTask(assignment.taskKey(), tick));
 
 			if (isWithinWorkReach(mason, assignment.targetPos())) {

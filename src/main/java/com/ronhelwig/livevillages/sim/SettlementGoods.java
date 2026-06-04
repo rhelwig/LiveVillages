@@ -4,11 +4,15 @@ import java.util.List;
 import java.util.Map;
 
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.content.LiveVillagesItems;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
 
 public final class SettlementGoods {
 	public static final List<String> SEEDLING_GOODS = List.of(
@@ -99,6 +103,94 @@ public final class SettlementGoods {
 			return "wool";
 		}
 
+		if (stack.is(Items.PAPER)) {
+			return "paper";
+		}
+
+		if (stack.is(Items.BOOK)) {
+			return "book";
+		}
+
+		if (stack.is(Items.BOOKSHELF)) {
+			return "bookshelf";
+		}
+
+		if (stack.is(Items.GLASS_BOTTLE)) {
+			return "glass_bottle";
+		}
+
+		if (stack.is(Items.NETHER_WART)) {
+			return "nether_wart";
+		}
+
+		if (stack.is(Items.GLISTERING_MELON_SLICE)) {
+			return "glistering_melon_slice";
+		}
+
+		if (stack.is(Items.HONEY_BOTTLE)) {
+			return "honey_bottle";
+		}
+
+		if (stack.is(Items.HONEYCOMB)) {
+			return "honeycomb";
+		}
+
+		if (stack.is(Items.CANDLE)) {
+			return "candle";
+		}
+
+		if (stack.is(Items.SHEARS)) {
+			return "shears";
+		}
+
+		if (isHealingPotion(stack)) {
+			return "healing_potion";
+		}
+
+		if (stack.is(Items.LEATHER_HELMET)) {
+			return "leather_helmet";
+		}
+
+		if (stack.is(Items.LEATHER_CHESTPLATE)) {
+			return "leather_chestplate";
+		}
+
+		if (stack.is(Items.LEATHER_LEGGINGS)) {
+			return "leather_leggings";
+		}
+
+		if (stack.is(Items.LEATHER_BOOTS)) {
+			return "leather_boots";
+		}
+
+		if (stack.is(Items.IRON_SWORD)) {
+			return "iron_sword";
+		}
+
+		if (stack.is(Items.IRON_PICKAXE)) {
+			return "iron_pickaxe";
+		}
+
+		if (stack.is(Items.IRON_HELMET)) {
+			return "iron_helmet";
+		}
+
+		if (stack.is(Items.IRON_CHESTPLATE)) {
+			return "iron_chestplate";
+		}
+
+		if (stack.is(Items.IRON_LEGGINGS)) {
+			return "iron_leggings";
+		}
+
+		if (stack.is(Items.IRON_BOOTS)) {
+			return "iron_boots";
+		}
+
+		if (stack.is(Items.SHIELD)) {
+			return "shield";
+		}
+
 		if (stack.is(Items.BEETROOT_SEEDS)) {
 			return "beetroot_seeds";
 		}
@@ -135,6 +227,10 @@ public final class SettlementGoods {
 			return "pumpkin";
 		}
 
+		if (stack.is(net.minecraft.tags.ItemTags.FLOWERS)) {
+			return "flower";
+		}
+
 		if (stack.is(Items.STICK)) {
 			return "stick";
 		}
@@ -149,6 +245,26 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.ARROW)) {
 			return "arrow";
+		}
+
+		if (stack.is(LiveVillagesItems.COPPERHEAD_ARROW)) {
+			return "copperhead_arrow";
+		}
+
+		if (stack.is(LiveVillagesItems.IRONHEAD_ARROW)) {
+			return "ironhead_arrow";
+		}
+
+		if (stack.is(LiveVillagesItems.DIAMONDHEAD_ARROW)) {
+			return "diamondhead_arrow";
+		}
+
+		if (stack.is(Items.COPPER_NUGGET)) {
+			return "copper_nugget";
+		}
+
+		if (stack.is(Items.IRON_NUGGET)) {
+			return "iron_nugget";
 		}
 
 		if (stack.is(Items.OAK_SAPLING)) {
@@ -195,6 +311,10 @@ public final class SettlementGoods {
 			return "planks";
 		}
 
+		if (isWoodenTrapdoor(stack)) {
+			return "trapdoor";
+		}
+
 		if (stack.is(Items.COBBLESTONE)) {
 			return "cobblestone";
 		}
@@ -203,8 +323,60 @@ public final class SettlementGoods {
 			return "cobblestone";
 		}
 
+		if (stack.is(Items.IRON_BARS)) {
+			return "iron_bars";
+		}
+
 		if (stack.is(LiveVillagesBlocks.MILEPOST_ITEM)) {
 			return "milepost";
+		}
+
+		if (stack.is(LiveVillagesBlocks.TRADE_BOARD_ITEM)) {
+			return "trade_board";
+		}
+
+		if (stack.is(LiveVillagesBlocks.CARPENTER_BENCH_ITEM)) {
+			return "carpenter_bench";
+		}
+
+		if (stack.is(LiveVillagesBlocks.BAKERS_COUNTER_ITEM)) {
+			return "bakers_counter";
+		}
+
+		if (stack.is(LiveVillagesBlocks.FORESTER_TABLE_ITEM)) {
+			return "forester_table";
+		}
+
+		if (stack.is(LiveVillagesBlocks.MINER_WORKSTATION_ITEM)) {
+			return "miner_workstation";
+		}
+
+		if (stack.is(LiveVillagesBlocks.SURVEYOR_TABLE_ITEM)) {
+			return "surveyor_table";
+		}
+
+		if (stack.is(LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM)) {
+			return "portmaster_anchor";
+		}
+
+		if (stack.is(LiveVillagesBlocks.LIGHTHOUSE_ITEM)) {
+			return "lighthouse";
+		}
+
+		if (stack.is(LiveVillagesBlocks.SCRIBE_DESK_ITEM)) {
+			return "scribe_desk";
+		}
+
+		if (stack.is(LiveVillagesBlocks.GUARD_POST_ITEM)) {
+			return "guard_post";
+		}
+
+		if (stack.is(LiveVillagesBlocks.GARDENER_WORKSTATION_ITEM)) {
+			return "gardener_workstation";
+		}
+
+		if (stack.is(LiveVillagesBlocks.HONEY_SEPARATOR_ITEM)) {
+			return "honey_separator";
 		}
 
 		if (stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT)) {
@@ -255,6 +427,14 @@ public final class SettlementGoods {
 			return "torch";
 		}
 
+		if (stack.is(Items.CAMPFIRE)) {
+			return "campfire";
+		}
+
+		if (stack.is(Items.BEEHIVE)) {
+			return "bee_hive";
+		}
+
 		if (stack.is(Items.COPPER_TORCH)) {
 			return "copper_torch";
 		}
@@ -288,6 +468,28 @@ public final class SettlementGoods {
 		}
 
 		return null;
+	}
+
+	private static boolean isHealingPotion(ItemStack stack) {
+		if (!stack.is(Items.POTION)) {
+			return false;
+		}
+
+		PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
+		return contents != null && (contents.is(Potions.HEALING) || contents.is(Potions.STRONG_HEALING));
+	}
+
+	private static boolean isWoodenTrapdoor(ItemStack stack) {
+		return stack.is(Items.OAK_TRAPDOOR)
+			|| stack.is(Items.SPRUCE_TRAPDOOR)
+			|| stack.is(Items.BIRCH_TRAPDOOR)
+			|| stack.is(Items.JUNGLE_TRAPDOOR)
+			|| stack.is(Items.ACACIA_TRAPDOOR)
+			|| stack.is(Items.CHERRY_TRAPDOOR)
+			|| stack.is(Items.DARK_OAK_TRAPDOOR)
+			|| stack.is(Items.PALE_OAK_TRAPDOOR)
+			|| stack.is(Items.MANGROVE_TRAPDOOR)
+			|| stack.is(Items.BAMBOO_TRAPDOOR);
 	}
 
 	public static boolean isSeedlingGoods(String goodsKey) {

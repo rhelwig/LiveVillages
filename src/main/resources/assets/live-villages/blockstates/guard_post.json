@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "live-villages:block/guard_post"
+    },
+    "facing=east": {
+      "model": "live-villages:block/guard_post",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "live-villages:block/guard_post",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "live-villages:block/guard_post",
+      "y": 270
+    }
+  }
+}

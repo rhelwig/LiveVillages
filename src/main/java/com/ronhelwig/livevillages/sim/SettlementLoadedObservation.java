@@ -515,21 +515,30 @@ public final class SettlementLoadedObservation {
 	private static String buildSiteSurveyLabel(SettlementBuildSite buildSite) {
 		return switch (buildSite.blueprintId()) {
 			case BAKERY -> "Bakery";
+			case BEEKEEPER_APIARY -> "Beekeeper";
 			case BUTCHER_SHOP -> "Butcher";
+			case CLERIC_SHRINE -> "Cleric";
 			case DOCK -> "Dock";
+			case LEATHERWORKER_WORKSHOP -> "Leatherworker";
 			case LIGHTHOUSE -> "Lighthouse";
+			case LIBRARY -> "Library";
 			case MASON_WORKSHOP -> "Mason";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case TRADING_POST -> "Trading Post";
 			case CARPENTER_WORKSHOP -> "Carpenter";
 			case FLETCHER_HUT -> "Fletcher";
 			case ROADWRIGHT_WORKSHOP -> "Roadwright";
+			case SCRIBE_OFFICE -> "Scribe";
 			case CARTOGRAPHER_HOUSE -> "Cartographer";
 			case FORESTER_WORKSHOP -> "Forester";
+			case GARDENER_SHED -> "Gardener";
+			case GUARD_POST -> "Guard";
 			case HOUSING_SHELTER -> "Housing";
 			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Gatehouse";
 			case PALISADE_WALL -> "Palisade Wall";
+			case SHEPHERD_HUT -> "Shepherd";
 			case SIMPLE_HOUSING_SHELTER -> "Shelter";
+			case SMITHY -> "Smithy";
 		};
 	}
 

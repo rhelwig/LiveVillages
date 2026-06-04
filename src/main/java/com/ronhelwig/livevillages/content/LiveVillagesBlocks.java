@@ -18,7 +18,10 @@ import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
 import com.ronhelwig.livevillages.block.CarpenterBenchBlock;
 import com.ronhelwig.livevillages.block.ForesterTableBlock;
+import com.ronhelwig.livevillages.block.GardenerWorkstationBlock;
 import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
+import com.ronhelwig.livevillages.block.GuardPostBlock;
+import com.ronhelwig.livevillages.block.HoneySeparatorBlock;
 import com.ronhelwig.livevillages.block.HousingShelterBlock;
 import com.ronhelwig.livevillages.block.LighthouseBlock;
 import com.ronhelwig.livevillages.block.MilepostBlock;
@@ -26,6 +29,7 @@ import com.ronhelwig.livevillages.block.MinerWorkstationBlock;
 import com.ronhelwig.livevillages.block.PalisadeGatehouseBlock;
 import com.ronhelwig.livevillages.block.PalisadePointBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
+import com.ronhelwig.livevillages.block.ScribeDeskBlock;
 import com.ronhelwig.livevillages.block.SimpleHousingShelterBlock;
 import com.ronhelwig.livevillages.block.SurveyorTableBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
@@ -59,6 +63,59 @@ public final class LiveVillagesBlocks {
 	public static final Item CARPENTER_BENCH_ITEM = registerItem(
 		"carpenter_bench",
 		new BlockItem(CARPENTER_BENCH, new Item.Properties().setId(itemKey("carpenter_bench")).useBlockDescriptionPrefix())
+	);
+	public static final ScribeDeskBlock SCRIBE_DESK = registerBlock(
+		"scribe_desk",
+		new ScribeDeskBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.CRAFTING_TABLE)
+				.setId(blockKey("scribe_desk"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+				.noOcclusion()
+		)
+	);
+	public static final Item SCRIBE_DESK_ITEM = registerItem(
+		"scribe_desk",
+		new BlockItem(SCRIBE_DESK, new Item.Properties().setId(itemKey("scribe_desk")).useBlockDescriptionPrefix())
+	);
+	public static final GuardPostBlock GUARD_POST = registerBlock(
+		"guard_post",
+		new GuardPostBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.CRAFTING_TABLE)
+				.setId(blockKey("guard_post"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item GUARD_POST_ITEM = registerItem(
+		"guard_post",
+		new BlockItem(GUARD_POST, new Item.Properties().setId(itemKey("guard_post")).useBlockDescriptionPrefix())
+	);
+	public static final GardenerWorkstationBlock GARDENER_WORKSTATION = registerBlock(
+		"gardener_workstation",
+		new GardenerWorkstationBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.CRAFTING_TABLE)
+				.setId(blockKey("gardener_workstation"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item GARDENER_WORKSTATION_ITEM = registerItem(
+		"gardener_workstation",
+		new BlockItem(GARDENER_WORKSTATION, new Item.Properties().setId(itemKey("gardener_workstation")).useBlockDescriptionPrefix())
+	);
+	public static final HoneySeparatorBlock HONEY_SEPARATOR = registerBlock(
+		"honey_separator",
+		new HoneySeparatorBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.CRAFTING_TABLE)
+				.setId(blockKey("honey_separator"))
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item HONEY_SEPARATOR_ITEM = registerItem(
+		"honey_separator",
+		new BlockItem(HONEY_SEPARATOR, new Item.Properties().setId(itemKey("honey_separator")).useBlockDescriptionPrefix())
 	);
 	public static final SurveyorTableBlock SURVEYOR_TABLE = registerBlock(
 		"surveyor_table",

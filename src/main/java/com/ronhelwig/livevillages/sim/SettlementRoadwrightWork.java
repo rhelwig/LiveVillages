@@ -965,6 +965,10 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static List<PathTarget> internalTargetsForBuildSite(ServerLevel level, SettlementBuildSite buildSite) {
+		if (isHarborRoadEndpointBuildSite(buildSite)) {
+			return harborLandAccessTargets(level, buildSite);
+		}
+
 		List<PathTarget> targets = new ArrayList<>();
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
@@ -1002,6 +1006,43 @@ public final class SettlementRoadwrightWork {
 		}
 
 		return targets;
+	}
+
+	private static boolean isHarborRoadEndpointBuildSite(SettlementBuildSite buildSite) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.DOCK
+			|| buildSite.blueprintId() == SettlementBuildSiteType.LIGHTHOUSE;
+	}
+
+	private static List<PathTarget> harborLandAccessTargets(ServerLevel level, SettlementBuildSite buildSite) {
+		LinkedHashSet<BlockPos> targets = new LinkedHashSet<>();
+
+		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
+			standableAccessTargets(level, buildSite.anchorPos()).stream()
+				.filter(pos -> isDockLandSideAccessTarget(buildSite, pos))
+				.forEach(pos -> targets.add(pos.immutable()));
+		} else {
+			standableAccessTargets(level, buildSite.workstationPos()).stream()
+				.forEach(pos -> targets.add(pos.immutable()));
+
+			if (!buildSite.anchorPos().equals(buildSite.workstationPos())) {
+				standableAccessTargets(level, buildSite.anchorPos()).stream()
+					.forEach(pos -> targets.add(pos.immutable()));
+			}
+		}
+
+		return targets.stream()
+			.map(pos -> new PathTarget(pos, true))
+			.toList();
+	}
+
+	private static boolean isDockLandSideAccessTarget(SettlementBuildSite buildSite, BlockPos accessPos) {
+		Direction dockFacing = buildSite.facing().getAxis() == Direction.Axis.Y ? Direction.NORTH : buildSite.facing();
+		BlockPos anchorPos = buildSite.anchorPos();
+		int dx = accessPos.getX() - anchorPos.getX();
+		int dz = accessPos.getZ() - anchorPos.getZ();
+		int waterwardOffset = dx * dockFacing.getStepX() + dz * dockFacing.getStepZ();
+
+		return waterwardOffset <= 0;
 	}
 
 	private static List<PathTarget> cachedScannedInternalPoiTargets(ServerLevel level, SettlementState settlement) {

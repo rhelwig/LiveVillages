@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:glass_bottle",
+    "H": "minecraft:honeycomb",
+    "P": "#minecraft:planks",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    "PHP",
+    "PBP",
+    "S S"
+  ],
+  "result": {
+    "id": "live-villages:honey_separator"
+  }
+}

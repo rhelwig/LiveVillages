@@ -50,6 +50,7 @@ public final class SettlementProfessionReports {
 		new ProfessionReportRole("child", null),
 		new ProfessionReportRole("armorer", poiType -> poiType.is(PoiTypes.ARMORER)),
 		new ProfessionReportRole(SettlementRoleKeys.BAKER, poiType -> poiType.is(LiveVillagesVillagerProfessions.BAKER_POI)),
+		new ProfessionReportRole(SettlementRoleKeys.BEEKEEPER, poiType -> poiType.is(LiveVillagesVillagerProfessions.BEEKEEPER_POI)),
 		new ProfessionReportRole(SettlementRoleKeys.BUTCHER, poiType -> poiType.is(PoiTypes.BUTCHER)),
 		new ProfessionReportRole(SettlementRoleKeys.CARPENTER, poiType -> poiType.is(LiveVillagesVillagerProfessions.CARPENTER_POI)),
 		new ProfessionReportRole(SettlementRoleKeys.CARTOGRAPHER, poiType -> poiType.is(PoiTypes.CARTOGRAPHER)),
@@ -58,12 +59,15 @@ public final class SettlementProfessionReports {
 		new ProfessionReportRole(SettlementRoleKeys.FISHERMAN, poiType -> poiType.is(PoiTypes.FISHERMAN)),
 		new ProfessionReportRole(SettlementRoleKeys.FLETCHER, poiType -> poiType.is(PoiTypes.FLETCHER)),
 		new ProfessionReportRole(SettlementRoleKeys.FORESTER, poiType -> poiType.is(LiveVillagesVillagerProfessions.FORESTER_POI)),
+		new ProfessionReportRole(SettlementRoleKeys.GARDENER, poiType -> poiType.is(LiveVillagesVillagerProfessions.GARDENER_POI)),
+		new ProfessionReportRole(SettlementRoleKeys.GUARD, poiType -> poiType.is(LiveVillagesVillagerProfessions.GUARD_POI)),
 		new ProfessionReportRole("leatherworker", poiType -> poiType.is(PoiTypes.LEATHERWORKER)),
 		new ProfessionReportRole("librarian", poiType -> poiType.is(PoiTypes.LIBRARIAN)),
 		new ProfessionReportRole(SettlementRoleKeys.MASON, poiType -> poiType.is(PoiTypes.MASON)),
 		new ProfessionReportRole(SettlementRoleKeys.MINER, poiType -> poiType.is(LiveVillagesVillagerProfessions.MINER_POI)),
 		new ProfessionReportRole(SettlementRoleKeys.PORTMASTER, poiType -> poiType.is(LiveVillagesVillagerProfessions.PORTMASTER_POI)),
 		new ProfessionReportRole(SettlementRoleKeys.ROADWRIGHT, poiType -> poiType.is(LiveVillagesVillagerProfessions.ROADWRIGHT_POI)),
+		new ProfessionReportRole(SettlementRoleKeys.SCRIBE, poiType -> poiType.is(LiveVillagesVillagerProfessions.SCRIBE_POI)),
 		new ProfessionReportRole("shepherd", poiType -> poiType.is(PoiTypes.SHEPHERD)),
 		new ProfessionReportRole("toolsmith", poiType -> poiType.is(PoiTypes.TOOLSMITH)),
 		new ProfessionReportRole(SettlementRoleKeys.TRADEMASTER, poiType -> poiType.is(LiveVillagesVillagerProfessions.TRADEMASTER_POI)),
@@ -840,6 +844,7 @@ public final class SettlementProfessionReports {
 			case SettlementRoleKeys.MASON -> "Mason";
 			case SettlementRoleKeys.MINER -> "Miner";
 			case SettlementRoleKeys.BAKER -> "Baker";
+			case SettlementRoleKeys.BEEKEEPER -> "Beekeeper";
 			case SettlementRoleKeys.FLETCHER -> "Fletcher";
 			case SettlementRoleKeys.ROADWRIGHT -> "Roadwright";
 			case SettlementRoleKeys.PORTMASTER -> "Portmaster";
@@ -847,6 +852,8 @@ public final class SettlementProfessionReports {
 			case SettlementRoleKeys.TRADEMASTER -> "Trademaster";
 			case SettlementRoleKeys.UNEMPLOYED -> "Unemployed";
 			case SettlementRoleKeys.GUARD -> "Guard";
+			case SettlementRoleKeys.GARDENER -> "Gardener";
+			case SettlementRoleKeys.SCRIBE -> "Scribe";
 			case SettlementRoleKeys.PILLAGER -> "Pillager";
 			case "armorer" -> "Armorer";
 			case "child" -> "Children";
@@ -877,6 +884,11 @@ public final class SettlementProfessionReports {
 			case "flint" -> "flint";
 			case "feather" -> "feathers";
 			case "arrow" -> "arrows";
+			case "copperhead_arrow" -> "Copperhead Arrows";
+			case "ironhead_arrow" -> "Ironhead Arrows";
+			case "diamondhead_arrow" -> "Diamondhead Arrows";
+			case "copper_nugget" -> "copper nuggets";
+			case "iron_nugget" -> "iron nuggets";
 			case "cobblestone" -> "cobblestone";
 			case "milepost" -> "mileposts";
 			case "wheat" -> "wheat";

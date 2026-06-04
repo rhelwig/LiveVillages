@@ -124,6 +124,12 @@ public final class SettlementBakerWork {
 		return resolveBakeryContext(level, pos).isPresent();
 	}
 
+	public static int bakerySettlementTierAt(ServerLevel level, BlockPos pos) {
+		return resolveBakeryContext(level, pos)
+			.map(context -> SettlementTiers.unlockedTier(context.settlement()))
+			.orElse(1);
+	}
+
 	public static List<BakeryBountyView> bakeryBountiesAt(ServerLevel level, BlockPos pos) {
 		return resolveBakeryContext(level, pos)
 			.map(context -> {
@@ -273,7 +279,7 @@ public final class SettlementBakerWork {
 				.orElse(settlement.center());
 			String taskKey = recipe == null ? (displayableGoodsKeys(stock, settlementTier).isEmpty() ? "baking_goods" : "arranging_displays") : recipe.taskKey();
 			showBakerTool(baker, recipe);
-			baker.getNavigation().moveTo(workPos.getX() + 0.5D, workPos.getY(), workPos.getZ() + 0.5D, BAKING_WALK_SPEED);
+			SettlementNavigation.moveToRoutineTarget(level, settlement, baker, workPos, BAKING_WALK_SPEED);
 			ACTIVE_TASKS.put(baker.getUUID().toString(), new TimedTask(taskKey, tick));
 
 			if (recipe == null || !isWithinWorkReach(baker, workPos)) {

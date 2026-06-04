@@ -42,7 +42,7 @@ public final class FletchingTableRecipes {
 			|| stack.is(Items.DIAMOND);
 	}
 
-	static boolean isCopperHeadMaterial(ItemStack stack) {
+	public static boolean isCopperHeadMaterial(ItemStack stack) {
 		return stack.is(Items.COPPER_NUGGET) || stack.is(COPPER_NUGGETS);
 	}
 

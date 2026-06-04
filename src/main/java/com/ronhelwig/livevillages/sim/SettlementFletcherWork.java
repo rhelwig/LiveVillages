@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -82,7 +83,7 @@ public final class SettlementFletcherWork {
 				.orElse(settlement.center());
 			showBow(fletcher);
 			fletcher.setAggressive(false);
-			fletcher.getNavigation().moveTo(workPos.getX() + 0.5D, workPos.getY(), workPos.getZ() + 0.5D, FLETCHING_WALK_SPEED);
+			SettlementNavigation.moveToRoutineTarget(level, settlement, fletcher, workPos, FLETCHING_WALK_SPEED);
 			ACTIVE_TASKS.put(fletcher.getUUID().toString(), new TimedTask("stocking_arrows", tick));
 
 			if (!isWithinWorkReach(fletcher, workPos)) {
@@ -90,13 +91,16 @@ public final class SettlementFletcherWork {
 				continue;
 			}
 
-			if (craftArrows(stock)) {
+			Optional<CraftedArrowBatch> craftedArrows = craftArrows(stock);
+			if (craftedArrows.isPresent()) {
+				CraftedArrowBatch batch = craftedArrows.get();
 				fletcher.swing(InteractionHand.MAIN_HAND);
-				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "stick", 1);
-				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "flint", 1);
-				SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "feather", 1);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "arrow", 4);
-				SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "stocked arrows");
+				for (Map.Entry<String, Integer> consumed : batch.consumedGoods().entrySet()) {
+					SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, consumed.getKey(), consumed.getValue());
+				}
+
+				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, batch.outputGoodsKey(), batch.outputAmount());
+				SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.FLETCHER, fletcher, "stocked " + batch.outputLabel());
 				stockChanged = true;
 			}
 		}
@@ -105,10 +109,12 @@ public final class SettlementFletcherWork {
 	}
 
 	private static String fletchingStockSummary(SettlementState settlement, Map<String, Integer> stock) {
-		return "arrows=" + stock.getOrDefault("arrow", 0)
+		return "arrows=" + arrowReserveStock(stock)
 			+ " target=" + SettlementEconomyRules.targetForGoods(settlement, "arrow")
 			+ " sticks=" + stock.getOrDefault("stick", 0)
 			+ " flint=" + stock.getOrDefault("flint", 0)
+			+ " copper_nuggets=" + stock.getOrDefault("copper_nugget", 0)
+			+ " copper_ingots=" + stock.getOrDefault("copper_ingot", 0)
 			+ " feathers=" + stock.getOrDefault("feather", 0);
 	}
 
@@ -188,21 +194,58 @@ public final class SettlementFletcherWork {
 	}
 
 	private static boolean needsArrows(SettlementState settlement, Map<String, Integer> stock) {
-		return stock.getOrDefault("arrow", 0) < SettlementEconomyRules.targetForGoods(settlement, "arrow")
+		return arrowReserveStock(stock) < SettlementEconomyRules.targetForGoods(settlement, "arrow")
 			&& stock.getOrDefault("stick", 0) > 0
-			&& stock.getOrDefault("flint", 0) > 0
-			&& stock.getOrDefault("feather", 0) > 0;
+			&& stock.getOrDefault("feather", 0) > 0
+			&& (stock.getOrDefault("copper_nugget", 0) > 0
+				|| stock.getOrDefault("copper_ingot", 0) > 0
+				|| stock.getOrDefault("flint", 0) > 0);
 	}
 
-	private static boolean craftArrows(Map<String, Integer> stock) {
-		if (!SettlementGoods.consumeGoods(stock, "stick", 1)
-			|| !SettlementGoods.consumeGoods(stock, "flint", 1)
-			|| !SettlementGoods.consumeGoods(stock, "feather", 1)) {
-			return false;
+	private static Optional<CraftedArrowBatch> craftArrows(Map<String, Integer> stock) {
+		if (stock.getOrDefault("stick", 0) <= 0 || stock.getOrDefault("feather", 0) <= 0) {
+			return Optional.empty();
 		}
 
-		SettlementGoods.addGoods(stock, "arrow", 4);
-		return true;
+		if (stock.getOrDefault("copper_nugget", 0) > 0 || stock.getOrDefault("copper_ingot", 0) > 0) {
+			Map<String, Integer> consumed = new LinkedHashMap<>();
+			consumeForFletching(stock, consumed, "stick", 1);
+			consumeForFletching(stock, consumed, "feather", 1);
+			consumeCopperArrowhead(stock, consumed);
+			SettlementGoods.addGoods(stock, "copperhead_arrow", 8);
+			return Optional.of(new CraftedArrowBatch("copperhead_arrow", 8, consumed, "Copperhead Arrows"));
+		}
+
+		if (stock.getOrDefault("flint", 0) > 0) {
+			Map<String, Integer> consumed = new LinkedHashMap<>();
+			consumeForFletching(stock, consumed, "stick", 1);
+			consumeForFletching(stock, consumed, "feather", 1);
+			consumeForFletching(stock, consumed, "flint", 1);
+			SettlementGoods.addGoods(stock, "arrow", 8);
+			return Optional.of(new CraftedArrowBatch("arrow", 8, consumed, "arrows"));
+		}
+
+		return Optional.empty();
+	}
+
+	private static int arrowReserveStock(Map<String, Integer> stock) {
+		return stock.getOrDefault("arrow", 0) + stock.getOrDefault("copperhead_arrow", 0);
+	}
+
+	private static void consumeCopperArrowhead(Map<String, Integer> stock, Map<String, Integer> consumed) {
+		if (stock.getOrDefault("copper_nugget", 0) > 0) {
+			consumeForFletching(stock, consumed, "copper_nugget", 1);
+			return;
+		}
+
+		consumeForFletching(stock, consumed, "copper_ingot", 1);
+		SettlementGoods.addGoods(stock, "copper_nugget", 8);
+	}
+
+	private static void consumeForFletching(Map<String, Integer> stock, Map<String, Integer> consumed, String goodsKey, int amount) {
+		if (SettlementGoods.consumeGoods(stock, goodsKey, amount)) {
+			consumed.merge(goodsKey, amount, Integer::sum);
+		}
 	}
 
 	private static boolean hasNearbyThreat(ServerLevel level, SettlementState settlement, List<Villager> fletchers) {
@@ -365,5 +408,8 @@ public final class SettlementFletcherWork {
 	}
 
 	private record TimedTask(String taskKey, long tick) {
+	}
+
+	private record CraftedArrowBatch(String outputGoodsKey, int outputAmount, Map<String, Integer> consumedGoods, String outputLabel) {
 	}
 }

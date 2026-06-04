@@ -26,6 +26,6 @@ public final class LiveVillagesGameRules {
 	}
 
 	public static boolean dailySettlementReportsEnabled(ServerLevel level) {
-		return level.getGameRules().get(DAILY_SETTLEMENT_REPORTS);
+		return LiveVillagesConfig.dailySettlementReportsEnabled() || level.getGameRules().get(DAILY_SETTLEMENT_REPORTS);
 	}
 }

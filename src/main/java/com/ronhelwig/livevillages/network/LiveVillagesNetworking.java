@@ -29,6 +29,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.menu.TradeBoardLogic;
 import com.ronhelwig.livevillages.menu.TradeBoardSettlementView;
+import com.ronhelwig.livevillages.menu.TradeBoardTrading;
 import com.ronhelwig.livevillages.LiveVillagesGameRules;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.RouteState;
@@ -75,6 +76,7 @@ public final class LiveVillagesNetworking {
 		PayloadTypeRegistry.clientboundPlay().register(SettlementOverlayStatePayload.TYPE, SettlementOverlayStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(BuildSitePreviewRequestPayload.TYPE, BuildSitePreviewRequestPayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(StructureCaptureRequestPayload.TYPE, StructureCaptureRequestPayload.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(TradeBoardActionPayload.TYPE, TradeBoardActionPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BuildSitePreviewStatePayload.TYPE, BuildSitePreviewStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(TradeBoardRefreshPayload.TYPE, TradeBoardRefreshPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(SurveyorMapStatePayload.TYPE, SurveyorMapStatePayload.STREAM_CODEC);
@@ -96,6 +98,9 @@ public final class LiveVillagesNetworking {
 		});
 		ServerPlayNetworking.registerGlobalReceiver(StructureCaptureRequestPayload.TYPE, (payload, context) ->
 			StructureBlueprintCapture.exportLookedAtStructure(context.player(), payload.targetPos())
+		);
+		ServerPlayNetworking.registerGlobalReceiver(TradeBoardActionPayload.TYPE, (payload, context) ->
+			TradeBoardTrading.handleTradeAction(context.player(), payload)
 		);
 	}
 
@@ -846,6 +851,10 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.LIGHTHOUSE_ITEM
 			|| item == LiveVillagesBlocks.MINER_WORKSTATION_ITEM
 			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
+			|| item == LiveVillagesBlocks.SCRIBE_DESK_ITEM
+			|| item == LiveVillagesBlocks.GARDENER_WORKSTATION_ITEM
+			|| item == LiveVillagesBlocks.HONEY_SEPARATOR_ITEM
+			|| item == LiveVillagesBlocks.GUARD_POST_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
 			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
@@ -857,7 +866,14 @@ public final class LiveVillagesNetworking {
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
 			|| item == Items.STONECUTTER
-			|| item == Items.FLETCHING_TABLE;
+			|| item == Items.FLETCHING_TABLE
+			|| item == Items.BREWING_STAND
+			|| item == Items.CAULDRON
+			|| item == Items.LECTERN
+			|| item == Items.LOOM
+			|| item == Items.BLAST_FURNACE
+			|| item == Items.SMITHING_TABLE
+			|| item == Items.GRINDSTONE;
 	}
 
 	private static SettlementConstruction.StructurePreview structurePreviewForHeldWorkstation(
@@ -888,6 +904,22 @@ public final class LiveVillagesNetworking {
 
 		if (item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM) {
 			return SettlementConstruction.previewRoadwrightWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.SCRIBE_DESK_ITEM) {
+			return SettlementConstruction.previewScribeOfficeAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.GARDENER_WORKSTATION_ITEM) {
+			return SettlementConstruction.previewGardenerShedAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.HONEY_SEPARATOR_ITEM) {
+			return SettlementConstruction.previewBeekeeperApiaryAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.GUARD_POST_ITEM) {
+			return SettlementConstruction.previewGuardPostAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		if (item == LiveVillagesBlocks.FORESTER_TABLE_ITEM) {
@@ -932,6 +964,26 @@ public final class LiveVillagesNetworking {
 
 		if (item == Items.FLETCHING_TABLE) {
 			return SettlementConstruction.previewFletcherHutAtWorkstation(level, settlement.id(), placementPos, SettlementConstruction.fletcherHutFacingFor(settlement, placementPos));
+		}
+
+		if (item == Items.BREWING_STAND) {
+			return SettlementConstruction.previewClericShrineAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.CAULDRON) {
+			return SettlementConstruction.previewLeatherworkerWorkshopAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.LECTERN) {
+			return SettlementConstruction.previewLibraryAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.LOOM) {
+			return SettlementConstruction.previewShepherdHutAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == Items.BLAST_FURNACE || item == Items.SMITHING_TABLE || item == Items.GRINDSTONE) {
+			return SettlementConstruction.previewSmithyAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		return null;
@@ -1092,20 +1144,29 @@ public final class LiveVillagesNetworking {
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
 		return switch (type) {
 			case BAKERY -> "Bakery";
+			case BEEKEEPER_APIARY -> "Beekeeper's Apiary";
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
+			case CLERIC_SHRINE -> "Cleric Shrine";
 			case DOCK -> "Dock";
 			case LIGHTHOUSE -> "Lighthouse";
+			case LEATHERWORKER_WORKSHOP -> "Leatherworker's Workshop";
+			case LIBRARY -> "Library";
 			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
 			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> "Palisade Gatehouse";
 			case PALISADE_WALL -> "Palisade Wall";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
+			case GARDENER_SHED -> "Gardener's Shed";
+			case GUARD_POST -> "Guard Post";
 			case HOUSING_SHELTER -> "Housing Shelter";
 			case ROADWRIGHT_WORKSHOP -> "Roadwright's Workshop";
+			case SCRIBE_OFFICE -> "Scribe Office";
+			case SHEPHERD_HUT -> "Shepherd's Hut";
 			case SIMPLE_HOUSING_SHELTER -> "Simple Housing Shelter";
+			case SMITHY -> "Smithy";
 			case TRADING_POST -> "Trade Post";
 		};
 	}

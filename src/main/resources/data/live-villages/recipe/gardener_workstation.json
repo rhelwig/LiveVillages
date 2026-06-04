@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:bone_meal",
+    "D": "minecraft:dirt",
+    "P": "#minecraft:planks",
+    "S": "minecraft:wheat_seeds"
+  },
+  "pattern": [
+    "SBS",
+    "DDD",
+    "P P"
+  ],
+  "result": {
+    "id": "live-villages:gardener_workstation"
+  }
+}

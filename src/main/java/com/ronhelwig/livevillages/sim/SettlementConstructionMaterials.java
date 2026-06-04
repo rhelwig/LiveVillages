@@ -62,6 +62,7 @@ public final class SettlementConstructionMaterials {
 			case "stairs" -> craftWoodPart(goods, "stairs", 6, 4);
 			case "slab" -> craftWoodPart(goods, "slab", 3, 6);
 			case "door" -> craftWoodPart(goods, "door", 6, 3);
+			case "trapdoor" -> craftWoodPart(goods, "trapdoor", 3, 1);
 			case "fence" -> craftWoodPart(goods, "fence", 2, 1);
 			case "fence_gate" -> craftWoodPart(goods, "fence_gate", 4, 1);
 			case "bed" -> craftBed(goods);

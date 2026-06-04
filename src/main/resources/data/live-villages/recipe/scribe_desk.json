@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "minecraft:lectern",
+    "B": "minecraft:book",
+    "P": "#minecraft:planks",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    "PPP",
+    "B#B",
+    "S S"
+  ],
+  "result": {
+    "id": "live-villages:scribe_desk"
+  }
+}

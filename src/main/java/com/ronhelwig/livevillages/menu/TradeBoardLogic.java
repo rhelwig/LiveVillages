@@ -241,7 +241,7 @@ public final class TradeBoardLogic {
 			}
 
 			for (SettlementBuildBlockState block : buildSite.blocks()) {
-				if (block.status() != SettlementBuildBlockStatus.MISSING_MATERIAL) {
+				if (!requiresUnplacedConstructionMaterial(block.status())) {
 					continue;
 				}
 
@@ -266,6 +266,10 @@ public final class TradeBoardLogic {
 		}
 
 		return Map.copyOf(demand);
+	}
+
+	private static boolean requiresUnplacedConstructionMaterial(SettlementBuildBlockStatus status) {
+		return status == SettlementBuildBlockStatus.PENDING || status == SettlementBuildBlockStatus.MISSING_MATERIAL;
 	}
 
 	public static TradeBoardRaidView createRaidView(ServerLevel level, LiveVillagesSavedData savedData, SettlementState settlement) {
@@ -538,9 +542,9 @@ public final class TradeBoardLogic {
 	private static int buildSitePriority(SettlementBuildSite buildSite) {
 		return switch (buildSite.blueprintId()) {
 			case TRADING_POST -> 0;
-			case BAKERY -> 2;
+			case BAKERY, BEEKEEPER_APIARY -> 2;
 			case DOCK, LIGHTHOUSE -> 1;
-			case ROADWRIGHT_WORKSHOP, CARTOGRAPHER_HOUSE -> 2;
+			case ROADWRIGHT_WORKSHOP, CARTOGRAPHER_HOUSE, SCRIBE_OFFICE, GARDENER_SHED, GUARD_POST -> 2;
 			default -> 3;
 		};
 	}
@@ -611,10 +615,14 @@ public final class TradeBoardLogic {
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
 		return switch (type) {
 			case BAKERY -> "Bakery";
+			case BEEKEEPER_APIARY -> "Beekeeper's Apiary";
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
+			case CLERIC_SHRINE -> "Cleric Shrine";
 			case DOCK -> "Dock";
+			case LEATHERWORKER_WORKSHOP -> "Leatherworker's Workshop";
+			case LIBRARY -> "Library";
 			case LIGHTHOUSE -> "Lighthouse";
 			case MASON_WORKSHOP -> "Mason's Workshop";
 			case MINE_ENTRANCE -> "Mine Entrance";
@@ -622,9 +630,14 @@ public final class TradeBoardLogic {
 			case PALISADE_WALL -> "Palisade Wall";
 			case FLETCHER_HUT -> "Fletcher's Hut";
 			case FORESTER_WORKSHOP -> "Forester's Workshop";
+			case GARDENER_SHED -> "Gardener's Shed";
+			case GUARD_POST -> "Guard Post";
 			case HOUSING_SHELTER -> "Housing Shelter";
 			case ROADWRIGHT_WORKSHOP -> "Roadwright's Workshop";
+			case SCRIBE_OFFICE -> "Scribe Office";
+			case SHEPHERD_HUT -> "Shepherd's Hut";
 			case SIMPLE_HOUSING_SHELTER -> "Simple Housing Shelter";
+			case SMITHY -> "Smithy";
 			case TRADING_POST -> "Trade Post";
 		};
 	}

@@ -105,7 +105,7 @@ public final class SettlementForesterWork {
 			ForestryTask forestryTask = task.get();
 			ACTIVE_TASKS.put(forester.getUUID().toString(), new TimedTask(forestryTask.taskKey(), tick));
 			showForesterTool(forester, forestryTask.action());
-			steerForesterTowardTask(forester, forestryTask.standPos());
+			steerForesterTowardTask(level, settlement, forester, forestryTask.standPos());
 
 			if (!isWithinWorkReach(forester, forestryTask.workPos())) {
 				SettlementProfessionDiagnostics.log(level, settlement, "forester", "moving_to_work", forestryTaskSummary(level, forester, forestryTask));
@@ -945,8 +945,8 @@ public final class SettlementForesterWork {
 		);
 	}
 
-	private static void steerForesterTowardTask(Villager forester, BlockPos standPos) {
-		forester.getNavigation().moveTo(standPos.getX() + 0.5D, standPos.getY(), standPos.getZ() + 0.5D, FORESTRY_WALK_SPEED);
+	private static void steerForesterTowardTask(ServerLevel level, SettlementState settlement, Villager forester, BlockPos standPos) {
+		SettlementNavigation.moveToRoutineTarget(level, settlement, forester, standPos, FORESTRY_WALK_SPEED, workRadius(settlement));
 	}
 
 	private static boolean isWithinWorkReach(Villager forester, BlockPos workPos) {

@@ -1,0 +1,101 @@
+{
+  "textures": {
+    "book": "minecraft:block/bookshelf",
+    "dark": "minecraft:block/dark_oak_planks",
+    "paper": "minecraft:block/birch_planks",
+    "particle": "minecraft:block/oak_planks",
+    "wood": "minecraft:block/oak_planks"
+  },
+  "elements": [
+    {
+      "from": [-16, 12, 2],
+      "to": [32, 16, 14],
+      "faces": {
+        "down": {"texture": "#dark"},
+        "east": {"texture": "#wood"},
+        "north": {"texture": "#wood"},
+        "south": {"texture": "#wood"},
+        "up": {"texture": "#wood"},
+        "west": {"texture": "#wood"}
+      }
+    },
+    {
+      "from": [-14, 0, 4],
+      "to": [-10, 12, 8],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [-14, 0, 10],
+      "to": [-10, 12, 14],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [4, 0, 4],
+      "to": [8, 12, 8],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [4, 0, 10],
+      "to": [8, 12, 14],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [26, 0, 4],
+      "to": [30, 12, 8],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [26, 0, 10],
+      "to": [30, 12, 14],
+      "faces": {
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [-10, 16, 5],
+      "to": [0, 17, 11],
+      "faces": {
+        "up": {"texture": "#paper"}
+      }
+    },
+    {
+      "from": [10, 16, 4],
+      "to": [22, 18, 12],
+      "faces": {
+        "east": {"texture": "#book"},
+        "north": {"texture": "#book"},
+        "south": {"texture": "#book"},
+        "up": {"texture": "#book"},
+        "west": {"texture": "#book"}
+      }
+    }
+  ]
+}

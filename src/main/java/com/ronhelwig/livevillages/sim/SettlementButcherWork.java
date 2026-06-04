@@ -32,6 +32,8 @@ import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
+import com.ronhelwig.livevillages.content.LiveVillagesItems;
+
 public final class SettlementButcherWork {
 	private static final double BUTCHER_WORK_REACH_DISTANCE_SQUARED = 9.0D;
 	private static final double BUTCHER_WALK_SPEED = 0.75D;
@@ -40,6 +42,7 @@ public final class SettlementButcherWork {
 	private static final int MAX_PEN_AREA_BLOCKS = 64;
 	private static final int MIN_PEN_AREA_BLOCKS = 4;
 	private static final int PEN_SITE_SEARCH_RADIUS_BLOCKS = 12;
+	private static final int MAX_EMPTY_PEN_BOUNDARY_SCANS = 512;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final List<String> PIG_FEED_GOODS = List.of("carrot", "potato", "beetroot");
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
@@ -48,52 +51,91 @@ public final class SettlementButcherWork {
 	}
 
 	public static void maintainLoadedButchery(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, int routeCount) {
-		HerdSurvey survey = survey(level, settlement);
-		List<AnimalPen> pens = detectPens(level, survey.animals());
-		List<Villager> butchers = SettlementVillagers.nearbyButchers(level, settlement);
+		maintainLoadedLivestockWork(
+			level,
+			settlement,
+			stock,
+			routeCount,
+			SettlementRoleKeys.BUTCHER,
+			"butchery",
+			SettlementVillagers.nearbyButchers(level, settlement),
+			List.of(LivestockType.PIG, LivestockType.COW),
+			false
+		);
+	}
 
-		if (butchers.isEmpty()) {
-			SettlementProfessionDiagnostics.log(level, settlement, "butcher", "no_butchers", "animals=" + survey.animals().size());
+	public static boolean maintainLoadedShepherding(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, int routeCount) {
+		Map<String, Integer> beforeStock = new HashMap<>(stock);
+		maintainLoadedLivestockWork(
+			level,
+			settlement,
+			stock,
+			routeCount,
+			SettlementRoleKeys.SHEPHERD,
+			"shepherding",
+			SettlementVillagers.nearbyShepherds(level, settlement),
+			List.of(LivestockType.SHEEP),
+			true
+		);
+		return !stock.equals(beforeStock);
+	}
+
+	private static void maintainLoadedLivestockWork(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		int routeCount,
+		String roleKey,
+		String scheduleKey,
+		List<Villager> workers,
+		List<LivestockType> livestockTypes,
+		boolean allowShearing
+	) {
+		HerdSurvey survey = survey(level, settlement);
+		List<AnimalPen> pens = detectPens(level, settlement, survey.animals());
+
+		if (workers.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, roleKey, "no_workers", "animals=" + survey.animals().size());
 			return;
 		}
 
-		for (Villager butcher : butchers) {
-			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, butcher, "butchery", BUTCHER_DECIDE_INTERVAL_TICKS)) {
-				if (SettlementVillagerWorkSchedule.isTakingBreak(level, butcher)) {
-					butcher.getNavigation().stop();
+		for (Villager worker : workers) {
+			if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, worker, scheduleKey, BUTCHER_DECIDE_INTERVAL_TICKS)) {
+				if (SettlementVillagerWorkSchedule.isTakingBreak(level, worker)) {
+					worker.getNavigation().stop();
 				}
 
 				continue;
 			}
 
-			Optional<ButcherTask> task = chooseButcherTask(level, settlement, butcher, stock, routeCount, survey, pens);
+			Optional<ButcherTask> task = chooseLivestockTask(level, settlement, worker, stock, routeCount, survey, pens, livestockTypes, allowShearing);
 
 			if (task.isEmpty()) {
-				ACTIVE_TASKS.remove(butcher.getUUID().toString());
-				SettlementProfessionDiagnostics.log(level, settlement, "butcher", "no_task", "animals=" + survey.animals().size() + " pens=" + pens.size());
+				ACTIVE_TASKS.remove(worker.getUUID().toString());
+				SettlementProfessionDiagnostics.log(level, settlement, roleKey, "no_task", "animals=" + survey.animals().size() + " pens=" + pens.size());
 				continue;
 			}
 
-			ButcherTask butcherTask = task.get();
-			BlockPos workPos = resolveTaskPos(level, butcherTask);
+			ButcherTask livestockTask = task.get();
+			BlockPos workPos = resolveTaskPos(level, livestockTask);
 
 			if (workPos == null) {
-				ACTIVE_TASKS.remove(butcher.getUUID().toString());
-				SettlementProfessionDiagnostics.log(level, settlement, "butcher", "no_work_position", "task=" + butcherTask.taskKey());
+				ACTIVE_TASKS.remove(worker.getUUID().toString());
+				SettlementProfessionDiagnostics.log(level, settlement, roleKey, "no_work_position", "task=" + livestockTask.taskKey());
 				continue;
 			}
 
-			ACTIVE_TASKS.put(butcher.getUUID().toString(), new TimedTask(butcherTask.taskKey(), level.getServer().getTickCount()));
-			showButcherTool(butcher, butcherTask);
-			steerButcherTowardTask(butcher, workPos);
+			ACTIVE_TASKS.put(worker.getUUID().toString(), new TimedTask(livestockTask.taskKey(), level.getServer().getTickCount()));
+			showLivestockTool(worker, livestockTask);
+			steerWorkerTowardTask(level, settlement, worker, workPos);
 
-			if (!isWithinWorkReach(butcher, workPos)) {
-				SettlementProfessionDiagnostics.log(level, settlement, "butcher", "moving_to_work", "villager=" + butcher.getUUID() + " task=" + butcherTask.taskKey() + " target=" + workPos.toShortString());
+			if (!isWithinWorkReach(worker, workPos)) {
+				SettlementProfessionDiagnostics.log(level, settlement, roleKey, "moving_to_work", "villager=" + worker.getUUID() + " task=" + livestockTask.taskKey() + " target=" + workPos.toShortString());
 				continue;
 			}
 
-			if (performButcherTask(level, settlement, butcher, butcherTask, stock)) {
-				butcher.swing(InteractionHand.MAIN_HAND);
+			if (performLivestockTask(level, settlement, worker, livestockTask, stock, roleKey)) {
+				worker.swing(InteractionHand.MAIN_HAND);
 			}
 		}
 	}
@@ -114,15 +156,15 @@ public final class SettlementButcherWork {
 
 		HerdSurvey survey = survey(level, settlement);
 
-		if (survey.adultCows() <= 0 && survey.adultSheep() <= 0 && survey.adultPigs() <= 0) {
+		if (survey.adultCows() <= 0 && survey.adultPigs() <= 0) {
 			return;
 		}
 
-		int activeButchers = Math.min(butchers, Math.max(1, (survey.adultCows() + survey.adultSheep() + survey.adultPigs() + 3) / 4));
+		int activeButchers = Math.min(butchers, Math.max(1, (survey.adultCows() + survey.adultPigs() + 3) / 4));
 		int requiredWheatFeed = scaledPeriodicAmount(
 			settlement,
 			"butcher|wheat_feed",
-			Math.min(activeButchers * 1.5D, (survey.adultCows() * 0.60D) + (survey.adultSheep() * 0.35D)),
+			Math.min(activeButchers * 1.5D, survey.adultCows() * 0.60D),
 			previousTick,
 			currentTick
 		);
@@ -151,20 +193,6 @@ public final class SettlementButcherWork {
 			previousTick,
 			currentTick
 		);
-		int mutton = scaledPeriodicAmount(
-			settlement,
-			"butcher|mutton",
-			Math.min(activeButchers * 1.5D, survey.adultSheep() * 0.30D) * wheatCoverage,
-			previousTick,
-			currentTick
-		);
-		int wool = scaledPeriodicAmount(
-			settlement,
-			"butcher|wool",
-			Math.min(activeButchers * 1.0D, survey.adultSheep() * 0.45D) * wheatCoverage,
-			previousTick,
-			currentTick
-		);
 		int pork = scaledPeriodicAmount(
 			settlement,
 			"butcher|pork",
@@ -174,9 +202,60 @@ public final class SettlementButcherWork {
 		);
 		addButcherOutput(stock, "beef", beef);
 		addButcherOutput(stock, "leather", leather);
+		addButcherOutput(stock, "pork", pork);
+	}
+
+	public static void applyLoadedShepherdWork(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		int shepherdCount,
+		long previousTick,
+		long currentTick
+	) {
+		int shepherds = Math.max(0, shepherdCount);
+
+		if (shepherds <= 0 || currentTick <= previousTick) {
+			return;
+		}
+
+		HerdSurvey survey = survey(level, settlement);
+
+		if (survey.adultSheep() <= 0) {
+			return;
+		}
+
+		int activeShepherds = Math.min(shepherds, Math.max(1, (survey.adultSheep() + 3) / 4));
+		int requiredWheatFeed = scaledPeriodicAmount(
+			settlement,
+			"shepherd|wheat_feed",
+			Math.min(activeShepherds * 1.5D, survey.adultSheep() * 0.35D),
+			previousTick,
+			currentTick
+		);
+		int wheatFeedCost = Math.min(stock.getOrDefault("wheat", 0), requiredWheatFeed);
+		double wheatCoverage = requiredWheatFeed <= 0 ? 1.0D : wheatFeedCost / (double) requiredWheatFeed;
+
+		if (wheatFeedCost > 0) {
+			stock.put("wheat", stock.getOrDefault("wheat", 0) - wheatFeedCost);
+		}
+
+		int mutton = scaledPeriodicAmount(
+			settlement,
+			"shepherd|mutton",
+			Math.min(activeShepherds * 1.0D, survey.adultSheep() * 0.18D) * wheatCoverage,
+			previousTick,
+			currentTick
+		);
+		int wool = scaledPeriodicAmount(
+			settlement,
+			"shepherd|wool",
+			Math.min(activeShepherds * 1.5D, survey.adultSheep() * 0.55D) * wheatCoverage,
+			previousTick,
+			currentTick
+		);
 		addButcherOutput(stock, "mutton", mutton);
 		addButcherOutput(stock, "wool", wool);
-		addButcherOutput(stock, "pork", pork);
 	}
 
 	public static Optional<String> loadedButcherTaskKey(ServerLevel level, Villager villager) {
@@ -187,6 +266,10 @@ public final class SettlementButcherWork {
 		}
 
 		return Optional.of(task.taskKey());
+	}
+
+	public static Optional<String> loadedShepherdTaskKey(ServerLevel level, Villager villager) {
+		return loadedButcherTaskKey(level, villager);
 	}
 
 	private static HerdSurvey survey(ServerLevel level, SettlementState settlement) {
@@ -228,7 +311,7 @@ public final class SettlementButcherWork {
 		return new HerdSurvey(List.copyOf(animals), adultCows, totalCows, adultSheep, totalSheep, adultPigs, totalPigs);
 	}
 
-	private static List<AnimalPen> detectPens(ServerLevel level, List<Animal> animals) {
+	private static List<AnimalPen> detectPens(ServerLevel level, SettlementState settlement, List<Animal> animals) {
 		List<AnimalPen> pens = new ArrayList<>();
 		Set<String> seenBounds = new HashSet<>();
 
@@ -249,6 +332,8 @@ public final class SettlementButcherWork {
 				pens.add(pen.get());
 			}
 		}
+
+		addEmptyDetectedPens(level, settlement, pens, seenBounds);
 
 		if (pens.isEmpty()) {
 			return List.of();
@@ -279,6 +364,69 @@ public final class SettlementButcherWork {
 		}
 
 		return List.copyOf(enrichedPens);
+	}
+
+	private static void addEmptyDetectedPens(ServerLevel level, SettlementState settlement, List<AnimalPen> pens, Set<String> seenBounds) {
+		BlockPos center = settlement.center();
+		int radius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		int radiusSquared = radius * radius;
+		int scannedBoundaries = 0;
+
+		for (int x = center.getX() - radius; x <= center.getX() + radius && scannedBoundaries < MAX_EMPTY_PEN_BOUNDARY_SCANS; x++) {
+			for (int z = center.getZ() - radius; z <= center.getZ() + radius && scannedBoundaries < MAX_EMPTY_PEN_BOUNDARY_SCANS; z++) {
+				int dx = x - center.getX();
+				int dz = z - center.getZ();
+
+				if (dx * dx + dz * dz > radiusSquared) {
+					continue;
+				}
+
+				BlockPos columnPos = new BlockPos(x, center.getY(), z);
+
+				if (!level.hasChunkAt(columnPos)) {
+					continue;
+				}
+
+				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+
+				if (y < level.getMinY()) {
+					continue;
+				}
+
+				BlockPos boundaryPos = new BlockPos(x, y, z);
+
+				if (!isFenceBoundary(level.getBlockState(boundaryPos))) {
+					continue;
+				}
+
+				scannedBoundaries++;
+
+				for (Direction direction : Direction.Plane.HORIZONTAL) {
+					BlockPos candidateInterior = boundaryPos.relative(direction);
+
+					if (!isPenWalkableCell(level, candidateInterior)) {
+						continue;
+					}
+
+					Optional<AnimalPen> pen = detectPenAt(level, candidateInterior);
+
+					if (pen.isEmpty() || !isPenInsideSettlement(settlement, pen.get(), radiusSquared)) {
+						continue;
+					}
+
+					String key = penBoundsKey(pen.get());
+
+					if (seenBounds.add(key)) {
+						pens.add(pen.get());
+					}
+				}
+			}
+		}
+	}
+
+	private static boolean isPenInsideSettlement(SettlementState settlement, AnimalPen pen, int radiusSquared) {
+		return horizontalDistanceSqr(pen.min(), settlement.center()) <= radiusSquared
+			&& horizontalDistanceSqr(pen.max(), settlement.center()) <= radiusSquared;
 	}
 
 	private static Optional<AnimalPen> detectPenAt(ServerLevel level, BlockPos start) {
@@ -333,40 +481,44 @@ public final class SettlementButcherWork {
 		return Optional.of(new AnimalPen(min, max, center, visited.size(), 0, 0, 0));
 	}
 
-	private static Optional<ButcherTask> chooseButcherTask(
+	private static Optional<ButcherTask> chooseLivestockTask(
 		ServerLevel level,
 		SettlementState settlement,
-		Villager butcher,
+		Villager worker,
 		Map<String, Integer> stock,
 		int routeCount,
 		HerdSurvey survey,
-		List<AnimalPen> pens
+		List<AnimalPen> pens,
+		List<LivestockType> livestockTypes,
+		boolean allowShearing
 	) {
-		Optional<ButcherTask> buildPenTask = choosePenBuildTask(level, settlement, butcher, stock, survey, pens);
+		Optional<ButcherTask> buildPenTask = choosePenBuildTask(level, settlement, worker, stock, survey, pens, livestockTypes);
 
 		if (buildPenTask.isPresent()) {
 			return buildPenTask;
 		}
 
-		Optional<ButcherTask> herdTask = chooseHerdTask(level, settlement, butcher, stock, survey, pens);
+		Optional<ButcherTask> herdTask = chooseHerdTask(level, settlement, worker, stock, survey, pens, livestockTypes);
 
 		if (herdTask.isPresent()) {
 			return herdTask;
 		}
 
-		Optional<ButcherTask> breedingTask = chooseBreedingTask(level, settlement, butcher, survey, stock, routeCount);
+		Optional<ButcherTask> breedingTask = chooseBreedingTask(level, settlement, worker, survey, stock, routeCount, livestockTypes);
 
 		if (breedingTask.isPresent()) {
 			return breedingTask;
 		}
 
-		Optional<ButcherTask> cullingTask = chooseCullingTask(level, settlement, butcher, survey, routeCount);
+		Optional<ButcherTask> cullingTask = chooseCullingTask(level, settlement, worker, survey, routeCount, livestockTypes);
 
 		if (cullingTask.isPresent()) {
 			return cullingTask;
 		}
 
-		return chooseShearingTask(level, settlement, butcher);
+		return allowShearing && livestockTypes.contains(LivestockType.SHEEP)
+			? chooseShearingTask(level, settlement, worker)
+			: Optional.empty();
 	}
 
 	private static Optional<ButcherTask> choosePenBuildTask(
@@ -375,9 +527,10 @@ public final class SettlementButcherWork {
 		Villager butcher,
 		Map<String, Integer> stock,
 		HerdSurvey survey,
-		List<AnimalPen> pens
+		List<AnimalPen> pens,
+		List<LivestockType> livestockTypes
 	) {
-		for (LivestockType livestockType : List.of(LivestockType.PIG, LivestockType.COW, LivestockType.SHEEP)) {
+		for (LivestockType livestockType : livestockTypes) {
 			Optional<PenPlan> plan = neededPenPlan(level, settlement, survey, pens, livestockType);
 
 			if (plan.isEmpty()) {
@@ -421,12 +574,13 @@ public final class SettlementButcherWork {
 		Villager butcher,
 		Map<String, Integer> stock,
 		HerdSurvey survey,
-		List<AnimalPen> pens
+		List<AnimalPen> pens,
+		List<LivestockType> livestockTypes
 	) {
 		ButcherTask bestTask = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 
-		for (LivestockType livestockType : List.of(LivestockType.PIG, LivestockType.COW, LivestockType.SHEEP)) {
+		for (LivestockType livestockType : livestockTypes) {
 			AnimalPen targetPen = usablePenForType(level, settlement, survey, pens, livestockType).orElse(null);
 
 			if (targetPen == null || !hasHerdingFeed(stock, livestockType)) {
@@ -465,7 +619,8 @@ public final class SettlementButcherWork {
 		Villager butcher,
 		HerdSurvey survey,
 		Map<String, Integer> stock,
-		int routeCount
+		int routeCount,
+		List<LivestockType> livestockTypes
 	) {
 		int desiredSheep = desiredSheepCount(settlement, routeCount);
 		int desiredCows = desiredCowCount(settlement, routeCount);
@@ -475,17 +630,17 @@ public final class SettlementButcherWork {
 		int pigDeficit = Math.max(0, desiredPigs - survey.totalPigs());
 		List<ScoredTask> candidates = new ArrayList<>();
 
-		if (sheepDeficit > 0 && stock.getOrDefault("wheat", 0) >= 2) {
+		if (livestockTypes.contains(LivestockType.SHEEP) && sheepDeficit > 0 && stock.getOrDefault("wheat", 0) >= 2) {
 			findBreedingTask(level, settlement, butcher, Sheep.class, LivestockType.SHEEP, ButcherAction.BREED_SHEEP)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, sheepDeficit / (double) Math.max(1, desiredSheep))));
 		}
 
-		if (cowDeficit > 0 && stock.getOrDefault("wheat", 0) >= 2) {
+		if (livestockTypes.contains(LivestockType.COW) && cowDeficit > 0 && stock.getOrDefault("wheat", 0) >= 2) {
 			findBreedingTask(level, settlement, butcher, Cow.class, LivestockType.COW, ButcherAction.BREED_COW)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, cowDeficit / (double) Math.max(1, desiredCows))));
 		}
 
-		if (pigDeficit > 0 && availablePigFeedUnits(stock) >= 2) {
+		if (livestockTypes.contains(LivestockType.PIG) && pigDeficit > 0 && availablePigFeedUnits(stock) >= 2) {
 			findBreedingTask(level, settlement, butcher, Pig.class, LivestockType.PIG, ButcherAction.BREED_PIG)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, pigDeficit / (double) Math.max(1, desiredPigs))));
 		}
@@ -503,7 +658,8 @@ public final class SettlementButcherWork {
 		SettlementState settlement,
 		Villager butcher,
 		HerdSurvey survey,
-		int routeCount
+		int routeCount,
+		List<LivestockType> livestockTypes
 	) {
 		int desiredSheep = desiredSheepCount(settlement, routeCount);
 		int desiredCows = desiredCowCount(settlement, routeCount);
@@ -513,17 +669,17 @@ public final class SettlementButcherWork {
 		int pigExcess = Math.max(0, survey.totalPigs() - desiredPigs);
 		List<ScoredTask> candidates = new ArrayList<>();
 
-		if (sheepExcess > 1) {
+		if (livestockTypes.contains(LivestockType.SHEEP) && sheepExcess > 1) {
 			findCullTask(level, settlement, butcher, Sheep.class, LivestockType.SHEEP, ButcherAction.CULL_SHEEP)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, sheepExcess / (double) Math.max(1, desiredSheep))));
 		}
 
-		if (cowExcess > 1) {
+		if (livestockTypes.contains(LivestockType.COW) && cowExcess > 1) {
 			findCullTask(level, settlement, butcher, Cow.class, LivestockType.COW, ButcherAction.CULL_COW)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, cowExcess / (double) Math.max(1, desiredCows))));
 		}
 
-		if (pigExcess > 1) {
+		if (livestockTypes.contains(LivestockType.PIG) && pigExcess > 1) {
 			findCullTask(level, settlement, butcher, Pig.class, LivestockType.PIG, ButcherAction.CULL_PIG)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, pigExcess / (double) Math.max(1, desiredPigs))));
 		}
@@ -764,29 +920,29 @@ public final class SettlementButcherWork {
 			.orElse(null);
 	}
 
-	private static boolean performButcherTask(ServerLevel level, SettlementState settlement, Villager butcher, ButcherTask task, Map<String, Integer> stock) {
+	private static boolean performLivestockTask(ServerLevel level, SettlementState settlement, Villager worker, ButcherTask task, Map<String, Integer> stock, String roleKey) {
 		Map<String, Integer> beforeStock = new HashMap<>(stock);
 		boolean completed = switch (task.action()) {
 			case BUILD_PEN -> buildPenBlock(level, task, stock);
 			case HERD_ANIMAL -> herdAnimal(level, task, stock);
 			case SHEAR_SHEEP -> level.getEntity(task.entityId()) instanceof Sheep sheep
 				&& sheep.readyForShearing()
-				&& shearSheep(level, sheep);
+				&& shearSheep(level, settlement, worker, sheep, stock, roleKey);
 			case BREED_SHEEP, BREED_COW -> breedWithWheat(level, task, stock);
 			case BREED_PIG -> breedWithPigFeed(level, task, stock);
-			case CULL_SHEEP, CULL_COW, CULL_PIG -> cullAnimal(level, settlement, butcher, task, stock);
+			case CULL_SHEEP, CULL_COW, CULL_PIG -> cullAnimal(level, settlement, worker, task, stock, roleKey);
 		};
 
 		if (completed) {
 			SettlementProfessionReports.recordConsumedDeltas(
 				level,
 				settlement,
-				SettlementRoleKeys.BUTCHER,
-				butcher,
+				roleKey,
+				worker,
 				beforeStock,
 				stock
 			);
-			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BUTCHER, butcher, task.taskKey().replace('_', ' '));
+			SettlementProfessionReports.recordAccomplished(level, settlement, roleKey, worker, task.taskKey().replace('_', ' '));
 		}
 
 		return completed;
@@ -838,8 +994,17 @@ public final class SettlementButcherWork {
 		return true;
 	}
 
-	private static boolean shearSheep(ServerLevel level, Sheep sheep) {
+	private static boolean shearSheep(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager worker,
+		Sheep sheep,
+		Map<String, Integer> stock,
+		String roleKey
+	) {
 		sheep.shear(level, SoundSource.NEUTRAL, new ItemStack(Items.SHEARS));
+		SettlementGoods.addGoods(stock, "wool", 1);
+		SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "wool", 1);
 		return true;
 	}
 
@@ -890,7 +1055,7 @@ public final class SettlementButcherWork {
 		return !animal.isBaby() && animal.getAge() == 0 && !animal.isInLove();
 	}
 
-	private static boolean cullAnimal(ServerLevel level, SettlementState settlement, Villager butcher, ButcherTask task, Map<String, Integer> stock) {
+	private static boolean cullAnimal(ServerLevel level, SettlementState settlement, Villager worker, ButcherTask task, Map<String, Integer> stock, String roleKey) {
 		if (!(level.getEntity(task.entityId()) instanceof Animal animal) || !canCull(animal)) {
 			return false;
 		}
@@ -899,18 +1064,18 @@ public final class SettlementButcherWork {
 			case COW -> {
 				SettlementGoods.addGoods(stock, "beef", 2);
 				SettlementGoods.addGoods(stock, "leather", 1);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BUTCHER, butcher, "beef", 2);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BUTCHER, butcher, "leather", 1);
+				SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "beef", 2);
+				SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "leather", 1);
 			}
 			case SHEEP -> {
 				SettlementGoods.addGoods(stock, "mutton", 1);
 				SettlementGoods.addGoods(stock, "wool", 1);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BUTCHER, butcher, "mutton", 1);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BUTCHER, butcher, "wool", 1);
+				SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "mutton", 1);
+				SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "wool", 1);
 			}
 			case PIG -> {
 				SettlementGoods.addGoods(stock, "pork", 2);
-				SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BUTCHER, butcher, "pork", 2);
+				SettlementProfessionReports.recordProduced(level, settlement, roleKey, worker, "pork", 2);
 			}
 		}
 
@@ -1026,6 +1191,12 @@ public final class SettlementButcherWork {
 		return new BlockPos(sumX / animals.size(), sumY / animals.size(), sumZ / animals.size());
 	}
 
+	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
+		double dx = first.getX() - second.getX();
+		double dz = first.getZ() - second.getZ();
+		return (dx * dx) + (dz * dz);
+	}
+
 	private static int interiorSizeForCapacity(int neededCapacity) {
 		if (neededCapacity > 12) {
 			return 9;
@@ -1076,29 +1247,30 @@ public final class SettlementButcherWork {
 		return SettlementEconomyRules.scaledPeriodicAmount(settlement.id() + "|" + key, dailyRate, previousTick, currentTick);
 	}
 
-	private static void showButcherTool(Villager butcher, ButcherTask task) {
-		if (!butcher.getMainHandItem().isEmpty()) {
+	private static void showLivestockTool(Villager worker, ButcherTask task) {
+		if (!worker.getMainHandItem().isEmpty()) {
 			return;
 		}
 
-		butcher.setItemSlot(
+		worker.setItemSlot(
 			EquipmentSlot.MAINHAND,
 			new ItemStack(switch (task.action()) {
 				case BUILD_PEN -> task.materialKey().equals("fence_gate") ? Items.OAK_FENCE_GATE : Items.OAK_FENCE;
 				case HERD_ANIMAL, BREED_PIG -> Items.CARROT;
 				case BREED_SHEEP, BREED_COW -> Items.WHEAT;
 				case SHEAR_SHEEP -> Items.SHEARS;
-				case CULL_SHEEP, CULL_COW, CULL_PIG -> Items.IRON_AXE;
+				case CULL_SHEEP -> LiveVillagesItems.CROOKED_STAFF;
+				case CULL_COW, CULL_PIG -> Items.IRON_AXE;
 			})
 		);
 	}
 
-	private static void steerButcherTowardTask(Villager butcher, BlockPos workPos) {
-		butcher.getNavigation().moveTo(workPos.getX() + 0.5D, workPos.getY(), workPos.getZ() + 0.5D, BUTCHER_WALK_SPEED);
+	private static void steerWorkerTowardTask(ServerLevel level, SettlementState settlement, Villager worker, BlockPos workPos) {
+		SettlementNavigation.moveToRoutineTarget(level, settlement, worker, workPos, BUTCHER_WALK_SPEED);
 	}
 
-	private static boolean isWithinWorkReach(Villager butcher, BlockPos workPos) {
-		return butcher.distanceToSqr(workPos.getX() + 0.5D, workPos.getY() + 0.5D, workPos.getZ() + 0.5D) <= BUTCHER_WORK_REACH_DISTANCE_SQUARED;
+	private static boolean isWithinWorkReach(Villager worker, BlockPos workPos) {
+		return worker.distanceToSqr(workPos.getX() + 0.5D, workPos.getY() + 0.5D, workPos.getZ() + 0.5D) <= BUTCHER_WORK_REACH_DISTANCE_SQUARED;
 	}
 
 	private enum LivestockType {
@@ -1174,10 +1346,14 @@ public final class SettlementButcherWork {
 
 		private boolean matchesType(LivestockType livestockType) {
 			return switch (livestockType) {
-				case COW -> cows > 0;
-				case SHEEP -> sheep > 0;
-				case PIG -> pigs > 0;
+				case COW -> isEmpty() || cows > 0;
+				case SHEEP -> isEmpty() || sheep > 0;
+				case PIG -> isEmpty() || pigs > 0;
 			};
+		}
+
+		private boolean isEmpty() {
+			return cows == 0 && sheep == 0 && pigs == 0;
 		}
 
 		private int capacity() {

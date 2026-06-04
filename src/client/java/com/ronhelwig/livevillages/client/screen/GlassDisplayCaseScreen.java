@@ -67,9 +67,11 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	private Button emeraldButton;
 	private int focusedSlot = -1;
 	private Tab activeTab = Tab.SHOP;
+	private final SettlementScreenTheme theme;
 
 	public GlassDisplayCaseScreen(GlassDisplayCaseMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title, SCREEN_WIDTH, SCREEN_HEIGHT);
+		this.theme = SettlementScreenTheme.forTier(menu.settlementTier());
 		this.inventoryLabelX = GlassDisplayCaseMenu.PLAYER_INV_X;
 		this.inventoryLabelY = 112;
 	}
@@ -98,25 +100,25 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 		extractTransparentBackground(graphics);
 		updateFocusedSlot(mouseX, mouseY);
 
-		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xEE2B241A);
-		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 18, 0xFF7A633F);
+		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, theme.overlay());
+		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 18, theme.header());
 		if (activeTab == Tab.BOUNTIES && menu.bakeryContext()) {
-			graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFFB39A6A);
+			graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + imageHeight - 1, theme.body());
 		} else {
-			graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + STOCK_SECTION_BOTTOM, 0xFFB39A6A);
-			graphics.fill(leftPos + 1, topPos + STOCK_SECTION_BOTTOM + 1, leftPos + imageWidth - 1, topPos + INVENTORY_SECTION_TOP - 1, 0xFF3E3223);
-			graphics.fill(leftPos + 1, topPos + INVENTORY_SECTION_TOP, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF251E16);
+			graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + STOCK_SECTION_BOTTOM, theme.body());
+			graphics.fill(leftPos + 1, topPos + STOCK_SECTION_BOTTOM + 1, leftPos + imageWidth - 1, topPos + INVENTORY_SECTION_TOP - 1, theme.divider());
+			graphics.fill(leftPos + 1, topPos + INVENTORY_SECTION_TOP, leftPos + imageWidth - 1, topPos + imageHeight - 1, theme.body());
 		}
-		graphics.outline(leftPos, topPos, imageWidth, imageHeight, 0xFFD8C497);
+		graphics.outline(leftPos, topPos, imageWidth, imageHeight, theme.border());
 
 		if (activeTab != Tab.BOUNTIES || !menu.bakeryContext()) {
-			graphics.fill(leftPos + 10, topPos + 22, leftPos + 144, topPos + STOCK_SECTION_BOTTOM - 8, 0x11FFF5E6);
+			graphics.fill(leftPos + 10, topPos + 22, leftPos + 144, topPos + STOCK_SECTION_BOTTOM - 8, theme.panelFill());
 			graphics.fill(
 				leftPos + GlassDisplayCaseMenu.CASE_START_X - 8,
 				topPos + 22,
 				leftPos + 216,
 				topPos + STOCK_SECTION_BOTTOM - 8,
-				0x22FFF5E6
+				theme.panelStrongFill()
 			);
 			if (menu.bakeryContext()) {
 				graphics.fill(
@@ -124,14 +126,14 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 					topPos + ACTION_PANEL_Y,
 					leftPos + ACTION_PANEL_X + ACTION_PANEL_WIDTH,
 					topPos + ACTION_PANEL_Y + ACTION_PANEL_HEIGHT,
-					0x22FFF5E6
+					theme.panelStrongFill()
 				);
 				graphics.outline(
 					leftPos + ACTION_PANEL_X,
 					topPos + ACTION_PANEL_Y,
 					ACTION_PANEL_WIDTH,
 					ACTION_PANEL_HEIGHT,
-					0x447A633F
+					theme.panelOutline()
 				);
 			}
 
@@ -149,36 +151,36 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 
 	@Override
 	protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-		graphics.text(font, title, titleLabelX, titleLabelY, 0xFFF5E6C8, false);
+		graphics.text(font, title, titleLabelX, titleLabelY, theme.titleText(), false);
 
 		if (activeTab == Tab.BOUNTIES && menu.bakeryContext()) {
 			drawBountiesTab(graphics, mouseX, mouseY);
 			return;
 		}
 
-		graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xFFD8C4A0, false);
+		graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, theme.secondaryText(), false);
 		if (!menu.bakeryContext()) {
-			graphics.text(font, STORAGE_LABEL, INFO_X, INFO_TITLE_Y, 0xFF4E381A, false);
-			int nextInfoY = drawWrappedText(graphics, STORAGE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, 0xFF4E381A);
-			drawWrappedText(graphics, STORAGE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF4E381A);
+			graphics.text(font, STORAGE_LABEL, INFO_X, INFO_TITLE_Y, theme.accentText(), false);
+			int nextInfoY = drawWrappedText(graphics, STORAGE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, theme.bodyText());
+			drawWrappedText(graphics, STORAGE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, theme.bodyText());
 			return;
 		}
 
-		graphics.text(font, STOCK_LABEL, INFO_X, INFO_TITLE_Y, 0xFF4E381A, false);
-		int nextInfoY = drawWrappedText(graphics, DONATE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, 0xFF4E381A);
-		nextInfoY = drawWrappedText(graphics, DONATE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF4E381A);
-		nextInfoY = drawWrappedText(graphics, DONATE_NOTE_3, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF4E381A);
-		drawWrappedText(graphics, DONATE_NOTE_4, INFO_X, nextInfoY + 2, INFO_WIDTH, 0xFF836B43);
-		graphics.text(font, ACTION_LABEL, ACTION_PANEL_X + 8, ACTION_PANEL_Y + 6, 0xFF4E381A, false);
+		graphics.text(font, STOCK_LABEL, INFO_X, INFO_TITLE_Y, theme.accentText(), false);
+		int nextInfoY = drawWrappedText(graphics, DONATE_NOTE_1, INFO_X, INFO_BODY_Y, INFO_WIDTH, theme.bodyText());
+		nextInfoY = drawWrappedText(graphics, DONATE_NOTE_2, INFO_X, nextInfoY + 2, INFO_WIDTH, theme.bodyText());
+		nextInfoY = drawWrappedText(graphics, DONATE_NOTE_3, INFO_X, nextInfoY + 2, INFO_WIDTH, theme.bodyText());
+		drawWrappedText(graphics, DONATE_NOTE_4, INFO_X, nextInfoY + 2, INFO_WIDTH, theme.secondaryText());
+		graphics.text(font, ACTION_LABEL, ACTION_PANEL_X + 8, ACTION_PANEL_Y + 6, theme.accentText(), false);
 
 		ItemStack selectedStack = selectedStack();
 		if (selectedStack.isEmpty()) {
-			graphics.text(font, ACTION_HINT, ACTION_PANEL_X + 8, ACTION_PANEL_Y + 22, 0xFF836B43, false);
+			graphics.text(font, ACTION_HINT, ACTION_PANEL_X + 8, ACTION_PANEL_Y + 22, theme.secondaryText(), false);
 			return;
 		}
 
-		graphics.text(font, selectedStack.getHoverName(), ACTION_PANEL_X + 8, ACTION_PANEL_Y + 22, 0xFF4E381A, false);
-		graphics.text(font, Component.literal("Stack: " + selectedStack.getCount()), ACTION_PANEL_X + 8, ACTION_PANEL_Y + 32, 0xFF836B43, false);
+		graphics.text(font, selectedStack.getHoverName(), ACTION_PANEL_X + 8, ACTION_PANEL_Y + 22, theme.bodyText(), false);
+		graphics.text(font, Component.literal("Stack: " + selectedStack.getCount()), ACTION_PANEL_X + 8, ACTION_PANEL_Y + 32, theme.secondaryText(), false);
 		if (emeraldButton != null && emeraldButton.visible) {
 			graphics.item(new ItemStack(Items.EMERALD), ACTION_PANEL_X + 14, ACTION_PANEL_Y + 66);
 		}
@@ -384,21 +386,21 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	}
 
 	private void drawBountiesTab(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-		graphics.text(font, BOUNTY_LABEL, BOUNTY_INFO_X, INFO_TITLE_Y, 0xFF4E381A, false);
+		graphics.text(font, BOUNTY_LABEL, BOUNTY_INFO_X, INFO_TITLE_Y, theme.accentText(), false);
 
 		if (menu.bakeryBounties().isEmpty()) {
-			graphics.fill(8, 22, imageWidth - 10, imageHeight - 10, 0x11FFF5E6);
-			int infoBottom = drawWrappedText(graphics, BOUNTY_SHOP_NOTE, BOUNTY_INFO_X, INFO_BODY_Y, BOUNTY_INFO_WIDTH, 0xFF836B43);
-			drawWrappedText(graphics, Component.literal("No missing bakery ingredients right now."), BOUNTY_INFO_X, infoBottom + 10, BOUNTY_INFO_WIDTH, 0xFF4E381A);
-			drawWrappedText(graphics, Component.literal("The baker can already reach every unlocked recipe ingredient."), BOUNTY_INFO_X, infoBottom + 26, BOUNTY_INFO_WIDTH, 0xFF836B43);
+			graphics.fill(8, 22, imageWidth - 10, imageHeight - 10, theme.panelFill());
+			int infoBottom = drawWrappedText(graphics, BOUNTY_SHOP_NOTE, BOUNTY_INFO_X, INFO_BODY_Y, BOUNTY_INFO_WIDTH, theme.secondaryText());
+			drawWrappedText(graphics, Component.literal("No missing bakery ingredients right now."), BOUNTY_INFO_X, infoBottom + 10, BOUNTY_INFO_WIDTH, theme.bodyText());
+			drawWrappedText(graphics, Component.literal("The baker can already reach every unlocked recipe ingredient."), BOUNTY_INFO_X, infoBottom + 26, BOUNTY_INFO_WIDTH, theme.secondaryText());
 			return;
 		}
 
-		graphics.fill(8, 22, 224, imageHeight - 10, 0x11FFF5E6);
-		graphics.fill(228, 22, imageWidth - 10, imageHeight - 10, 0x22FFF5E6);
-		graphics.outline(8, 80, 216, imageHeight - 90, 0x447A633F);
-		graphics.outline(228, 22, imageWidth - 238, imageHeight - 32, 0x447A633F);
-		drawWrappedText(graphics, BOUNTY_SHOP_NOTE, BOUNTY_INFO_X, INFO_BODY_Y, BOUNTY_INFO_WIDTH, 0xFF836B43);
+		graphics.fill(8, 22, 224, imageHeight - 10, theme.panelFill());
+		graphics.fill(228, 22, imageWidth - 10, imageHeight - 10, theme.panelStrongFill());
+		graphics.outline(8, 80, 216, imageHeight - 90, theme.panelOutline());
+		graphics.outline(228, 22, imageWidth - 238, imageHeight - 32, theme.panelOutline());
+		drawWrappedText(graphics, BOUNTY_SHOP_NOTE, BOUNTY_INFO_X, INFO_BODY_Y, BOUNTY_INFO_WIDTH, theme.secondaryText());
 		BakeryBountyView hoveredBounty = hoveredBounty(mouseX, mouseY);
 
 		for (int index = 0; index < menu.bakeryBounties().size(); index++) {
@@ -410,21 +412,21 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 		}
 
 		if (hoveredBounty == null) {
-			drawWrappedText(graphics, BOUNTY_HINT, BOUNTY_DETAIL_X, BOUNTY_DETAIL_Y, BOUNTY_DETAIL_WIDTH, 0xFF836B43);
+			drawWrappedText(graphics, BOUNTY_HINT, BOUNTY_DETAIL_X, BOUNTY_DETAIL_Y, BOUNTY_DETAIL_WIDTH, theme.secondaryText());
 			return;
 		}
 
 		List<Component> detailLines = bountyTooltip(hoveredBounty);
 		int detailY = BOUNTY_DETAIL_Y;
 		for (int index = 0; index < detailLines.size(); index++) {
-			int color = index == 0 ? 0xFF4E381A : 0xFF836B43;
+			int color = index == 0 ? theme.bodyText() : theme.secondaryText();
 			detailY = drawWrappedText(graphics, detailLines.get(index), BOUNTY_DETAIL_X, detailY, BOUNTY_DETAIL_WIDTH, color) + 2;
 		}
 	}
 
 	private void drawBountyEntry(GuiGraphicsExtractor graphics, int x, int y, BakeryBountyView bounty, boolean hovered) {
-		graphics.fill(x - 2, y - 1, x + BOUNTY_LIST_COLUMN_WIDTH, y + 12, hovered ? 0x55FFF5E6 : 0x22FFF5E6);
-		graphics.outline(x - 2, y - 1, BOUNTY_LIST_COLUMN_WIDTH + 2, 13, hovered ? 0xFFD8C497 : 0x447A633F);
+		graphics.fill(x - 2, y - 1, x + BOUNTY_LIST_COLUMN_WIDTH, y + 12, hovered ? theme.selectionFill() : theme.panelStrongFill());
+		graphics.outline(x - 2, y - 1, BOUNTY_LIST_COLUMN_WIDTH + 2, 13, hovered ? theme.selectionOutline() : theme.panelOutline());
 
 		ItemStack stack = goodsStack(bounty.goodsKey());
 		if (!stack.isEmpty()) {
@@ -432,7 +434,7 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 		}
 
 		String suffix = bounty.unlockOutputGoodsKeys().isEmpty() ? "" : " *";
-		graphics.text(font, trimToWidth(goodsLabel(bounty.goodsKey()) + suffix, BOUNTY_LIST_COLUMN_WIDTH - 24), x + 18, y + 1, 0xFF4E381A, false);
+		graphics.text(font, trimToWidth(goodsLabel(bounty.goodsKey()) + suffix, BOUNTY_LIST_COLUMN_WIDTH - 24), x + 18, y + 1, theme.bodyText(), false);
 	}
 
 	private BakeryBountyView hoveredBounty(int mouseX, int mouseY) {
@@ -574,8 +576,8 @@ public class GlassDisplayCaseScreen extends AbstractContainerScreen<GlassDisplay
 	}
 
 	private void drawSlotFrame(GuiGraphicsExtractor graphics, int x, int y, boolean focused) {
-		graphics.fill(x - 1, y - 1, x + 17, y + 17, 0xFF16120F);
-		graphics.outline(x - 1, y - 1, 18, 18, focused ? 0xFFF5E6C8 : 0xFF8A6B39);
+		graphics.fill(x - 1, y - 1, x + 17, y + 17, theme.divider());
+		graphics.outline(x - 1, y - 1, 18, 18, focused ? theme.selectionOutline() : theme.panelOutline());
 	}
 
 	private enum Tab {

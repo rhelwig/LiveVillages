@@ -3,8 +3,14 @@
   "values": [
     "live-villages:trademaster",
     "live-villages:carpenter",
+    "live-villages:scribe",
+    "live-villages:guard",
+    "live-villages:gardener",
+    "live-villages:beekeeper",
+    "live-villages:baker",
     "live-villages:roadwright",
     "live-villages:forester",
+    "live-villages:miner",
     "live-villages:portmaster"
   ]
 }

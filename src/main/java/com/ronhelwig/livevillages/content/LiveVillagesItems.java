@@ -23,6 +23,18 @@ public final class LiveVillagesItems {
 		"diamondhead_arrow",
 		new MaterialArrowItem("diamond", new Item.Properties().setId(itemKey("diamondhead_arrow")))
 	);
+	public static final Item SLING = registerItem(
+		"sling",
+		new Item(new Item.Properties().setId(itemKey("sling")))
+	);
+	public static final Item CROOKED_STAFF = registerItem(
+		"crooked_staff",
+		new Item(new Item.Properties().setId(itemKey("crooked_staff")))
+	);
+	public static final Item SCYTHE = registerItem(
+		"scythe",
+		new Item(new Item.Properties().setId(itemKey("scythe")))
+	);
 
 	private LiveVillagesItems() {
 	}

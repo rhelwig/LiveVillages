@@ -50,6 +50,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	private final BlockPos casePos;
 	private final UUID viewerId;
 	private final boolean bakeryContext;
+	private final int settlementTier;
 	private final List<BakeryBountyView> bakeryBounties;
 	private final List<BakeryBarterPriceView> bakeryBarterPrices;
 	private final List<ToggleableSlot> caseSlots = new ArrayList<>();
@@ -96,6 +97,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 		this.casePos = openData.casePos().immutable();
 		this.viewerId = inventory.player.getUUID();
 		this.bakeryContext = openData.bakeryContext();
+		this.settlementTier = openData.settlementTier();
 		this.bakeryBounties = List.copyOf(openData.bakeryBounties());
 		this.bakeryBarterPrices = List.copyOf(openData.bakeryBarterPrices());
 		checkContainerSize(caseInventory, CASE_SLOT_COUNT);
@@ -150,6 +152,10 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 
 	public boolean bakeryContext() {
 		return bakeryContext;
+	}
+
+	public int settlementTier() {
+		return settlementTier;
 	}
 
 	public List<BakeryBountyView> bakeryBounties() {
@@ -436,6 +442,7 @@ public class GlassDisplayCaseMenu extends AbstractContainerMenu {
 	@Override
 	public void removed(Player player) {
 		super.removed(player);
+		reconcileBakeryIngredientDisplays();
 		caseInventory.stopOpen(player);
 	}
 

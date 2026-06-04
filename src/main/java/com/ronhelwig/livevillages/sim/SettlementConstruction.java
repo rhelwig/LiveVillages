@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LanternBlock;
+import net.minecraft.world.level.block.LecternBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.ShelfBlock;
 import net.minecraft.world.level.block.SlabBlock;
@@ -48,9 +49,13 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
+import com.ronhelwig.livevillages.block.GardenerWorkstationBlock;
 import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
+import com.ronhelwig.livevillages.block.GuardPostBlock;
+import com.ronhelwig.livevillages.block.HoneySeparatorBlock;
 import com.ronhelwig.livevillages.block.PalisadeGatehouseBlock;
 import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
+import com.ronhelwig.livevillages.block.ScribeDeskBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.ShelterAnchorBlock;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
@@ -106,12 +111,14 @@ public final class SettlementConstruction {
 	 * Placement symbols:
 	 * A = empty space
 	 * B = bed at bed-designated coordinates, otherwise slab
+	 * C = cobblestone-family block, except logs for Forester workshops and planks for wood-heavy workshops
 	 * D = door
 	 * E = excavate / clear to air
 	 * F = fence
 	 * G = fence gate
 	 * H = chest
 	 * I = iron/copper bars
+	 * K = campfire
 	 * L = log
 	 * M = stone / cobblestone-family block
 	 * N = hanging lantern
@@ -634,6 +641,314 @@ public final class SettlementConstruction {
 				"SAAAS",
 				"SAAAS",
 				"LSSSL"
+			},
+			{
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS"
+			},
+			{
+				"ASPSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASASA",
+				"ASASA",
+				"ASPSA"
+			},
+			{
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA"
+			}
+		}
+	);
+	private static final StructureBlueprint SCRIBE_OFFICE_BLUEPRINT = new StructureBlueprint(
+		-2,
+		-4,
+		6,
+		new String[][] {
+			{
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
+			},
+			{
+				"LPPPL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
+				"LPDPL",
+				"HAAAH",
+				"PAAAP",
+				"LAWAL"
+			},
+			{
+				"LVVVL",
+				"PAAAP",
+				"VAAAV",
+				"PAAAP",
+				"LVDVL",
+				"PAAAP",
+				"PAAAP",
+				"LVVVL"
+			},
+			{
+				"LPPPL",
+				"PATAP",
+				"PAAAP",
+				"PAAAP",
+				"LPPPL",
+				"PHAHP",
+				"PAAAP",
+				"LPPPL"
+			},
+			{
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS"
+			},
+			{
+				"ASPSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASASA",
+				"ASASA",
+				"ASPSA"
+			},
+			{
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA"
+			}
+		}
+	);
+	private static final StructureBlueprint GUARD_POST_BLUEPRINT = new StructureBlueprint(
+		-2,
+		-4,
+		6,
+		new String[][] {
+			{
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
+			},
+			{
+				"LPPPL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
+				"LPDPL",
+				"FATF",
+				"FAAAG",
+				"LAWAL"
+			},
+			{
+				"LPVPL",
+				"PAAAP",
+				"VAAAT",
+				"PAAAP",
+				"LIDIL",
+				"FAAAF",
+				"FAAAG",
+				"LAAAL"
+			},
+			{
+				"LPPPL",
+				"PATAP",
+				"PAAAP",
+				"PAAAP",
+				"LPPPL",
+				"FFFFF",
+				"FAAAG",
+				"LFFFL"
+			},
+			{
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS"
+			},
+			{
+				"ASPSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASASA",
+				"ASASA",
+				"ASPSA"
+			},
+			{
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA"
+			}
+		}
+	);
+	private static final StructureBlueprint GARDENER_SHED_BLUEPRINT = new StructureBlueprint(
+		-2,
+		-4,
+		6,
+		new String[][] {
+			{
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
+			},
+			{
+				"LPPPL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
+				"LPDPL",
+				"FAAAF",
+				"FAAAG",
+				"LAWAL"
+			},
+			{
+				"LPVPL",
+				"PAAAP",
+				"VAAAV",
+				"PAAAP",
+				"LVDVL",
+				"FAAAF",
+				"FAAAG",
+				"LAAAL"
+			},
+			{
+				"LPPPL",
+				"PATAP",
+				"PAAAP",
+				"PAAAP",
+				"LPPPL",
+				"FAAAF",
+				"FAAAG",
+				"LFFFL"
+			},
+			{
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS",
+				"SAAAS",
+				"SAAAS",
+				"SPPPS"
+			},
+			{
+				"ASPSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASBSA",
+				"ASASA",
+				"ASASA",
+				"ASPSA"
+			},
+			{
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA",
+				"AABAA"
+			}
+		}
+	);
+	private static final StructureBlueprint BEEKEEPER_APIARY_BLUEPRINT = new StructureBlueprint(
+		-2,
+		-4,
+		6,
+		new String[][] {
+			{
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM",
+				"MMMMM"
+			},
+			{
+				"LPPPL",
+				"PBABP",
+				"PBABP",
+				"PAAAP",
+				"LPDPL",
+				"FAHAF",
+				"FAAAG",
+				"LAWAL"
+			},
+			{
+				"LPVPL",
+				"PAAAP",
+				"VAAAV",
+				"PAAAP",
+				"LVDVL",
+				"FAAAF",
+				"FAAAG",
+				"LAAAL"
+			},
+			{
+				"LPPPL",
+				"PATAP",
+				"PAAAP",
+				"PAAAP",
+				"LPPPL",
+				"FAAAF",
+				"FAAAG",
+				"LFFFL"
 			},
 			{
 				"SPPPS",
@@ -1672,18 +1987,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = benchPos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.CARPENTER_WORKSHOP,
 			CARPENTER_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(benchPos.immutable())
+			Set.of(benchPos.immutable()),
+			benchPos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, benchPos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1718,18 +2034,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.ROADWRIGHT_WORKSHOP,
 			ROADWRIGHT_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(tablePos.immutable())
+			Set.of(tablePos.immutable()),
+			tablePos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, tablePos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1764,18 +2081,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = stonecutterPos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.MASON_WORKSHOP,
 			MASON_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(stonecutterPos.immutable())
+			Set.of(stonecutterPos.immutable()),
+			stonecutterPos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, stonecutterPos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1810,18 +2128,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.FORESTER_WORKSHOP,
 			FORESTER_WORKSHOP_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(tablePos.immutable())
+			Set.of(tablePos.immutable()),
+			tablePos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, tablePos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1852,7 +2171,7 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = workstationPos.relative(horizontalFacing.getOpposite(), 3);
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
@@ -1860,11 +2179,12 @@ public final class SettlementConstruction {
 			MINE_ENTRANCE_BLUEPRINT,
 			MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS,
 			MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS,
-			Set.of(workstationPos.immutable())
+			Set.of(workstationPos.immutable()),
+			workstationPos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, workstationPos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1900,18 +2220,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.FLETCHER_HUT,
 			FLETCHER_HUT_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(tablePos.immutable())
+			Set.of(tablePos.immutable()),
+			tablePos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, tablePos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1946,18 +2267,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = smokerPos.relative(horizontalFacing.getOpposite(), 3).below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.BUTCHER_SHOP,
 			FLETCHER_HUT_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(smokerPos.immutable())
+			Set.of(smokerPos.immutable()),
+			smokerPos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, smokerPos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -1969,6 +2291,154 @@ public final class SettlementConstruction {
 			site.origin(),
 			smokerPos.immutable(),
 			smokerPos.immutable(),
+			site.facing(),
+			level.getServer().getTickCount()
+		), stock, level.getServer().getTickCount()));
+	}
+
+	public static WorkstationBuildResult tryStartClericShrineAtWorkstation(
+		ServerLevel level,
+		BlockPos brewingStandPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, brewingStandPos, facing, settlementId, stock, existingBuildSite, StructureKind.CLERIC_SHRINE);
+	}
+
+	public static WorkstationBuildResult tryStartLeatherworkerWorkshopAtWorkstation(
+		ServerLevel level,
+		BlockPos cauldronPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, cauldronPos, facing, settlementId, stock, existingBuildSite, StructureKind.LEATHERWORKER_WORKSHOP);
+	}
+
+	public static WorkstationBuildResult tryStartLibraryAtWorkstation(
+		ServerLevel level,
+		BlockPos lecternPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, lecternPos, facing, settlementId, stock, existingBuildSite, StructureKind.LIBRARY);
+	}
+
+	public static WorkstationBuildResult tryStartScribeOfficeAtWorkstation(
+		ServerLevel level,
+		BlockPos deskPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, deskPos, facing, settlementId, stock, existingBuildSite, StructureKind.SCRIBE_OFFICE);
+	}
+
+	public static WorkstationBuildResult tryStartGuardPostAtWorkstation(
+		ServerLevel level,
+		BlockPos guardPostPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, guardPostPos, facing, settlementId, stock, existingBuildSite, StructureKind.GUARD_POST);
+	}
+
+	public static WorkstationBuildResult tryStartGardenerShedAtWorkstation(
+		ServerLevel level,
+		BlockPos workstationPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, workstationPos, facing, settlementId, stock, existingBuildSite, StructureKind.GARDENER_SHED);
+	}
+
+	public static WorkstationBuildResult tryStartBeekeeperApiaryAtWorkstation(
+		ServerLevel level,
+		BlockPos separatorPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, separatorPos, facing, settlementId, stock, existingBuildSite, StructureKind.BEEKEEPER_APIARY);
+	}
+
+	public static WorkstationBuildResult tryStartShepherdHutAtWorkstation(
+		ServerLevel level,
+		BlockPos loomPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, loomPos, facing, settlementId, stock, existingBuildSite, StructureKind.SHEPHERD_HUT);
+	}
+
+	public static WorkstationBuildResult tryStartSmithyAtWorkstation(
+		ServerLevel level,
+		BlockPos workstationPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite
+	) {
+		return tryStartBeddedHutAtWorkstation(level, workstationPos, facing, settlementId, stock, existingBuildSite, StructureKind.SMITHY);
+	}
+
+	private static WorkstationBuildResult tryStartBeddedHutAtWorkstation(
+		ServerLevel level,
+		BlockPos workstationPos,
+		Direction facing,
+		String settlementId,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite,
+		StructureKind structureKind
+	) {
+		if (existingBuildSite.isPresent()) {
+			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, workstationPos)) {
+			return WorkstationBuildResult.completed();
+		}
+
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		BlockPos origin = workstationPos.relative(horizontalFacing.getOpposite(), 3).below();
+		StructureBlueprint blueprint = blueprintFor(structureKind);
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
+			level,
+			origin,
+			horizontalFacing,
+			structureKind,
+			blueprint,
+			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
+			Set.of(workstationPos.immutable()),
+			workstationPos,
+			horizontalFacing
+		);
+
+		if (site == null) {
+			return WorkstationBuildResult.blocked();
+		}
+
+		return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(createPendingBuildSite(
+			level,
+			structureKind,
+			blueprint,
+			settlementId,
+			site.origin(),
+			workstationPos.immutable(),
+			workstationPos.immutable(),
 			site.facing(),
 			level.getServer().getTickCount()
 		), stock, level.getServer().getTickCount()));
@@ -1992,18 +2462,19 @@ public final class SettlementConstruction {
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = tablePos.below();
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			horizontalFacing,
 			StructureKind.CARTOGRAPHER_HOUSE,
 			CARTOGRAPHER_HOUSE_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(tablePos.immutable())
+			Set.of(tablePos.immutable()),
+			tablePos,
+			horizontalFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, tablePos, horizontalFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -2071,20 +2542,20 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.completed();
 		}
 
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			structureFacing,
 			StructureKind.TRADING_POST,
 			TRADING_POST_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(boardPos.immutable())
+			Set.of(boardPos.immutable()),
+			boardPos,
+			boardFacing,
+			placeBlockedSign
 		);
 
 		if (site == null) {
-			if (placeBlockedSign) {
-				placeCantBuildHereSign(level, boardPos, boardFacing);
-			}
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -2140,18 +2611,19 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.completed();
 		}
 
-		AnchoredStructureSite site = findAnchoredStructureSite(
+		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
 			origin,
 			structureFacing,
 			StructureKind.BAKERY,
 			BAKERY_BLUEPRINT,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS,
-			Set.of(workstationPos.immutable())
+			Set.of(workstationPos.immutable()),
+			workstationPos,
+			counterFacing
 		);
 
 		if (site == null) {
-			placeCantBuildHereSign(level, workstationPos, counterFacing);
 			return WorkstationBuildResult.blocked();
 		}
 
@@ -2345,6 +2817,67 @@ public final class SettlementConstruction {
 			origin,
 			smokerPos,
 			smokerPos,
+			horizontalFacing,
+			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS
+		);
+	}
+
+	public static StructurePreview previewClericShrineAtWorkstation(ServerLevel level, String settlementId, BlockPos brewingStandPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, brewingStandPos, facing, StructureKind.CLERIC_SHRINE, "Cleric Shrine");
+	}
+
+	public static StructurePreview previewLeatherworkerWorkshopAtWorkstation(ServerLevel level, String settlementId, BlockPos cauldronPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, cauldronPos, facing, StructureKind.LEATHERWORKER_WORKSHOP, "Leatherworker's Workshop");
+	}
+
+	public static StructurePreview previewLibraryAtWorkstation(ServerLevel level, String settlementId, BlockPos lecternPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, lecternPos, facing, StructureKind.LIBRARY, "Library");
+	}
+
+	public static StructurePreview previewScribeOfficeAtWorkstation(ServerLevel level, String settlementId, BlockPos deskPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, deskPos, facing, StructureKind.SCRIBE_OFFICE, "Scribe Office");
+	}
+
+	public static StructurePreview previewGuardPostAtWorkstation(ServerLevel level, String settlementId, BlockPos guardPostPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, guardPostPos, facing, StructureKind.GUARD_POST, "Guard Post");
+	}
+
+	public static StructurePreview previewGardenerShedAtWorkstation(ServerLevel level, String settlementId, BlockPos workstationPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, workstationPos, facing, StructureKind.GARDENER_SHED, "Gardener's Shed");
+	}
+
+	public static StructurePreview previewBeekeeperApiaryAtWorkstation(ServerLevel level, String settlementId, BlockPos separatorPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, separatorPos, facing, StructureKind.BEEKEEPER_APIARY, "Beekeeper's Apiary");
+	}
+
+	public static StructurePreview previewShepherdHutAtWorkstation(ServerLevel level, String settlementId, BlockPos loomPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, loomPos, facing, StructureKind.SHEPHERD_HUT, "Shepherd's Hut");
+	}
+
+	public static StructurePreview previewSmithyAtWorkstation(ServerLevel level, String settlementId, BlockPos workstationPos, Direction facing) {
+		return previewBeddedHutAtWorkstation(level, settlementId, workstationPos, facing, StructureKind.SMITHY, "Smithy");
+	}
+
+	private static StructurePreview previewBeddedHutAtWorkstation(
+		ServerLevel level,
+		String settlementId,
+		BlockPos workstationPos,
+		Direction facing,
+		StructureKind structureKind,
+		String label
+	) {
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
+		BlockPos origin = workstationPos.relative(horizontalFacing.getOpposite(), 3).below();
+		StructureBlueprint blueprint = blueprintFor(structureKind);
+		return previewAnchoredStructure(
+			level,
+			settlementId,
+			structureKind,
+			blueprint,
+			label,
+			origin,
+			workstationPos,
+			workstationPos,
 			horizontalFacing,
 			MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS
 		);
@@ -2613,12 +3146,61 @@ public final class SettlementConstruction {
 		return findPlacedWorkstations(level, settlement, state -> state.is(Blocks.STONECUTTER));
 	}
 
+	public static List<BlockPos> findPlacedBrewingStands(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(Blocks.BREWING_STAND));
+	}
+
+	public static List<BlockPos> findPlacedCauldrons(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(
+			level,
+			settlement,
+			state -> state.is(Blocks.CAULDRON)
+				|| state.is(Blocks.WATER_CAULDRON)
+				|| state.is(Blocks.LAVA_CAULDRON)
+				|| state.is(Blocks.POWDER_SNOW_CAULDRON)
+		);
+	}
+
+	public static List<BlockPos> findPlacedLecterns(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(Blocks.LECTERN));
+	}
+
+	public static List<BlockPos> findPlacedLooms(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(Blocks.LOOM));
+	}
+
+	public static List<BlockPos> findPlacedSmithingWorkstations(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(
+			level,
+			settlement,
+			state -> state.is(Blocks.BLAST_FURNACE)
+				|| state.is(Blocks.SMITHING_TABLE)
+				|| state.is(Blocks.GRINDSTONE)
+		);
+	}
+
 	public static List<BlockPos> findPlacedTradeBoards(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.TRADE_BOARD));
 	}
 
 	public static List<BlockPos> findPlacedCarpenterBenches(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.CARPENTER_BENCH));
+	}
+
+	public static List<BlockPos> findPlacedScribeDesks(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.SCRIBE_DESK));
+	}
+
+	public static List<BlockPos> findPlacedGuardPosts(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.GUARD_POST));
+	}
+
+	public static List<BlockPos> findPlacedGardenerWorkstations(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.GARDENER_WORKSTATION));
+	}
+
+	public static List<BlockPos> findPlacedHoneySeparators(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.HONEY_SEPARATOR));
 	}
 
 	public static List<BlockPos> findPlacedSurveyorTables(ServerLevel level, SettlementState settlement) {
@@ -3575,6 +4157,121 @@ public final class SettlementConstruction {
 		).site();
 	}
 
+	private static AnchoredStructureSite findAnchoredStructureSiteOrPlaceBlockedSign(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		Set<BlockPos> protectedPositions,
+		BlockPos workstationPos,
+		Direction signFacing
+	) {
+		return findAnchoredStructureSiteOrPlaceBlockedSign(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			MAX_TERRAIN_CUT_BLOCKS,
+			protectedPositions,
+			workstationPos,
+			signFacing,
+			true
+		);
+	}
+
+	private static AnchoredStructureSite findAnchoredStructureSiteOrPlaceBlockedSign(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		int maxTerrainCutBlocks,
+		Set<BlockPos> protectedPositions,
+		BlockPos workstationPos,
+		Direction signFacing
+	) {
+		return findAnchoredStructureSiteOrPlaceBlockedSign(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			maxTerrainCutBlocks,
+			protectedPositions,
+			workstationPos,
+			signFacing,
+			true
+		);
+	}
+
+	private static AnchoredStructureSite findAnchoredStructureSiteOrPlaceBlockedSign(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		Set<BlockPos> protectedPositions,
+		BlockPos workstationPos,
+		Direction signFacing,
+		boolean placeBlockedSign
+	) {
+		return findAnchoredStructureSiteOrPlaceBlockedSign(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			MAX_TERRAIN_CUT_BLOCKS,
+			protectedPositions,
+			workstationPos,
+			signFacing,
+			placeBlockedSign
+		);
+	}
+
+	private static AnchoredStructureSite findAnchoredStructureSiteOrPlaceBlockedSign(
+		ServerLevel level,
+		BlockPos origin,
+		Direction facing,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int maxLandscapingBlocks,
+		int maxTerrainCutBlocks,
+		Set<BlockPos> protectedPositions,
+		BlockPos workstationPos,
+		Direction signFacing,
+		boolean placeBlockedSign
+	) {
+		PlacementPreviewResult placement = evaluateAnchoredStructureSite(
+			level,
+			origin,
+			facing,
+			structureKind,
+			blueprint,
+			maxLandscapingBlocks,
+			maxTerrainCutBlocks,
+			protectedPositions
+		);
+
+		if (!placement.valid() || placement.site() == null) {
+			if (placeBlockedSign) {
+				placeCantBuildHereSign(level, workstationPos, signFacing, placement.statusMessage());
+			}
+
+			return null;
+		}
+
+		return placement.site();
+	}
+
 	private static PlacementPreviewResult evaluateAnchoredStructureSite(
 		ServerLevel level,
 		BlockPos origin,
@@ -4110,10 +4807,19 @@ public final class SettlementConstruction {
 				: (structureKind == StructureKind.LIGHTHOUSE
 					|| structureKind == StructureKind.MINE_ENTRANCE
 					|| structureKind == StructureKind.MASON_WORKSHOP
-					|| structureKind == StructureKind.TRADING_POST
-					|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
-					|| structureKind == StructureKind.FLETCHER_HUT
-					|| structureKind == StructureKind.BUTCHER_SHOP)
+			|| structureKind == StructureKind.TRADING_POST
+			|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
+			|| structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.CLERIC_SHRINE
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY)
 				? stoneBlock(stoneMaterial).defaultBlockState()
 				: woodPlankBlock(woodFamily).defaultBlockState();
 			case 'H' -> chestStateFor(blueprint, facing, right, forward, up);
@@ -4280,6 +4986,22 @@ public final class SettlementConstruction {
 			return LiveVillagesBlocks.SURVEYOR_TABLE.defaultBlockState();
 		}
 
+		if (structureKind == StructureKind.SCRIBE_OFFICE) {
+			return LiveVillagesBlocks.SCRIBE_DESK.defaultBlockState().setValue(ScribeDeskBlock.FACING, facing);
+		}
+
+		if (structureKind == StructureKind.GUARD_POST) {
+			return LiveVillagesBlocks.GUARD_POST.defaultBlockState().setValue(GuardPostBlock.FACING, facing);
+		}
+
+		if (structureKind == StructureKind.GARDENER_SHED) {
+			return LiveVillagesBlocks.GARDENER_WORKSTATION.defaultBlockState().setValue(GardenerWorkstationBlock.FACING, facing);
+		}
+
+		if (structureKind == StructureKind.BEEKEEPER_APIARY) {
+			return LiveVillagesBlocks.HONEY_SEPARATOR.defaultBlockState().setValue(HoneySeparatorBlock.FACING, facing);
+		}
+
 		if (structureKind == StructureKind.MASON_WORKSHOP) {
 			return Blocks.STONECUTTER.defaultBlockState();
 		}
@@ -4304,6 +5026,26 @@ public final class SettlementConstruction {
 			return Blocks.SMOKER.defaultBlockState();
 		}
 
+		if (structureKind == StructureKind.CLERIC_SHRINE) {
+			return Blocks.BREWING_STAND.defaultBlockState();
+		}
+
+		if (structureKind == StructureKind.LEATHERWORKER_WORKSHOP) {
+			return Blocks.CAULDRON.defaultBlockState();
+		}
+
+		if (structureKind == StructureKind.LIBRARY) {
+			return Blocks.LECTERN.defaultBlockState().setValue(LecternBlock.FACING, facing);
+		}
+
+		if (structureKind == StructureKind.SHEPHERD_HUT) {
+			return Blocks.LOOM.defaultBlockState();
+		}
+
+		if (structureKind == StructureKind.SMITHY) {
+			return Blocks.BLAST_FURNACE.defaultBlockState();
+		}
+
 		return LiveVillagesBlocks.CARPENTER_BENCH.defaultBlockState();
 	}
 
@@ -4324,7 +5066,16 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.MASON_WORKSHOP
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
 			|| structureKind == StructureKind.FLETCHER_HUT
-			|| structureKind == StructureKind.BUTCHER_SHOP) && up == 5) {
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.CLERIC_SHRINE
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY) && up == 5) {
 			return state.setValue(SlabBlock.TYPE, SlabType.TOP);
 		}
 
@@ -4568,11 +5319,20 @@ public final class SettlementConstruction {
 		return symbol == 'B' && up == 1 && (structureKind == StructureKind.BAKERY
 			|| structureKind == StructureKind.CARPENTER_WORKSHOP
 			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.CLERIC_SHRINE
 			|| structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
 			|| structureKind == StructureKind.HOUSING_SHELTER
 			|| structureKind == StructureKind.MASON_WORKSHOP
 			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY
 			|| structureKind == StructureKind.SIMPLE_HOUSING_SHELTER
 			|| structureKind == StructureKind.TRADING_POST);
 	}
@@ -4593,7 +5353,17 @@ public final class SettlementConstruction {
 				.setValue(BedBlock.FACING, facing.getOpposite());
 		}
 
-		if ((structureKind == StructureKind.FLETCHER_HUT || structureKind == StructureKind.BUTCHER_SHOP)
+		if ((structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.CLERIC_SHRINE
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY)
 			&& (right == -1 || right == 1)
 			&& (forward == -3 || forward == -2)) {
 			return Blocks.WHITE_BED.defaultBlockState()
@@ -4633,7 +5403,17 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
 			|| structureKind == StructureKind.MASON_WORKSHOP
 			|| structureKind == StructureKind.FORESTER_WORKSHOP) && right == -1 && forward == -2 && up == 1)
-			|| ((structureKind == StructureKind.FLETCHER_HUT || structureKind == StructureKind.BUTCHER_SHOP) && (right == -1 || right == 1) && forward == -2 && up == 1)
+			|| ((structureKind == StructureKind.FLETCHER_HUT
+				|| structureKind == StructureKind.BUTCHER_SHOP
+				|| structureKind == StructureKind.BEEKEEPER_APIARY
+				|| structureKind == StructureKind.CLERIC_SHRINE
+				|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+				|| structureKind == StructureKind.LIBRARY
+				|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY) && (right == -1 || right == 1) && forward == -2 && up == 1)
 			|| (structureKind == StructureKind.HOUSING_SHELTER && (right == -1 || right == 1) && forward == 0 && up == 1)
 			|| (structureKind == StructureKind.SIMPLE_HOUSING_SHELTER && right == -1 && forward == 1 && up == 1)
 			|| ((structureKind == StructureKind.BAKERY || structureKind == StructureKind.TRADING_POST) && right == -1 && forward == -2 && up == 1);
@@ -4644,7 +5424,17 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
 			|| structureKind == StructureKind.MASON_WORKSHOP) {
 			placeBed(level, offset(origin, facing, -1, -3, 1), offset(origin, facing, -1, -2, 1), facing.getOpposite());
-		} else if (structureKind == StructureKind.FLETCHER_HUT || structureKind == StructureKind.BUTCHER_SHOP) {
+		} else if (structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.CLERIC_SHRINE
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY) {
 			placeBed(level, offset(origin, facing, -1, -3, 1), offset(origin, facing, -1, -2, 1), facing.getOpposite());
 			placeBed(level, offset(origin, facing, 1, -3, 1), offset(origin, facing, 1, -2, 1), facing.getOpposite());
 		} else if (structureKind == StructureKind.HOUSING_SHELTER) {
@@ -5198,12 +5988,21 @@ public final class SettlementConstruction {
 			|| structureKind == StructureKind.CARPENTER_WORKSHOP
 			|| structureKind == StructureKind.BUTCHER_SHOP
 			|| structureKind == StructureKind.CARTOGRAPHER_HOUSE
+			|| structureKind == StructureKind.BEEKEEPER_APIARY
+			|| structureKind == StructureKind.CLERIC_SHRINE
 			|| structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.GUARD_POST
 			|| structureKind == StructureKind.FORESTER_WORKSHOP
 			|| structureKind == StructureKind.LIGHTHOUSE
 			|| structureKind == StructureKind.MASON_WORKSHOP
 			|| structureKind == StructureKind.MINE_ENTRANCE
 			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY
 			|| structureKind == StructureKind.TRADING_POST);
 	}
 
@@ -5243,13 +6042,22 @@ public final class SettlementConstruction {
 			case 'V' -> "glass";
 			case 'W' -> switch (structureKind) {
 				case BAKERY -> "bakers_counter";
+				case BEEKEEPER_APIARY -> "honey_separator";
 				case TRADING_POST -> "trade_board";
 				case FORESTER_WORKSHOP -> "forester_table";
 				case MASON_WORKSHOP -> "stonecutter";
 				case MINE_ENTRANCE -> "miner_workstation";
 				case FLETCHER_HUT -> "fletching_table";
 				case BUTCHER_SHOP -> "smoker";
+				case CLERIC_SHRINE -> "brewing_stand";
+				case LEATHERWORKER_WORKSHOP -> "cauldron";
+				case LIBRARY -> "lectern";
+				case GARDENER_SHED -> "gardener_workstation";
+				case GUARD_POST -> "guard_post";
+				case SHEPHERD_HUT -> "loom";
+				case SMITHY -> "smithing_station";
 				case ROADWRIGHT_WORKSHOP -> "surveyor_table";
+				case SCRIBE_OFFICE -> "scribe_desk";
 				case CARTOGRAPHER_HOUSE -> "cartography_table";
 				case CARPENTER_WORKSHOP -> "carpenter_bench";
 				case LIGHTHOUSE -> "lighthouse_marker";
@@ -5463,19 +6271,28 @@ public final class SettlementConstruction {
 	private static StructureBlueprint blueprintFor(StructureKind structureKind) {
 		return switch (structureKind) {
 			case BAKERY -> BAKERY_BLUEPRINT;
+			case BEEKEEPER_APIARY -> BEEKEEPER_APIARY_BLUEPRINT;
 			case BUTCHER_SHOP -> FLETCHER_HUT_BLUEPRINT;
 			case CARTOGRAPHER_HOUSE -> CARTOGRAPHER_HOUSE_BLUEPRINT;
 			case CARPENTER_WORKSHOP -> CARPENTER_WORKSHOP_BLUEPRINT;
+			case CLERIC_SHRINE -> FLETCHER_HUT_BLUEPRINT;
 			case DOCK -> throw new IllegalStateException("Dock build sites use custom block generation");
 			case FLETCHER_HUT -> FLETCHER_HUT_BLUEPRINT;
 			case FORESTER_WORKSHOP -> FORESTER_WORKSHOP_BLUEPRINT;
+			case GARDENER_SHED -> GARDENER_SHED_BLUEPRINT;
+			case GUARD_POST -> GUARD_POST_BLUEPRINT;
 			case HOUSING_SHELTER -> HOUSING_SHELTER_BLUEPRINT;
+			case LEATHERWORKER_WORKSHOP -> FLETCHER_HUT_BLUEPRINT;
 			case LIGHTHOUSE -> LIGHTHOUSE_BLUEPRINT;
+			case LIBRARY -> FLETCHER_HUT_BLUEPRINT;
 			case MASON_WORKSHOP -> MASON_WORKSHOP_BLUEPRINT;
 			case MINE_ENTRANCE -> MINE_ENTRANCE_BLUEPRINT;
 			case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> PALISADE_GATEHOUSE_BLUEPRINT;
 			case ROADWRIGHT_WORKSHOP -> ROADWRIGHT_WORKSHOP_BLUEPRINT;
+			case SCRIBE_OFFICE -> SCRIBE_OFFICE_BLUEPRINT;
+			case SHEPHERD_HUT -> FLETCHER_HUT_BLUEPRINT;
 			case SIMPLE_HOUSING_SHELTER -> SIMPLE_HOUSING_SHELTER_BLUEPRINT;
+			case SMITHY -> FLETCHER_HUT_BLUEPRINT;
 			case TRADING_POST -> TRADING_POST_BLUEPRINT;
 		};
 	}
@@ -5483,21 +6300,30 @@ public final class SettlementConstruction {
 	private static StructureKind structureKindFor(SettlementBuildSiteType blueprintId) {
 		return switch (blueprintId) {
 			case BAKERY -> StructureKind.BAKERY;
+			case BEEKEEPER_APIARY -> StructureKind.BEEKEEPER_APIARY;
 			case BUTCHER_SHOP -> StructureKind.BUTCHER_SHOP;
 			case CARTOGRAPHER_HOUSE -> StructureKind.CARTOGRAPHER_HOUSE;
 			case CARPENTER_WORKSHOP -> StructureKind.CARPENTER_WORKSHOP;
+			case CLERIC_SHRINE -> StructureKind.CLERIC_SHRINE;
 			case DOCK -> StructureKind.DOCK;
 			case FLETCHER_HUT -> StructureKind.FLETCHER_HUT;
 			case FORESTER_WORKSHOP -> StructureKind.FORESTER_WORKSHOP;
+			case GARDENER_SHED -> StructureKind.GARDENER_SHED;
+			case GUARD_POST -> StructureKind.GUARD_POST;
 			case HOUSING_SHELTER -> StructureKind.HOUSING_SHELTER;
+			case LEATHERWORKER_WORKSHOP -> StructureKind.LEATHERWORKER_WORKSHOP;
 			case LIGHTHOUSE -> StructureKind.LIGHTHOUSE;
+			case LIBRARY -> StructureKind.LIBRARY;
 			case MASON_WORKSHOP -> StructureKind.MASON_WORKSHOP;
 			case MINE_ENTRANCE -> StructureKind.MINE_ENTRANCE;
 			case PALISADE_GATEHOUSE -> StructureKind.PALISADE_GATEHOUSE;
 			case COPPER_PALISADE_GATEHOUSE -> StructureKind.COPPER_PALISADE_GATEHOUSE;
 			case PALISADE_WALL -> throw new IllegalArgumentException("Palisade wall build sites use custom block generation");
 			case ROADWRIGHT_WORKSHOP -> StructureKind.ROADWRIGHT_WORKSHOP;
+			case SCRIBE_OFFICE -> StructureKind.SCRIBE_OFFICE;
+			case SHEPHERD_HUT -> StructureKind.SHEPHERD_HUT;
 			case SIMPLE_HOUSING_SHELTER -> StructureKind.SIMPLE_HOUSING_SHELTER;
+			case SMITHY -> StructureKind.SMITHY;
 			case TRADING_POST -> StructureKind.TRADING_POST;
 		};
 	}
@@ -5505,20 +6331,29 @@ public final class SettlementConstruction {
 	private static SettlementBuildSiteType blueprintIdFor(StructureKind structureKind) {
 		return switch (structureKind) {
 			case BAKERY -> SettlementBuildSiteType.BAKERY;
+			case BEEKEEPER_APIARY -> SettlementBuildSiteType.BEEKEEPER_APIARY;
 			case BUTCHER_SHOP -> SettlementBuildSiteType.BUTCHER_SHOP;
 			case CARTOGRAPHER_HOUSE -> SettlementBuildSiteType.CARTOGRAPHER_HOUSE;
 			case CARPENTER_WORKSHOP -> SettlementBuildSiteType.CARPENTER_WORKSHOP;
+			case CLERIC_SHRINE -> SettlementBuildSiteType.CLERIC_SHRINE;
 			case DOCK -> SettlementBuildSiteType.DOCK;
 			case FLETCHER_HUT -> SettlementBuildSiteType.FLETCHER_HUT;
 			case FORESTER_WORKSHOP -> SettlementBuildSiteType.FORESTER_WORKSHOP;
+			case GARDENER_SHED -> SettlementBuildSiteType.GARDENER_SHED;
+			case GUARD_POST -> SettlementBuildSiteType.GUARD_POST;
 			case HOUSING_SHELTER -> SettlementBuildSiteType.HOUSING_SHELTER;
+			case LEATHERWORKER_WORKSHOP -> SettlementBuildSiteType.LEATHERWORKER_WORKSHOP;
 			case LIGHTHOUSE -> SettlementBuildSiteType.LIGHTHOUSE;
+			case LIBRARY -> SettlementBuildSiteType.LIBRARY;
 			case MASON_WORKSHOP -> SettlementBuildSiteType.MASON_WORKSHOP;
 			case MINE_ENTRANCE -> SettlementBuildSiteType.MINE_ENTRANCE;
 			case PALISADE_GATEHOUSE -> SettlementBuildSiteType.PALISADE_GATEHOUSE;
 			case COPPER_PALISADE_GATEHOUSE -> SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE;
 			case ROADWRIGHT_WORKSHOP -> SettlementBuildSiteType.ROADWRIGHT_WORKSHOP;
+			case SCRIBE_OFFICE -> SettlementBuildSiteType.SCRIBE_OFFICE;
+			case SHEPHERD_HUT -> SettlementBuildSiteType.SHEPHERD_HUT;
 			case SIMPLE_HOUSING_SHELTER -> SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER;
+			case SMITHY -> SettlementBuildSiteType.SMITHY;
 			case TRADING_POST -> SettlementBuildSiteType.TRADING_POST;
 		};
 	}
@@ -7119,7 +7954,15 @@ public final class SettlementConstruction {
 		);
 	}
 
-	private static void placeCantBuildHereSign(ServerLevel level, BlockPos workstationPos, Direction facing) {
+	private static void placeCantBuildHereSign(ServerLevel level, BlockPos workstationPos, Direction facing, String statusMessage) {
+		for (Direction direction : new Direction[] {facing.getClockWise(), facing.getCounterClockWise(), facing, facing.getOpposite()}) {
+			BlockPos signPos = workstationPos.relative(direction);
+
+			if (updateExistingCantBuildHereSign(level, signPos, statusMessage)) {
+				return;
+			}
+		}
+
 		for (Direction direction : new Direction[] {facing.getClockWise(), facing.getCounterClockWise(), facing, facing.getOpposite()}) {
 			BlockPos signPos = workstationPos.relative(direction);
 
@@ -7132,16 +7975,88 @@ public final class SettlementConstruction {
 			level.setBlock(signPos, signState, BLOCK_UPDATE_FLAGS);
 
 			if (level.getBlockEntity(signPos) instanceof SignBlockEntity signBlockEntity) {
-				SignText text = new SignText()
-					.setMessage(0, Component.literal("can't build"))
-					.setMessage(1, Component.literal("here"));
-				signBlockEntity.setText(text, true);
-				signBlockEntity.setChanged();
-				level.sendBlockUpdated(signPos, signState, signState, BLOCK_UPDATE_FLAGS);
+				writeCantBuildHereSign(level, signPos, signState, signBlockEntity, statusMessage);
 			}
 
 			return;
 		}
+	}
+
+	private static boolean updateExistingCantBuildHereSign(ServerLevel level, BlockPos signPos, String statusMessage) {
+		if (!level.hasChunkAt(signPos) || !(level.getBlockState(signPos).getBlock() instanceof StandingSignBlock)) {
+			return false;
+		}
+
+		if (!(level.getBlockEntity(signPos) instanceof SignBlockEntity signBlockEntity) || !isCantBuildHereSign(signBlockEntity)) {
+			return false;
+		}
+
+		BlockState signState = level.getBlockState(signPos);
+		writeCantBuildHereSign(level, signPos, signState, signBlockEntity, statusMessage);
+		return true;
+	}
+
+	private static boolean isCantBuildHereSign(SignBlockEntity signBlockEntity) {
+		for (boolean front : List.of(true, false)) {
+			SignText text = signBlockEntity.getText(front);
+
+			if (text.getMessage(0, false).getString().equalsIgnoreCase("can't build")) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static void writeCantBuildHereSign(ServerLevel level, BlockPos signPos, BlockState signState, SignBlockEntity signBlockEntity, String statusMessage) {
+		List<String> lines = cantBuildHereSignLines(statusMessage);
+		SignText text = new SignText()
+			.setMessage(0, Component.literal(lines.get(0)))
+			.setMessage(1, Component.literal(lines.get(1)))
+			.setMessage(2, Component.literal(lines.get(2)))
+			.setMessage(3, Component.literal(lines.get(3)));
+		signBlockEntity.setText(text, true);
+		signBlockEntity.setChanged();
+		level.sendBlockUpdated(signPos, signState, signState, BLOCK_UPDATE_FLAGS);
+	}
+
+	private static List<String> cantBuildHereSignLines(String statusMessage) {
+		String reason = cantBuildHereReason(statusMessage);
+		return List.of("can't build", "blocked by", reason, "clear area");
+	}
+
+	private static String cantBuildHereReason(String statusMessage) {
+		String normalized = statusMessage == null ? "" : statusMessage.toLowerCase();
+
+		if (normalized.contains("unloaded")) {
+			return "unloaded land";
+		}
+
+		if (normalized.contains("water") || normalized.contains("lava")) {
+			return "fluid";
+		}
+
+		if (normalized.contains("garden") || normalized.contains("planting")) {
+			return "garden";
+		}
+
+		if (normalized.contains("terrain") || normalized.contains("ground")) {
+			return "terrain";
+		}
+
+		if (normalized.contains("clearing") || normalized.contains("fill")) {
+			return "too much work";
+		}
+
+		if (normalized.contains("entry") || normalized.contains("approach")) {
+			return "entry";
+		}
+
+		if (normalized.contains("blocked")) {
+			return "blocks";
+		}
+
+		return "site";
 	}
 
 	public static boolean isPositionInExistingShelteredStructure(ServerLevel level, BlockPos pos) {
@@ -7561,6 +8476,22 @@ public final class SettlementConstruction {
 			return "carpenter_bench";
 		}
 
+		if (state.is(LiveVillagesBlocks.SCRIBE_DESK)) {
+			return "scribe_desk";
+		}
+
+		if (state.is(LiveVillagesBlocks.GUARD_POST)) {
+			return "guard_post";
+		}
+
+		if (state.is(LiveVillagesBlocks.GARDENER_WORKSTATION)) {
+			return "gardener_workstation";
+		}
+
+		if (state.is(LiveVillagesBlocks.HONEY_SEPARATOR)) {
+			return "honey_separator";
+		}
+
 		if (state.is(LiveVillagesBlocks.SURVEYOR_TABLE)) {
 			return "surveyor_table";
 		}
@@ -7616,6 +8547,10 @@ public final class SettlementConstruction {
 			|| state.is(LiveVillagesBlocks.BAKERS_COUNTER)
 			|| state.is(LiveVillagesBlocks.TRADE_BOARD)
 			|| state.is(LiveVillagesBlocks.CARPENTER_BENCH)
+			|| state.is(LiveVillagesBlocks.SCRIBE_DESK)
+			|| state.is(LiveVillagesBlocks.GUARD_POST)
+			|| state.is(LiveVillagesBlocks.GARDENER_WORKSTATION)
+			|| state.is(LiveVillagesBlocks.HONEY_SEPARATOR)
 			|| state.is(LiveVillagesBlocks.MINER_WORKSTATION)
 			|| state.is(LiveVillagesBlocks.SURVEYOR_TABLE)
 			|| state.is(LiveVillagesBlocks.FORESTER_TABLE);
@@ -8212,20 +9147,29 @@ public final class SettlementConstruction {
 
 	private enum StructureKind {
 		BAKERY,
+		BEEKEEPER_APIARY,
 		BUTCHER_SHOP,
 		CARTOGRAPHER_HOUSE,
 		CARPENTER_WORKSHOP,
+		CLERIC_SHRINE,
 		DOCK,
 		FLETCHER_HUT,
 		FORESTER_WORKSHOP,
 		HOUSING_SHELTER,
+		LEATHERWORKER_WORKSHOP,
 		LIGHTHOUSE,
+		LIBRARY,
 		MASON_WORKSHOP,
 		MINE_ENTRANCE,
 		PALISADE_GATEHOUSE,
 		COPPER_PALISADE_GATEHOUSE,
 		ROADWRIGHT_WORKSHOP,
+		SCRIBE_OFFICE,
+		GARDENER_SHED,
+		GUARD_POST,
+		SHEPHERD_HUT,
 		SIMPLE_HOUSING_SHELTER,
+		SMITHY,
 		TRADING_POST
 	}
 

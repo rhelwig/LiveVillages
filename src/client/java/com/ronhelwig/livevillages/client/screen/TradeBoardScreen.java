@@ -26,6 +26,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 import com.ronhelwig.livevillages.menu.TradeBoardTrading;
 import com.ronhelwig.livevillages.menu.TradeBoardTrading.GoodsTradeOption;
 import com.ronhelwig.livevillages.menu.TradeBoardTrading.PlayerGoodsOption;
+import com.ronhelwig.livevillages.network.TradeBoardActionPayload;
 import com.ronhelwig.livevillages.network.TradeBoardRefreshPayload;
 import com.ronhelwig.livevillages.sim.SettlementKind;
 
@@ -93,12 +94,15 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private boolean hasPlayerInventoryRowsSnapshot;
 	private List<TradeBoardInventoryEntryView> playerInventoryRowsSnapshot = List.of();
 	private String feedbackMessage = "";
-	private int feedbackColor = 0xFF9F8E72;
+	private int feedbackColor;
+	private final SettlementScreenTheme theme;
 	private PlayerInventoryListWidget playerInventoryList;
 
 	public TradeBoardScreen(TradeBoardMenu menu, Inventory playerInventory, Component title) {
 		super(menu, playerInventory, title, SCREEN_WIDTH, SCREEN_HEIGHT);
 		this.playerInventory = playerInventory;
+		this.theme = SettlementScreenTheme.forTier(menu.settlement().tier());
+		this.feedbackColor = theme.mutedText();
 	}
 
 	public static void registerNetworking() {
@@ -118,14 +122,14 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		extractTransparentBackground(graphics);
-		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xEE1F1A17);
-		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 26, 0xFF6B5A36);
-		graphics.fill(leftPos + 1, topPos + 27, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF2C241A);
-		graphics.outline(leftPos, topPos, imageWidth, imageHeight, 0xFFB69155);
+		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, theme.overlay());
+		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 26, theme.header());
+		graphics.fill(leftPos + 1, topPos + 27, leftPos + imageWidth - 1, topPos + imageHeight - 1, theme.body());
+		graphics.outline(leftPos, topPos, imageWidth, imageHeight, theme.border());
 
 		if (activeTab.usesTradeDivider()) {
 			int dividerX = leftPos + RIGHT_COLUMN_X - 8;
-			graphics.fill(dividerX, topPos + TRADE_SECTION_TOP_Y - 6, dividerX + 1, topPos + imageHeight - 18, 0xFF4A3A26);
+			graphics.fill(dividerX, topPos + TRADE_SECTION_TOP_Y - 6, dividerX + 1, topPos + imageHeight - 18, theme.divider());
 		}
 	}
 
@@ -142,12 +146,12 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			: Math.max(80, standingX - 18);
 		String nameText = trimToWidth(settlement.settlementName(), nameMaxWidth);
 
-		graphics.text(font, nameText, 10, 8, 0xFFF8E6BE, false);
+		graphics.text(font, nameText, 10, 8, theme.titleText(), false);
 		if (!standingText.isBlank()) {
 			int standingMaxWidth = Math.max(80, growthX - standingX - 8);
-			graphics.text(font, trimToWidth(standingText, standingMaxWidth), standingX, 8, 0xFFEBCB87, false);
+			graphics.text(font, trimToWidth(standingText, standingMaxWidth), standingX, 8, theme.accentText(), false);
 		}
-		graphics.text(font, settlement.growthSummary(), growthX, 9, 0xFFF2CF84, false);
+		graphics.text(font, settlement.growthSummary(), growthX, 9, theme.accentText(), false);
 
 		if (!hidesTopSummaryForActiveTab()) {
 			int y = TOP_SUMMARY_Y;
@@ -156,7 +160,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 				"Kind: " + humanizeKey(settlement.settlementKind().getSerializedName()) + "  Tier: " + settlement.tier() + "  Routes: " + settlement.routes().size(),
 				10,
 				y,
-				0xFFE6D6B7,
+				theme.bodyText(),
 				false
 			);
 			y += INFO_ROW_SPACING;
@@ -165,7 +169,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 				"Population: " + settlement.population() + "  Housing: " + settlement.housingCapacity(),
 				10,
 				y,
-				0xFFDCC8A4,
+				theme.secondaryText(),
 				false
 			);
 			y += INFO_ROW_SPACING;
@@ -174,7 +178,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 				"Treasury: " + settlement.emeraldWealth() + "e  Comfort: " + percent(settlement.comfort()) + "  Security: " + percent(settlement.security()),
 				10,
 				y,
-				0xFFDCC8A4,
+				theme.secondaryText(),
 				false
 			);
 		}
@@ -284,9 +288,15 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 				addRenderableWidget(
 					Button.builder(
 							Component.literal("Donate contents"),
-							clicked -> sendTradeButton(TradeBoardTrading.donateContentsButtonId(
+							clicked -> sendTradeAction(new TradeBoardActionPayload(
+								menu.boardPos(),
+								TradeBoardActionPayload.ACTION_DONATE_CONTENTS,
 								selectedIndex,
-								TradeBoardTrading.donateContentsActionKey(selected)
+								0,
+								selected.rowKey(),
+								selected.exactItemKey(),
+								"",
+								0
 							))
 						)
 						.bounds(leftPos + RIGHT_COLUMN_X, topPos + DONATION_BUTTON_Y, DONATE_CONTENTS_BUTTON_WIDTH, ROW_BUTTON_HEIGHT)
@@ -302,13 +312,22 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			int optionCount = Math.min(DETAIL_OPTION_ROWS, payoutOptions.size());
 
 			for (int index = 0; index < optionCount; index++) {
-				int buttonId = TradeBoardTrading.playerTradeButtonId(
-					selectedIndex,
-					index,
-					TradeBoardTrading.playerTradeActionKey(selected, payoutOptions.get(index))
-				);
+				GoodsTradeOption payout = payoutOptions.get(index);
+				int optionIndex = index;
 				addRenderableWidget(
-					Button.builder(Component.literal("Take"), clicked -> sendTradeButton(buttonId))
+					Button.builder(
+							Component.literal("Take"),
+							clicked -> sendTradeAction(new TradeBoardActionPayload(
+								menu.boardPos(),
+								TradeBoardActionPayload.ACTION_PLAYER_TRADE,
+								selectedIndex,
+								optionIndex,
+								selected.rowKey(),
+								selected.tradeGoodsKey(),
+								payout.goodsKey(),
+								payout.amount()
+							))
+						)
 						.bounds(detailButtonX(), topPos + detailOptionRowY(index) - 5, ACTION_BUTTON_WIDTH, ROW_BUTTON_HEIGHT)
 						.build()
 				);
@@ -325,10 +344,15 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		int amount = donationAmount(selected, donationIndex);
 		Button button = Button.builder(
 				Component.literal(label),
-				clicked -> sendTradeButton(TradeBoardTrading.donateButtonId(
+				clicked -> sendTradeAction(new TradeBoardActionPayload(
+					menu.boardPos(),
+					TradeBoardActionPayload.ACTION_DONATION,
 					selectedIndex,
 					donationIndex,
-					TradeBoardTrading.donationActionKey(selected)
+					selected.rowKey(),
+					selected.stockKey(),
+					"",
+					amount
 				))
 			)
 			.bounds(
@@ -361,16 +385,16 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	}
 
 	private void drawTradeTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement) {
-		graphics.text(font, "Trade", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
-		graphics.text(font, "Selected Good", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+		graphics.text(font, "Trade", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, theme.accentText(), false);
+		graphics.text(font, "Selected Good", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y, theme.accentText(), false);
 
 		TradeBoardInventoryEntryView selected = selectedPlayerEntry();
 		if (playerInventoryRows().isEmpty()) {
-			graphics.text(font, "No inventory goods", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, 0xFF9F8E72, false);
+			graphics.text(font, "No inventory goods", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, theme.mutedText(), false);
 		}
 
 		if (selected == null) {
-			graphics.text(font, "Choose one of your goods on the left.", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, 0xFF9F8E72, false);
+			graphics.text(font, "Choose one of your goods on the left.", RIGHT_COLUMN_X, TRADE_SECTION_TOP_Y + 14, theme.mutedText(), false);
 		} else {
 			drawPlayerGoodsDetail(graphics, selected, settlement);
 		}
@@ -379,24 +403,24 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	}
 
 	private void drawRaidTab(GuiGraphicsExtractor graphics, TradeBoardSettlementView settlement, TradeBoardRaidView raid) {
-		graphics.text(font, "Raid Status", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+		graphics.text(font, "Raid Status", LEFT_COLUMN_X, TRADE_SECTION_TOP_Y, theme.accentText(), false);
 		int y = TRADE_SECTION_TOP_Y + 13;
-		y = drawWrappedText(graphics, Component.literal(raid.status().isBlank() ? "No raid information recorded." : raid.status()), LEFT_COLUMN_X, y, imageWidth - 20, 0xFFE8DDC8) + 2;
+		y = drawWrappedText(graphics, Component.literal(raid.status().isBlank() ? "No raid information recorded." : raid.status()), LEFT_COLUMN_X, y, imageWidth - 20, theme.bodyText()) + 2;
 
 		if (!raid.targetSettlementName().isBlank()) {
-			graphics.text(font, "Target: " + trimToWidth(raid.targetSettlementName(), imageWidth - 70), LEFT_COLUMN_X, y, 0xFFDCC8A4, false);
+			graphics.text(font, "Target: " + trimToWidth(raid.targetSettlementName(), imageWidth - 70), LEFT_COLUMN_X, y, theme.secondaryText(), false);
 			y += INFO_ROW_SPACING + 1;
 		}
 
 		if (raid.partySize() > 0) {
-			graphics.text(font, "Party: " + raid.partySize() + " raiders  Phase: " + raid.phaseLabel(), LEFT_COLUMN_X, y, 0xFFDCC8A4, false);
+			graphics.text(font, "Party: " + raid.partySize() + " raiders  Phase: " + raid.phaseLabel(), LEFT_COLUMN_X, y, theme.secondaryText(), false);
 			y += INFO_ROW_SPACING + 1;
 		}
 
 		y = drawRaidRewards(graphics, raid, y + 2);
 
 		int detailY = Math.max(y + 8, 126);
-		graphics.text(font, "Last Raid Gains", LEFT_COLUMN_X, detailY, 0xFFF2CF84, false);
+		graphics.text(font, "Last Raid Gains", LEFT_COLUMN_X, detailY, theme.accentText(), false);
 		drawRaidLoot(graphics, raid, detailY + 14);
 		drawFeedback(graphics);
 	}
@@ -419,7 +443,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	private void drawRaidLoot(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
 		if (raid.loot().isEmpty()) {
-			graphics.text(font, "No goods recorded", LEFT_COLUMN_X, y, 0xFF9F8E72, false);
+			graphics.text(font, "No goods recorded", LEFT_COLUMN_X, y, theme.mutedText(), false);
 			return;
 		}
 
@@ -433,21 +457,21 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			int rowY = y + row * RAID_LOOT_ROW_SPACING;
 			drawGoodsIcon(graphics, loot.goodsKey(), rowX, rowY - 4, Math.max(1, loot.current()));
 			String label = TradeBoardTradeRules.compactLabel(loot.goodsKey(), loot.label());
-			graphics.text(font, trimToWidth(loot.current() + " " + label, RAID_LOOT_COLUMN_WIDTH - 22), rowX + 20, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, trimToWidth(loot.current() + " " + label, RAID_LOOT_COLUMN_WIDTH - 22), rowX + 20, rowY, theme.bodyText(), false);
 		}
 
 		if (raid.loot().size() > visibleCount) {
 			int hiddenY = y + rowsPerColumn * RAID_LOOT_ROW_SPACING;
-			graphics.text(font, "+" + (raid.loot().size() - visibleCount) + " more goods", LEFT_COLUMN_X, hiddenY, 0xFF9F8E72, false);
+			graphics.text(font, "+" + (raid.loot().size() - visibleCount) + " more goods", LEFT_COLUMN_X, hiddenY, theme.mutedText(), false);
 		}
 	}
 
 	private int drawRaidRewards(GuiGraphicsExtractor graphics, TradeBoardRaidView raid, int y) {
-		graphics.text(font, "Player Rewards", LEFT_COLUMN_X, y, 0xFFF2CF84, false);
+		graphics.text(font, "Player Rewards", LEFT_COLUMN_X, y, theme.accentText(), false);
 		y += INFO_ROW_SPACING + 1;
 
 		if (raid.playerRewards().isEmpty()) {
-			graphics.text(font, "No participants recorded", LEFT_COLUMN_X, y, 0xFF9F8E72, false);
+			graphics.text(font, "No participants recorded", LEFT_COLUMN_X, y, theme.mutedText(), false);
 			return y + INFO_ROW_SPACING;
 		}
 
@@ -459,7 +483,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			if (index == visibleCount - 1 && rewards.size() > visibleCount) {
 				line += "  +" + (rewards.size() - visibleCount) + " more";
 			}
-			graphics.text(font, trimToWidth(line, imageWidth - 20), LEFT_COLUMN_X, y, 0xFFE8DDC8, false);
+			graphics.text(font, trimToWidth(line, imageWidth - 20), LEFT_COLUMN_X, y, theme.bodyText(), false);
 			y += INFO_ROW_SPACING + 1;
 		}
 
@@ -475,16 +499,16 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private void drawPlayerGoodsDetail(GuiGraphicsExtractor graphics, TradeBoardInventoryEntryView selected, TradeBoardSettlementView settlement) {
 		drawSelectionFill(graphics, RIGHT_COLUMN_X, DETAIL_SUMMARY_Y - GOODS_ROW_HIGHLIGHT_Y_OFFSET, DETAIL_SECTION_WIDTH, GOODS_ROW_HIGHLIGHT_HEIGHT, true);
 		drawItemStack(graphics, representativeStack(selected), RIGHT_COLUMN_X + 1, DETAIL_SUMMARY_Y - 4);
-		graphics.text(font, trimToWidth(selected.label() + " x" + selected.totalCount(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y, 0xFFE8DDC8, false);
+		graphics.text(font, trimToWidth(selected.label() + " x" + selected.totalCount(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y, theme.bodyText(), false);
 
 		PlayerGoodsOption tradeOption = tradeOptionForRow(selected);
 		if (selected.hasStoredContents()) {
-			graphics.text(font, trimToWidth(selected.label() + " is carrying stored contents.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y + GOODS_NOTE_Y_OFFSET, 0xFFDCC8A4, false);
-			graphics.text(font, "Stored contents", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
+			graphics.text(font, trimToWidth(selected.label() + " is carrying stored contents.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y + GOODS_NOTE_Y_OFFSET, theme.secondaryText(), false);
+			graphics.text(font, "Stored contents", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, theme.accentText(), false);
 			String containerNote = selected.storedContentStacks() == 1
 				? "This container holds 1 stored stack. Hover the row to preview it, then use Donate contents to empty it into village stock."
 				: "This container holds " + selected.storedContentStacks() + " stored stacks. Hover the row to preview them, then use Donate contents to empty it into village stock.";
-			graphics.text(font, trimToWidth(containerNote, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
+			graphics.text(font, trimToWidth(containerNote, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, theme.mutedText(), false);
 			drawDonationControls(graphics, selected);
 			return;
 		}
@@ -494,32 +518,32 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			: tradeOption != null
 				? settlement.settlementName() + " is not asking for this right now."
 				: settlement.settlementName() + " does not have a known trade use for this yet.";
-		int noteColor = tradeOption != null && tradeOption.wanted() ? 0xFFDCC8A4 : 0xFF9F8E72;
+		int noteColor = tradeOption != null && tradeOption.wanted() ? theme.secondaryText() : theme.mutedText();
 		graphics.text(font, trimToWidth(note, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X + 20, DETAIL_SUMMARY_Y + GOODS_NOTE_Y_OFFSET, noteColor, false);
 
 		if (tradeOption == null) {
-			graphics.text(font, "Unknown settlement pricing", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
-			graphics.text(font, trimToWidth("You can still donate this stack so the village can hold it for later use or barter.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
+			graphics.text(font, "Unknown settlement pricing", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, theme.accentText(), false);
+			graphics.text(font, trimToWidth("You can still donate this stack so the village can hold it for later use or barter.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, theme.mutedText(), false);
 			drawDonationControls(graphics, selected);
 			return;
 		}
 
 		if (!tradeOption.wanted()) {
-			graphics.text(font, "No current trade demand", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
-			graphics.text(font, trimToWidth("You can still donate it directly to help future stock.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
+			graphics.text(font, "No current trade demand", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, theme.accentText(), false);
+			graphics.text(font, trimToWidth("You can still donate it directly to help future stock.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, theme.mutedText(), false);
 			drawDonationControls(graphics, selected);
 			return;
 		}
 
 		if (!tradeOption.canOfferBundle()) {
-			graphics.text(font, "Bundle trade requirement", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
+			graphics.text(font, "Bundle trade requirement", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, theme.accentText(), false);
 			String requirement = "Need " + tradeOption.tradeBundleSize() + " " + tradeOption.label().toLowerCase() + " across your inventory for a full trade.";
-			graphics.text(font, trimToWidth(requirement, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
+			graphics.text(font, trimToWidth(requirement, DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, theme.mutedText(), false);
 			drawDonationControls(graphics, selected);
 			return;
 		}
 
-		graphics.text(font, "Village offers for one bundle", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, 0xFFF2CF84, false);
+		graphics.text(font, "Village offers for one bundle", RIGHT_COLUMN_X, DETAIL_SECTION_TITLE_Y, theme.accentText(), false);
 		drawPayoutOptions(graphics, tradeOption, settlement);
 		drawDonationControls(graphics, selected);
 	}
@@ -527,7 +551,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private void drawPayoutOptions(GuiGraphicsExtractor graphics, PlayerGoodsOption selected, TradeBoardSettlementView settlement) {
 		List<GoodsTradeOption> options = TradeBoardTrading.payoutOptionsForPlayerGoods(selected, settlement);
 		if (options.isEmpty()) {
-			graphics.text(font, "No protected surplus to trade back yet.", RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, 0xFF9F8E72, false);
+			graphics.text(font, "No protected surplus to trade back yet.", RIGHT_COLUMN_X, DETAIL_FIRST_ROW_Y, theme.mutedText(), false);
 			return;
 		}
 
@@ -538,8 +562,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			int rowY = detailOptionRowY(index);
 			drawGoodsIcon(graphics, option.goodsKey(), RIGHT_COLUMN_X + 1, rowY - 4, Math.min(64, option.amount()));
 			String optionLabel = TradeBoardTradeRules.compactLabel(option.goodsKey(), option.label());
-			graphics.text(font, trimToWidth(option.amount() + " " + optionLabel, DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY, 0xFFE8DDC8, false);
-			graphics.text(font, trimToWidth("For " + selected.tradeBundleSize() + " " + selected.label().toLowerCase(), DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY + 9, 0xFFDCC8A4, false);
+			graphics.text(font, trimToWidth(option.amount() + " " + optionLabel, DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY, theme.bodyText(), false);
+			graphics.text(font, trimToWidth("For " + selected.tradeBundleSize() + " " + selected.label().toLowerCase(), DETAIL_ACTION_TEXT_WIDTH), RIGHT_COLUMN_X + 20, rowY + 9, theme.secondaryText(), false);
 		}
 
 		drawDetailHiddenCount(graphics, options.size(), visibleCount);
@@ -548,20 +572,20 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private void drawDonationControls(GuiGraphicsExtractor graphics, TradeBoardInventoryEntryView selected) {
 		if (selected.hasStoredContents()) {
 			String stackText = selected.storedContentStacks() == 1 ? "1 stored stack." : selected.storedContentStacks() + " stored stacks.";
-			graphics.text(font, trimToWidth("Donate contents of selected " + selected.label().toLowerCase(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_LABEL_Y, 0xFFF2CF84, false);
-			graphics.text(font, trimToWidth(stackText + " Hover the row to inspect them first.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_NOTE_Y, 0xFF9F8E72, false);
+			graphics.text(font, trimToWidth("Donate contents of selected " + selected.label().toLowerCase(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_LABEL_Y, theme.accentText(), false);
+			graphics.text(font, trimToWidth(stackText + " Hover the row to inspect them first.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_NOTE_Y, theme.mutedText(), false);
 			return;
 		}
 
-		graphics.text(font, trimToWidth("Donate selected " + selected.label().toLowerCase(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_LABEL_Y, 0xFFF2CF84, false);
+		graphics.text(font, trimToWidth("Donate selected " + selected.label().toLowerCase(), DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_LABEL_Y, theme.accentText(), false);
 		String bundleText = selected.bundleSize() == 1 ? "Bundle: 1 item." : "Bundle: " + selected.bundleSize() + " items.";
-		graphics.text(font, trimToWidth(bundleText + " Adds directly to village stock.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_NOTE_Y, 0xFF9F8E72, false);
+		graphics.text(font, trimToWidth(bundleText + " Adds directly to village stock.", DETAIL_TEXT_WIDTH), RIGHT_COLUMN_X, DONATION_NOTE_Y, theme.mutedText(), false);
 	}
 
 	private void drawSelectionFill(GuiGraphicsExtractor graphics, int x, int y, int width, int height, boolean selected) {
 		if (selected) {
-			graphics.fill(x - 2, y - 2, x + width, y + height, 0x553E6A3B);
-			graphics.outline(x - 2, y - 2, width + 2, height + 2, 0xFF9BC87D);
+			graphics.fill(x - 2, y - 2, x + width, y + height, theme.selectionFill());
+			graphics.outline(x - 2, y - 2, width + 2, height + 2, theme.selectionOutline());
 		}
 	}
 
@@ -581,7 +605,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	private void drawDetailHiddenCount(GuiGraphicsExtractor graphics, int total, int visible) {
 		int hiddenCount = Math.max(0, total - visible);
 		if (hiddenCount > 0) {
-			graphics.text(font, "+" + hiddenCount + " more offers", RIGHT_COLUMN_X, detailOptionRowY(visible), 0xFF9F8E72, false);
+			graphics.text(font, "+" + hiddenCount + " more offers", RIGHT_COLUMN_X, detailOptionRowY(visible), theme.mutedText(), false);
 		}
 	}
 
@@ -593,22 +617,22 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 	private void drawBountiesTab(GuiGraphicsExtractor graphics, int mouseX, int mouseY, TradeBoardSettlementView settlement) {
 		List<TradeBoardGoodsView> shortages = settlement.shortages();
-		graphics.text(font, BOUNTY_LABEL, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y, 0xFFF2CF84, false);
+		graphics.text(font, BOUNTY_LABEL, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y, theme.accentText(), false);
 
 		if (shortages.isEmpty()) {
-			graphics.fill(8, TRADE_SECTION_TOP_Y + 18, imageWidth - 10, imageHeight - 10, 0x11FFF5E6);
-			int infoBottom = drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, 224, 0xFFDCC8A4);
-			drawWrappedText(graphics, Component.literal("No missing settlement goods right now."), BOUNTY_INFO_X, infoBottom + 10, 224, 0xFFE8DDC8);
-			drawWrappedText(graphics, Component.literal("Current stock already covers every known reserve target."), BOUNTY_INFO_X, infoBottom + 24, 224, 0xFF9F8E72);
+			graphics.fill(8, TRADE_SECTION_TOP_Y + 18, imageWidth - 10, imageHeight - 10, theme.panelFill());
+			int infoBottom = drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, 224, theme.secondaryText());
+			drawWrappedText(graphics, Component.literal("No missing settlement goods right now."), BOUNTY_INFO_X, infoBottom + 10, 224, theme.bodyText());
+			drawWrappedText(graphics, Component.literal("Current stock already covers every known reserve target."), BOUNTY_INFO_X, infoBottom + 24, 224, theme.mutedText());
 			drawFeedback(graphics);
 			return;
 		}
 
-		graphics.fill(8, TRADE_SECTION_TOP_Y + 4, 224, imageHeight - 10, 0x11FFF5E6);
-		graphics.fill(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 10, imageHeight - 10, 0x22FFF5E6);
-		graphics.outline(8, 80, 216, imageHeight - 90, 0x447A633F);
-		graphics.outline(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 238, imageHeight - TRADE_SECTION_TOP_Y - 14, 0x447A633F);
-		drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, BOUNTY_INFO_WIDTH, 0xFFDCC8A4);
+		graphics.fill(8, TRADE_SECTION_TOP_Y + 4, 224, imageHeight - 10, theme.panelFill());
+		graphics.fill(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 10, imageHeight - 10, theme.panelStrongFill());
+		graphics.outline(8, 80, 216, imageHeight - 90, theme.panelOutline());
+		graphics.outline(228, TRADE_SECTION_TOP_Y + 4, imageWidth - 238, imageHeight - TRADE_SECTION_TOP_Y - 14, theme.panelOutline());
+		drawWrappedText(graphics, BOUNTY_TRADE_NOTE, BOUNTY_INFO_X, TRADE_SECTION_TOP_Y + 14, BOUNTY_INFO_WIDTH, theme.secondaryText());
 
 		TradeBoardGoodsView hoveredBounty = hoveredBounty(mouseX, mouseY, shortages);
 		for (int index = 0; index < shortages.size(); index++) {
@@ -619,7 +643,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		}
 
 		if (hoveredBounty == null) {
-			drawWrappedText(graphics, BOUNTY_HINT, BOUNTY_DETAIL_X, BOUNTY_DETAIL_Y, BOUNTY_DETAIL_WIDTH, 0xFFDCC8A4);
+			drawWrappedText(graphics, BOUNTY_HINT, BOUNTY_DETAIL_X, BOUNTY_DETAIL_Y, BOUNTY_DETAIL_WIDTH, theme.secondaryText());
 			drawFeedback(graphics);
 			return;
 		}
@@ -628,7 +652,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		int detailY = BOUNTY_DETAIL_Y;
 		for (int index = 0; index < detailLines.size(); index++) {
 			Component line = detailLines.get(index);
-			int color = index == 0 ? 0xFFE8DDC8 : 0xFFDCC8A4;
+			int color = index == 0 ? theme.bodyText() : theme.secondaryText();
 			detailY = drawWrappedText(graphics, line, BOUNTY_DETAIL_X, detailY, BOUNTY_DETAIL_WIDTH, color) + 2;
 		}
 
@@ -642,17 +666,17 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		String title,
 		List<String> lines
 	) {
-		graphics.text(font, title, x, y, 0xFFF2CF84, false);
+		graphics.text(font, title, x, y, theme.accentText(), false);
 
 		if (lines.isEmpty()) {
-			graphics.text(font, "None recorded", x, y + 12, 0xFF9F8E72, false);
+			graphics.text(font, "None recorded", x, y + 12, theme.mutedText(), false);
 			return;
 		}
 
 		int rowY = y + 12;
 
 		for (String line : lines) {
-			graphics.text(font, trimToWidth(line, infoSectionWidth(x)), x, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, trimToWidth(line, infoSectionWidth(x)), x, rowY, theme.bodyText(), false);
 			rowY += INFO_ROW_SPACING;
 		}
 	}
@@ -665,10 +689,10 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		List<TradeBoardGoodsView> entries,
 		boolean includeTarget
 	) {
-		graphics.text(font, title, x, y, 0xFFF2CF84, false);
+		graphics.text(font, title, x, y, theme.accentText(), false);
 
 		if (entries.isEmpty()) {
-			graphics.text(font, "None recorded", x, y + 12, 0xFF9F8E72, false);
+			graphics.text(font, "None recorded", x, y + 12, theme.mutedText(), false);
 			return;
 		}
 
@@ -679,7 +703,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			String line = includeTarget
 				? "%s %d/%d".formatted(label, entry.current(), entry.target())
 				: "%s: %d".formatted(label, entry.current());
-			graphics.text(font, trimToWidth(line, infoSectionWidth(x)), x, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, trimToWidth(line, infoSectionWidth(x)), x, rowY, theme.bodyText(), false);
 			rowY += INFO_ROW_SPACING;
 		}
 	}
@@ -692,23 +716,23 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		List<TradeBoardProjectView> entries,
 		int totalCount
 	) {
-		graphics.text(font, title, x, y, 0xFFF2CF84, false);
+		graphics.text(font, title, x, y, theme.accentText(), false);
 
 		if (entries.isEmpty()) {
-			graphics.text(font, "None recorded", x, y + 12, 0xFF9F8E72, false);
+			graphics.text(font, "None recorded", x, y + 12, theme.mutedText(), false);
 			return;
 		}
 
 		int rowY = y + 12;
 
 		for (TradeBoardProjectView entry : entries) {
-			graphics.text(font, trimToWidth(entry.label() + " " + entry.progressPercent() + "%", infoSectionWidth(x)), x, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, trimToWidth(entry.label() + " " + entry.progressPercent() + "%", infoSectionWidth(x)), x, rowY, theme.bodyText(), false);
 			rowY += INFO_ROW_SPACING;
 		}
 
 		int hiddenCount = Math.max(0, totalCount - entries.size());
 		if (hiddenCount > 0) {
-			graphics.text(font, "+" + hiddenCount + " more", x, rowY, 0xFF9F8E72, false);
+			graphics.text(font, "+" + hiddenCount + " more", x, rowY, theme.mutedText(), false);
 		}
 	}
 
@@ -720,10 +744,10 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		List<TradeBoardRouteView> entries,
 		int totalCount
 	) {
-		graphics.text(font, title, x, y, 0xFFF2CF84, false);
+		graphics.text(font, title, x, y, theme.accentText(), false);
 
 		if (entries.isEmpty()) {
-			graphics.text(font, "No active routes recorded", x, y + 12, 0xFF9F8E72, false);
+			graphics.text(font, "No active routes recorded", x, y + 12, theme.mutedText(), false);
 			return;
 		}
 
@@ -732,13 +756,13 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 
 		for (TradeBoardRouteView entry : entries) {
 			String line = trimToWidth(entry.targetSettlementName() + ": " + entry.summary(), maxWidth);
-			graphics.text(font, line, x, rowY, 0xFFE8DDC8, false);
+			graphics.text(font, line, x, rowY, theme.bodyText(), false);
 			rowY += INFO_ROW_SPACING + 2;
 		}
 
 		int hiddenCount = Math.max(0, totalCount - entries.size());
 		if (hiddenCount > 0) {
-			graphics.text(font, "+" + hiddenCount + " more routes", x, rowY, 0xFF9F8E72, false);
+			graphics.text(font, "+" + hiddenCount + " more routes", x, rowY, theme.mutedText(), false);
 		}
 	}
 
@@ -767,14 +791,12 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 		playerInventoryRowsSnapshot = payload.inventoryRows();
 		hasPlayerInventoryRowsSnapshot = true;
 		feedbackMessage = payload.message();
-		feedbackColor = payload.success() ? 0xFFD5E6B7 : 0xFFFF9A8A;
+		feedbackColor = payload.success() ? theme.successText() : theme.failureText();
 		rebuildTradeBoardWidgets();
 	}
 
-	private void sendTradeButton(int buttonId) {
-		if (minecraft != null && minecraft.gameMode != null) {
-			minecraft.gameMode.handleInventoryButtonClick(menu.containerId, buttonId);
-		}
+	private void sendTradeAction(TradeBoardActionPayload payload) {
+		ClientPlayNetworking.send(payload);
 	}
 
 	private void clampSelections() {
@@ -1027,7 +1049,7 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 			PlayerGoodsOption tradeOption = tradeOptionForRow(view);
 
 			drawItemStack(graphics, representativeStack(view), x, y);
-			graphics.text(font, trimToWidth(view.label() + " x" + view.totalCount(), GOODS_ROW_WIDTH - 24), x + 19, y + 2, tradeOption != null && tradeOption.wanted() ? 0xFFE8DDC8 : 0xFF9F8E72, false);
+			graphics.text(font, trimToWidth(view.label() + " x" + view.totalCount(), GOODS_ROW_WIDTH - 24), x + 19, y + 2, tradeOption != null && tradeOption.wanted() ? theme.bodyText() : theme.mutedText(), false);
 
 			String note = view.hasStoredContents()
 				? "Stored contents ready to donate"
@@ -1037,8 +1059,8 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 					: "Not currently wanted"
 				: "Unknown to settlement pricing";
 			int noteColor = view.hasStoredContents()
-				? 0xFFDCC8A4
-				: tradeOption != null && tradeOption.wanted() ? 0xFFDCC8A4 : 0xFF806F5A;
+				? theme.secondaryText()
+				: tradeOption != null && tradeOption.wanted() ? theme.secondaryText() : theme.disabledText();
 			graphics.text(font, trimToWidth(note, GOODS_ROW_WIDTH - 24), x + 19, y + 10, noteColor, false);
 		}
 
@@ -1054,11 +1076,11 @@ public class TradeBoardScreen extends AbstractContainerScreen<TradeBoardMenu> {
 	}
 
 	private void drawBountyEntry(GuiGraphicsExtractor graphics, int x, int y, TradeBoardGoodsView bounty, boolean hovered) {
-		graphics.fill(x - 2, y - 1, x + BOUNTY_LIST_COLUMN_WIDTH, y + 12, hovered ? 0x553E6A3B : 0x22FFF5E6);
-		graphics.outline(x - 2, y - 1, BOUNTY_LIST_COLUMN_WIDTH + 2, 13, hovered ? 0xFF9BC87D : 0x447A633F);
+		graphics.fill(x - 2, y - 1, x + BOUNTY_LIST_COLUMN_WIDTH, y + 12, hovered ? theme.selectionFill() : theme.panelStrongFill());
+		graphics.outline(x - 2, y - 1, BOUNTY_LIST_COLUMN_WIDTH + 2, 13, hovered ? theme.selectionOutline() : theme.panelOutline());
 		drawGoodsIcon(graphics, bounty.goodsKey(), x, y - 2, Math.max(1, bounty.current()));
 		String label = TradeBoardTradeRules.compactLabel(bounty.goodsKey(), bounty.label());
-		graphics.text(font, trimToWidth(label, BOUNTY_LIST_COLUMN_WIDTH - 24), x + 18, y + 1, 0xFFE8DDC8, false);
+		graphics.text(font, trimToWidth(label, BOUNTY_LIST_COLUMN_WIDTH - 24), x + 18, y + 1, theme.bodyText(), false);
 	}
 
 	private TradeBoardGoodsView hoveredBounty(int mouseX, int mouseY, List<TradeBoardGoodsView> shortages) {

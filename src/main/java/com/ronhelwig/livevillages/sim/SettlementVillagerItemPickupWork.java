@@ -85,7 +85,7 @@ public final class SettlementVillagerItemPickupWork {
 				}
 
 				BlockPos depositPos = stockAccessPos.get();
-				steerVillagerTowardDeposit(villager, depositPos);
+				steerVillagerTowardDeposit(level, settlement, villager, depositPos);
 
 				if (isWithinDepositReach(villager, depositPos)) {
 					depositIntoStock(level, settlement, villager, stock, carriedGoods);
@@ -228,8 +228,8 @@ public final class SettlementVillagerItemPickupWork {
 		}
 	}
 
-	private static void steerVillagerTowardDeposit(Villager villager, BlockPos depositPos) {
-		villager.getNavigation().moveTo(depositPos.getX() + 0.5D, depositPos.getY(), depositPos.getZ() + 0.5D, DEPOSIT_WALK_SPEED);
+	private static void steerVillagerTowardDeposit(ServerLevel level, SettlementState settlement, Villager villager, BlockPos depositPos) {
+		SettlementNavigation.moveToRoutineTarget(level, settlement, villager, depositPos, DEPOSIT_WALK_SPEED);
 	}
 
 	private static boolean isWithinDepositReach(Villager villager, BlockPos depositPos) {

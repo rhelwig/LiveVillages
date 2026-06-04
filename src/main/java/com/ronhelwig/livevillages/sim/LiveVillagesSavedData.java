@@ -46,6 +46,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final long CUSTOM_SETTLEMENT_BOOTSTRAP_RETRY_TICKS = 6_000L;
 	private static final int CUSTOM_SETTLEMENT_VILLAGER_RADIUS_BLOCKS = 32;
 	private static final int CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS = 6;
+	private static final int SCRIBE_ROUTE_EXCHANGE_ONE_SIDED_LIMIT = 2;
+	private static final int SCRIBE_ROUTE_EXCHANGE_TWO_SIDED_LIMIT = 3;
 	public static final int SHARED_MAP_SAMPLE_STRIDE_BLOCKS = 4;
 	public static final long SURVEY_CACHE_DURATION_TICKS = 2_000L; // Cache survey for 100 seconds
 	private static final long DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS = (long) SettlementEconomyRules.TICKS_PER_DAY;
@@ -57,10 +59,11 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int VIRTUAL_TRADING_POST_MIN_POPULATION = 2;
 	private static final int VIRTUAL_TRADING_POST_MIN_STOCK = 48;
 	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18 };
-	private static final com.mojang.serialization.MapCodec<OutpostPersistence> OUTPOST_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(OutpostPersistence::playerStandings),
-		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(OutpostPersistence::raids)
-	).apply(instance, OutpostPersistence::new));
+	private static final com.mojang.serialization.MapCodec<SupplementalPersistence> SUPPLEMENTAL_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(SupplementalPersistence::playerStandings),
+		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(SupplementalPersistence::raids),
+		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_recipe_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeRecipeLedgers)
+	).apply(instance, SupplementalPersistence::new));
 	private static final Codec<LiveVillagesSavedData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, SettlementState.CODEC).optionalFieldOf("settlements", Map.of()).forGetter(data -> data.settlements),
 		Codec.unboundedMap(Codec.STRING, RouteState.CODEC).optionalFieldOf("routes", Map.of()).forGetter(data -> data.routes),
@@ -71,7 +74,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
-		OUTPOST_PERSISTENCE_CODEC.forGetter(data -> new OutpostPersistence(data.outpostPlayerStandings, data.outpostRaidStates)),
+		SUPPLEMENTAL_PERSISTENCE_CODEC.forGetter(data -> new SupplementalPersistence(data.outpostPlayerStandings, data.outpostRaidStates, data.scribeRecipeLedgers)),
 		Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("villager_settlements", Map.of()).forGetter(data -> data.villagerSettlements),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
@@ -95,6 +98,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations;
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
 	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
+	private final LinkedHashMap<String, List<String>> scribeRecipeLedgers;
 	private final LinkedHashMap<String, Map<String, OutpostPlayerStanding>> outpostPlayerStandings;
 	private final LinkedHashMap<String, OutpostRaidState> outpostRaidStates;
 	private final LinkedHashMap<String, String> villagerSettlements;
@@ -118,6 +122,18 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 	}
 
+	private record SupplementalPersistence(
+		Map<String, Map<String, OutpostPlayerStanding>> playerStandings,
+		Map<String, OutpostRaidState> raids,
+		Map<String, List<String>> scribeRecipeLedgers
+	) {
+		private SupplementalPersistence {
+			playerStandings = playerStandings == null ? Map.of() : playerStandings;
+			raids = raids == null ? Map.of() : raids;
+			scribeRecipeLedgers = scribeRecipeLedgers == null ? Map.of() : scribeRecipeLedgers;
+		}
+	}
+
 	public record SharedTerrainCell(String terrainCode, long lastObservedTick) {
 		public static final Codec<SharedTerrainCell> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.STRING.optionalFieldOf("terrain_code", "U").forGetter(SharedTerrainCell::terrainCode),
@@ -134,7 +150,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new OutpostPersistence(Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new SupplementalPersistence(Map.of(), Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -147,7 +163,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, SettlementLoadedObservation.SurveyorObservation> savedSurveyorObservations,
 		Map<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans,
 		Map<String, Map<String, Integer>> bakeryFreebiesOwed,
-		OutpostPersistence outpostPersistence,
+		SupplementalPersistence supplementalPersistence,
 		Map<String, String> villagerSettlements,
 		Map<String, Long> preferredVillagerHomes,
 		Map<String, Long> loadedRoadworkCatchupTicks,
@@ -166,9 +182,11 @@ public class LiveVillagesSavedData extends SavedData {
 		savedRoadworkPlans.forEach((settlementId, plans) -> this.savedRoadworkPlans.put(settlementId, new LinkedHashMap<>(plans)));
 		this.bakeryFreebiesOwed = new LinkedHashMap<>();
 		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
+		this.scribeRecipeLedgers = new LinkedHashMap<>();
+		supplementalPersistence.scribeRecipeLedgers().forEach((settlementId, recipeIds) -> this.scribeRecipeLedgers.put(settlementId, sortedRecipeIds(recipeIds)));
 		this.outpostPlayerStandings = new LinkedHashMap<>();
-		outpostPersistence.playerStandings().forEach((settlementId, playerStandings) -> this.outpostPlayerStandings.put(settlementId, new LinkedHashMap<>(playerStandings)));
-		this.outpostRaidStates = new LinkedHashMap<>(outpostPersistence.raids());
+		supplementalPersistence.playerStandings().forEach((settlementId, playerStandings) -> this.outpostPlayerStandings.put(settlementId, new LinkedHashMap<>(playerStandings)));
+		this.outpostRaidStates = new LinkedHashMap<>(supplementalPersistence.raids());
 		this.villagerSettlements = new LinkedHashMap<>(villagerSettlements);
 		this.preferredVillagerHomes = new LinkedHashMap<>(preferredVillagerHomes);
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
@@ -204,6 +222,47 @@ public class LiveVillagesSavedData extends SavedData {
 
 	public Collection<OutpostRaidState> outpostRaidStates() {
 		return Collections.unmodifiableCollection(outpostRaidStates.values());
+	}
+
+	public List<String> knownScribeRecipeIds(String settlementId) {
+		if (settlementId == null || settlementId.isBlank()) {
+			return List.of();
+		}
+
+		return List.copyOf(scribeRecipeLedgers.getOrDefault(settlementId, List.of()));
+	}
+
+	public List<String> ensureScribeStarterRecipes(String settlementId, Collection<String> recipeIds) {
+		if (settlementId == null || settlementId.isBlank() || recipeIds == null || recipeIds.isEmpty()) {
+			return knownScribeRecipeIds(settlementId);
+		}
+
+		List<String> previous = scribeRecipeLedgers.getOrDefault(settlementId, List.of());
+		List<String> updated = sortedRecipeIds(previous, recipeIds);
+
+		if (!updated.equals(previous)) {
+			scribeRecipeLedgers.put(settlementId, updated);
+			setDirty();
+		}
+
+		return List.copyOf(updated);
+	}
+
+	public boolean addKnownScribeRecipe(String settlementId, String recipeId) {
+		if (settlementId == null || settlementId.isBlank() || recipeId == null || recipeId.isBlank()) {
+			return false;
+		}
+
+		List<String> previous = scribeRecipeLedgers.getOrDefault(settlementId, List.of());
+		List<String> updated = sortedRecipeIds(previous, List.of(recipeId));
+
+		if (updated.equals(previous)) {
+			return false;
+		}
+
+		scribeRecipeLedgers.put(settlementId, updated);
+		setDirty();
+		return true;
 	}
 
 	public Optional<OutpostRaidState> outpostRaidState(String outpostSettlementId) {
@@ -358,6 +417,29 @@ public class LiveVillagesSavedData extends SavedData {
 		double dx = (first.getX() + 0.5D) - (second.getX() + 0.5D);
 		double dz = (first.getZ() + 0.5D) - (second.getZ() + 0.5D);
 		return (dx * dx) + (dz * dz);
+	}
+
+	private static List<String> sortedRecipeIds(Collection<String> recipeIds) {
+		return sortedRecipeIds(List.of(), recipeIds);
+	}
+
+	private static List<String> sortedRecipeIds(Collection<String> first, Collection<String> second) {
+		TreeSet<String> sorted = new TreeSet<>();
+		addRecipeIds(sorted, first);
+		addRecipeIds(sorted, second);
+		return List.copyOf(sorted);
+	}
+
+	private static void addRecipeIds(Set<String> target, Collection<String> recipeIds) {
+		if (recipeIds == null) {
+			return;
+		}
+
+		for (String recipeId : recipeIds) {
+			if (recipeId != null && !recipeId.isBlank()) {
+				target.add(recipeId);
+			}
+		}
 	}
 
 	public int settlementCount() {
@@ -1130,6 +1212,7 @@ public class LiveVillagesSavedData extends SavedData {
 				.map(SettlementConstructionDelivery::villagerId)
 				.collect(java.util.stream.Collectors.toSet());
 			boolean stockChanged = false;
+			SettlementTrademasterWork.maintainLoadedTradeManagement(level, workingSettlement, activeBuildSites);
 			stockChanged |= SettlementVillagerItemPickupWork.maintainLoadedItemCollection(
 				level,
 				workingSettlement,
@@ -1143,13 +1226,23 @@ public class LiveVillagesSavedData extends SavedData {
 				stock,
 				getRoutesForSettlement(workingSettlement.id()).size()
 			);
+			stockChanged |= SettlementButcherWork.maintainLoadedShepherding(
+				level,
+				workingSettlement,
+				stock,
+				getRoutesForSettlement(workingSettlement.id()).size()
+			);
 			stockChanged |= SettlementFishermanWork.maintainLoadedFishing(level, workingSettlement, stock);
 			stockChanged |= SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
+			stockChanged |= SettlementGardenerWork.maintainLoadedGardening(level, workingSettlement, stock);
+			stockChanged |= SettlementBeekeeperWork.maintainLoadedBeekeeping(level, workingSettlement, stock);
 			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementBakerWork.maintainLoadedBaking(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementMasonWork.maintainLoadedMasonry(level, workingSettlement, stock, activeBuildSites);
+			stockChanged |= SettlementVanillaProfessionWork.maintainLoadedVanillaProfessionWork(level, workingSettlement, stock);
+			changed |= SettlementScribeWork.maintainLoadedScribing(level, workingSettlement, this);
 			SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
 			stockChanged |= !stock.equals(workingSettlement.stock());
 			SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
@@ -1184,10 +1277,25 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
 				: settlement.withPopulation(actualPopulation);
-			SettlementDefenseWork.maintainLoadedDefense(level, workingSettlement, getBuildSitesForSettlement(workingSettlement.id()));
+			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
+			boolean stockChanged = SettlementDefenseWork.maintainLoadedDefense(
+				level,
+				workingSettlement,
+				stock,
+				getBuildSitesForSettlement(workingSettlement.id()),
+				getConstructionDeliveries(),
+				getSettlementsInDimension(server, settlement.dimension()),
+				getRoutesForSettlement(workingSettlement.id())
+			);
+			SettlementAccessWork.maintainLoadedDefensiveAccess(
+				level,
+				workingSettlement,
+				getBuildSitesForSettlement(workingSettlement.id())
+			);
+			SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
 
-			if (!workingSettlement.equals(settlement)) {
-				entry.setValue(workingSettlement);
+			if (!updatedSettlement.equals(settlement)) {
+				entry.setValue(updatedSettlement);
 				changed = true;
 			}
 
@@ -1223,13 +1331,22 @@ public class LiveVillagesSavedData extends SavedData {
 				changed |= OutpostGear.maintainOutpostEquipment(level, workingSettlement, stock) > 0;
 				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
@@ -1284,13 +1401,22 @@ public class LiveVillagesSavedData extends SavedData {
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
+			changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
 			changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
+			changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
 			changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
 			changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
@@ -1476,7 +1602,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private boolean tryMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		if (settlement.kind() == SettlementKind.OUTPOST
 			|| findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST).isPresent()
-			|| !SettlementConstruction.findPlacedTradeBoards(level, settlement).isEmpty()
+			|| hasLinkedTradeBoard(level, settlement)
 			|| !shouldMaterializeVirtualTradingPost(level, settlement)) {
 			return false;
 		}
@@ -1505,6 +1631,17 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			level.setBlock(site.pos(), Blocks.AIR.defaultBlockState(), 3);
+		}
+
+		return false;
+	}
+
+	private boolean hasLinkedTradeBoard(ServerLevel level, SettlementState settlement) {
+		for (BlockPos boardPos : SettlementConstruction.findPlacedTradeBoards(level, settlement)) {
+			if (level.getBlockEntity(boardPos) instanceof TradeBoardBlockEntity tradeBoard
+				&& tradeBoard.resolveSettlement(level).id().equals(settlement.id())) {
+				return true;
+			}
 		}
 
 		return false;
@@ -1588,6 +1725,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1612,6 +1750,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1706,18 +1845,240 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
+	private boolean tryStartVanillaClericShrineBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos brewingStandPos : SettlementConstruction.findPlacedBrewingStands(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CLERIC_SHRINE, brewingStandPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartClericShrineAtWorkstation(
+				level,
+				brewingStandPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, brewingStandPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaLeatherworkerWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos cauldronPos : SettlementConstruction.findPlacedCauldrons(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LEATHERWORKER_WORKSHOP, cauldronPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLeatherworkerWorkshopAtWorkstation(
+				level,
+				cauldronPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, cauldronPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaLibraryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos lecternPos : SettlementConstruction.findPlacedLecterns(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIBRARY, lecternPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLibraryAtWorkstation(
+				level,
+				lecternPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, lecternPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaShepherdHutBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos loomPos : SettlementConstruction.findPlacedLooms(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SHEPHERD_HUT, loomPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartShepherdHutAtWorkstation(
+				level,
+				loomPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, loomPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartVanillaSmithyBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos workstationPos : SettlementConstruction.findPlacedSmithingWorkstations(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SMITHY, workstationPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartSmithyAtWorkstation(
+				level,
+				workstationPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
 	private boolean tryStartPlacedCarpenterWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		boolean changed = false;
 
 		for (BlockPos benchPos : SettlementConstruction.findPlacedCarpenterBenches(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP, benchPos);
-			if (existingBuildSite.isEmpty()) {
-				continue;
-			}
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartCarpenterWorkshopAtWorkstation(
 				level,
 				benchPos,
-				existingBuildSite.get().facing(),
+				existingBuildSite.map(SettlementBuildSite::facing).orElseGet(() -> SettlementConstruction.fletcherHutFacingFor(settlement, benchPos)),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedScribeOfficeBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos deskPos : SettlementConstruction.findPlacedScribeDesks(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SCRIBE_OFFICE, deskPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartScribeOfficeAtWorkstation(
+				level,
+				deskPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, deskPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedGuardPostBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos guardPostPos : SettlementConstruction.findPlacedGuardPosts(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.GUARD_POST, guardPostPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartGuardPostAtWorkstation(
+				level,
+				guardPostPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, guardPostPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedGardenerShedBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos workstationPos : SettlementConstruction.findPlacedGardenerWorkstations(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.GARDENER_SHED, workstationPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartGardenerShedAtWorkstation(
+				level,
+				workstationPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedBeekeeperApiaryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (BlockPos separatorPos : SettlementConstruction.findPlacedHoneySeparators(level, settlement)) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BEEKEEPER_APIARY, separatorPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartBeekeeperApiaryAtWorkstation(
+				level,
+				separatorPos,
+				SettlementConstruction.fletcherHutFacingFor(settlement, separatorPos),
 				settlement.id(),
 				stock,
 				existingBuildSite
@@ -1738,14 +2099,11 @@ public class LiveVillagesSavedData extends SavedData {
 
 		for (BlockPos workstationPos : SettlementConstruction.findPlacedBakersCounters(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BAKERY, workstationPos);
-			if (existingBuildSite.isEmpty()) {
-				continue;
-			}
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartBakeryAtWorkstation(
 				level,
 				workstationPos,
-				existingBuildSite.get().facing(),
+				existingBuildSite.map(SettlementBuildSite::facing).orElseGet(() -> SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos)),
 				settlement.id(),
 				stock,
 				existingBuildSite
@@ -1754,6 +2112,7 @@ public class LiveVillagesSavedData extends SavedData {
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
 			}
 		}
 
@@ -1766,14 +2125,10 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos workstationPos : SettlementConstruction.findPlacedMinerWorkstations(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE, workstationPos);
 
-			if (existingBuildSite.isEmpty()) {
-				continue;
-			}
-
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartMineEntranceAtWorkstation(
 				level,
 				workstationPos,
-				existingBuildSite.get().facing(),
+				existingBuildSite.map(SettlementBuildSite::facing).orElseGet(() -> SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos)),
 				settlement.id(),
 				stock,
 				existingBuildSite
@@ -1794,13 +2149,10 @@ public class LiveVillagesSavedData extends SavedData {
 
 		for (BlockPos tablePos : SettlementConstruction.findPlacedSurveyorTables(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.ROADWRIGHT_WORKSHOP, tablePos);
-			if (existingBuildSite.isEmpty()) {
-				continue;
-			}
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartRoadwrightWorkshopAtWorkstation(
 				level,
 				tablePos,
-				existingBuildSite.get().facing(),
+				existingBuildSite.map(SettlementBuildSite::facing).orElseGet(() -> SettlementConstruction.fletcherHutFacingFor(settlement, tablePos)),
 				settlement.id(),
 				stock,
 				existingBuildSite
@@ -1821,13 +2173,10 @@ public class LiveVillagesSavedData extends SavedData {
 
 		for (BlockPos tablePos : SettlementConstruction.findPlacedForesterTables(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.FORESTER_WORKSHOP, tablePos);
-			if (existingBuildSite.isEmpty()) {
-				continue;
-			}
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartForesterWorkshopAtWorkstation(
 				level,
 				tablePos,
-				existingBuildSite.get().facing(),
+				existingBuildSite.map(SettlementBuildSite::facing).orElseGet(() -> SettlementConstruction.fletcherHutFacingFor(settlement, tablePos)),
 				settlement.id(),
 				stock,
 				existingBuildSite
@@ -1974,9 +2323,83 @@ public class LiveVillagesSavedData extends SavedData {
 				settlements.put(toSettlement.id(), routeAdvanceResult.toSettlement().withTier(SettlementTiers.unlockedTier(routeAdvanceResult.toSettlement())));
 				changed = true;
 			}
+
+			if (routeAdvanceResult.route().lastTradeAttemptTick() == currentTick
+				&& route.lastTradeAttemptTick() != currentTick
+				&& exchangeScribeRecipes(level, routeAdvanceResult.fromSettlement(), routeAdvanceResult.toSettlement(), route.id())) {
+				changed = true;
+			}
 		}
 
 		return changed;
+	}
+
+	private boolean exchangeScribeRecipes(ServerLevel level, SettlementState fromSettlement, SettlementState toSettlement, String routeId) {
+		boolean fromHasScribe = hasScribeSupport(fromSettlement);
+		boolean toHasScribe = hasScribeSupport(toSettlement);
+
+		if (!fromHasScribe && !toHasScribe) {
+			return false;
+		}
+
+		if (fromHasScribe) {
+			ensureScribeStarterRecipes(fromSettlement.id(), SettlementRecipeKnowledge.starterRecipeIds());
+		}
+
+		if (toHasScribe) {
+			ensureScribeStarterRecipes(toSettlement.id(), SettlementRecipeKnowledge.starterRecipeIds());
+		}
+
+		List<String> fromRecipes = knownScribeRecipeIds(fromSettlement.id());
+		List<String> toRecipes = knownScribeRecipeIds(toSettlement.id());
+		boolean changed = false;
+		int exchangeLimit = scribeRouteExchangeLimit(fromHasScribe, toHasScribe);
+		List<String> recipesForTo = unknownRecipes(fromRecipes, toRecipes, exchangeLimit);
+		List<String> recipesForFrom = unknownRecipes(toRecipes, fromRecipes, exchangeLimit);
+
+		for (String recipeForTo : recipesForTo) {
+			if (addKnownScribeRecipe(toSettlement.id(), recipeForTo)) {
+				SettlementProfessionDiagnostics.log(
+					level,
+					toSettlement,
+					SettlementRoleKeys.SCRIBE,
+					"recipe_trade_received",
+					"route=" + routeId + " from=" + fromSettlement.name() + " recipe=" + recipeForTo
+				);
+				changed = true;
+			}
+		}
+
+		for (String recipeForFrom : recipesForFrom) {
+			if (addKnownScribeRecipe(fromSettlement.id(), recipeForFrom)) {
+				SettlementProfessionDiagnostics.log(
+					level,
+					fromSettlement,
+					SettlementRoleKeys.SCRIBE,
+					"recipe_trade_received",
+					"route=" + routeId + " from=" + toSettlement.name() + " recipe=" + recipeForFrom
+				);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	private static boolean hasScribeSupport(SettlementState settlement) {
+		return settlement.population().getOrDefault(SettlementRoleKeys.SCRIBE, 0) > 0;
+	}
+
+	private static int scribeRouteExchangeLimit(boolean fromHasScribe, boolean toHasScribe) {
+		return fromHasScribe && toHasScribe ? SCRIBE_ROUTE_EXCHANGE_TWO_SIDED_LIMIT : SCRIBE_ROUTE_EXCHANGE_ONE_SIDED_LIMIT;
+	}
+
+	private static List<String> unknownRecipes(List<String> sourceRecipes, List<String> knownRecipes, int limit) {
+		Set<String> known = new HashSet<>(knownRecipes);
+		return sourceRecipes.stream()
+			.filter(recipeId -> !known.contains(recipeId))
+			.limit(limit)
+			.toList();
 	}
 
 	private Map<String, List<SettlementBuildSite>> indexBuildSitesBySettlement() {

@@ -24,6 +24,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.BlockHitResult;
 
 import com.ronhelwig.livevillages.block.entity.GlassDisplayCaseBlockEntity;
+import com.ronhelwig.livevillages.sim.SettlementBakerWork;
 
 public class GlassDisplayCaseBlock extends BaseEntityBlock {
 	public static final MapCodec<GlassDisplayCaseBlock> CODEC = simpleCodec(GlassDisplayCaseBlock::new);
@@ -93,6 +94,7 @@ public class GlassDisplayCaseBlock extends BaseEntityBlock {
 		}
 
 		if (level.getBlockEntity(pos) instanceof GlassDisplayCaseBlockEntity displayCase) {
+			SettlementBakerWork.reconcileBakeryIngredientDisplaysNear((ServerLevel) level, pos);
 			player.openMenu(displayCase);
 			return InteractionResult.SUCCESS_SERVER;
 		}

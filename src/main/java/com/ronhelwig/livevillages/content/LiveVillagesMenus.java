@@ -13,6 +13,8 @@ import com.ronhelwig.livevillages.menu.CarpenterBenchMenu;
 import com.ronhelwig.livevillages.menu.FletchingTableMenu;
 import com.ronhelwig.livevillages.menu.GlassDisplayCaseMenu;
 import com.ronhelwig.livevillages.menu.GlassDisplayCaseOpenData;
+import com.ronhelwig.livevillages.menu.ScribeDeskMenu;
+import com.ronhelwig.livevillages.menu.ScribeDeskOpenData;
 import com.ronhelwig.livevillages.menu.TradeBoardMenu;
 import com.ronhelwig.livevillages.menu.TradeBoardOpenData;
 
@@ -31,6 +33,12 @@ public final class LiveVillagesMenus {
 		BuiltInRegistries.MENU,
 		LiveVillages.id("glass_display_case"),
 		new ExtendedMenuType<>(GlassDisplayCaseMenu::new, ByteBufCodecs.fromCodecWithRegistries(GlassDisplayCaseOpenData.CODEC))
+	);
+
+	public static final MenuType<ScribeDeskMenu> SCRIBE_DESK = Registry.register(
+		BuiltInRegistries.MENU,
+		LiveVillages.id("scribe_desk"),
+		new ExtendedMenuType<>(ScribeDeskMenu::new, ByteBufCodecs.fromCodecWithRegistries(ScribeDeskOpenData.CODEC))
 	);
 
 	public static final MenuType<TradeBoardMenu> TRADE_BOARD = Registry.register(

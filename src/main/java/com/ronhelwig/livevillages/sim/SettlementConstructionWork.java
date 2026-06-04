@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -119,7 +120,7 @@ public final class SettlementConstructionWork {
 						}
 
 						claimedBlocks.add(deliveredTask.claimKey());
-						steerWorkerTowardTask(worker, deliveredTask.standPos());
+						steerWorkerTowardTask(level, settlement, worker, deliveredTask.standPos());
 
 						if (isWithinWorkReach(worker, deliveredTask.targetPos())) {
 							ConstructionActionResult actionResult = performConstructionTask(level, stock, deliveredTask, tick, true);
@@ -170,7 +171,7 @@ public final class SettlementConstructionWork {
 
 				if (shouldPickUpSuppliesFirst(level, task) && stockAccessPos.isPresent()) {
 					BlockPos supplyPos = stockAccessPos.get();
-					steerWorkerTowardTask(worker, supplyPos);
+					steerWorkerTowardTask(level, settlement, worker, supplyPos);
 
 					if (isWithinWorkReach(worker, supplyPos)) {
 						DeliveryPickupResult pickupResult = pickUpConstructionDelivery(stock, deliveries, workerId, settlement, task, tick);
@@ -187,7 +188,7 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
-				steerWorkerTowardTask(worker, task.standPos());
+				steerWorkerTowardTask(level, settlement, worker, task.standPos());
 
 				if (!isWithinWorkReach(worker, task.targetPos())) {
 					continue;
@@ -1182,6 +1183,23 @@ public final class SettlementConstructionWork {
 			return false;
 		}
 
+		if (requiresStrongConstructionSupport(plannedState)) {
+			BlockPos belowPos = targetPos.below();
+			if (level.hasChunkAt(belowPos) && isConstructionSupportBlock(level, belowPos, level.getBlockState(belowPos))) {
+				return true;
+			}
+
+			int horizontalSupports = 0;
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos neighborPos = targetPos.relative(direction);
+				if (level.hasChunkAt(neighborPos) && isConstructionSupportBlock(level, neighborPos, level.getBlockState(neighborPos))) {
+					horizontalSupports++;
+				}
+			}
+
+			return horizontalSupports >= 2;
+		}
+
 		for (Direction direction : Direction.values()) {
 			BlockPos neighborPos = targetPos.relative(direction);
 			if (!level.hasChunkAt(neighborPos)) {
@@ -1200,6 +1218,14 @@ public final class SettlementConstructionWork {
 	private static boolean isConstructionSupportBlock(ServerLevel level, BlockPos supportPos, BlockState supportState) {
 		return !SettlementConstruction.isBuildSiteReplaceable(supportState)
 			&& !supportState.getCollisionShape(level, supportPos).isEmpty();
+	}
+
+	private static boolean requiresStrongConstructionSupport(BlockState plannedState) {
+		return plannedState.getBlock() instanceof SlabBlock
+			|| plannedState.getBlock() instanceof StairBlock
+			|| plannedState.getBlock() instanceof FenceBlock
+			|| plannedState.getBlock() instanceof FenceGateBlock
+			|| plannedState.getBlock() instanceof TrapDoorBlock;
 	}
 
 	private static boolean requiresIndependentConstructionSupport(BlockState plannedState) {
@@ -1252,6 +1278,13 @@ public final class SettlementConstructionWork {
 		}
 
 		BlockState currentState = level.getBlockState(task.targetPos());
+
+		if (isLegacyStructureMarginGroundAirBlock(level, task.buildSite(), block, task.targetPos(), currentState)) {
+			return ConstructionActionResult.blockStatusChanged(
+				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLAYER_PLACED, "", tick),
+				false
+			);
+		}
 
 		if (isProtectedWorkstationOccupyingDifferentPlannedBlock(task, block, currentState)) {
 			return ConstructionActionResult.blockStatusChanged(
@@ -1483,6 +1516,67 @@ public final class SettlementConstructionWork {
 		);
 	}
 
+	private static boolean isLegacyStructureMarginGroundAirBlock(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos targetPos,
+		BlockState currentState
+	) {
+		if (block.blueprintSymbol().isBlank()
+			|| block.blueprintSymbol().charAt(0) != 'A'
+			|| !block.expectedMaterialKey().isBlank()
+			|| !SettlementConstruction.matchesStructureMarginGroundReplacement(currentState)) {
+			return false;
+		}
+
+		BuildRelativePos relativePos = parseRelativePos(block.position());
+
+		if (relativePos == null || !isLikelyStructureMarginGroundSurface(level, targetPos)) {
+			return false;
+		}
+
+		return isOutsideAuthoredStructureFootprint(buildSite, relativePos);
+	}
+
+	private static boolean isLikelyStructureMarginGroundSurface(ServerLevel level, BlockPos targetPos) {
+		BlockState aboveState = level.getBlockState(targetPos.above());
+		return aboveState.isAir() || SettlementConstruction.isBuildSiteReplaceable(aboveState);
+	}
+
+	private static boolean isOutsideAuthoredStructureFootprint(SettlementBuildSite buildSite, BuildRelativePos relativePos) {
+		int minRight = Integer.MAX_VALUE;
+		int maxRight = Integer.MIN_VALUE;
+		int minForward = Integer.MAX_VALUE;
+		int maxForward = Integer.MIN_VALUE;
+
+		for (SettlementBuildBlockState candidate : buildSite.blocks()) {
+			if (candidate.blueprintSymbol().isBlank() || candidate.blueprintSymbol().charAt(0) == 'A') {
+				continue;
+			}
+
+			BuildRelativePos candidatePos = parseRelativePos(candidate.position());
+
+			if (candidatePos == null) {
+				continue;
+			}
+
+			minRight = Math.min(minRight, candidatePos.right());
+			maxRight = Math.max(maxRight, candidatePos.right());
+			minForward = Math.min(minForward, candidatePos.forward());
+			maxForward = Math.max(maxForward, candidatePos.forward());
+		}
+
+		if (minRight == Integer.MAX_VALUE) {
+			return false;
+		}
+
+		return relativePos.right() < minRight
+			|| relativePos.right() > maxRight
+			|| relativePos.forward() < minForward
+			|| relativePos.forward() > maxForward;
+	}
+
 	private static boolean canSupplyFromSiteMaterials(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
 		if (buildSite.siteMaterials().isEmpty()) {
 			return false;
@@ -1534,27 +1628,36 @@ public final class SettlementConstructionWork {
 			if (isPalisadeGatehouse(buildSite)) {
 				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 1);
 			} else {
-			pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
+				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
 			}
 		} else if (isBedFoot(buildSite, relativePos)) {
-				pairedPosition = switch (buildSite.blueprintId()) {
-					case BAKERY -> relativePosition(-1, -3, 1);
-					case BUTCHER_SHOP -> relativePosition(relativePos.right(), -3, 1);
-					case CARTOGRAPHER_HOUSE -> null;
-					case CARPENTER_WORKSHOP -> relativePosition(-1, -3, 1);
-					case DOCK -> null;
-					case FLETCHER_HUT -> relativePosition(relativePos.right(), -3, 1);
-					case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
-					case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
-					case LIGHTHOUSE -> null;
-					case MASON_WORKSHOP -> relativePosition(-1, -3, 1);
-					case MINE_ENTRANCE -> null;
-					case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> null;
-					case PALISADE_WALL -> null;
-					case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
-					case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
-					case TRADING_POST -> relativePosition(-1, -3, 1);
-				};
+			pairedPosition = switch (buildSite.blueprintId()) {
+				case BAKERY -> relativePosition(-1, -3, 1);
+				case BEEKEEPER_APIARY -> relativePosition(relativePos.right(), -3, 1);
+				case BUTCHER_SHOP -> relativePosition(relativePos.right(), -3, 1);
+				case CARTOGRAPHER_HOUSE -> null;
+				case CARPENTER_WORKSHOP -> relativePosition(-1, -3, 1);
+				case CLERIC_SHRINE -> relativePosition(relativePos.right(), -3, 1);
+				case DOCK -> null;
+				case FLETCHER_HUT -> relativePosition(relativePos.right(), -3, 1);
+				case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
+				case GARDENER_SHED -> relativePosition(relativePos.right(), -3, 1);
+				case GUARD_POST -> relativePosition(relativePos.right(), -3, 1);
+				case HOUSING_SHELTER -> relativePosition(relativePos.right(), -1, 1);
+				case LEATHERWORKER_WORKSHOP -> relativePosition(relativePos.right(), -3, 1);
+				case LIGHTHOUSE -> null;
+				case LIBRARY -> relativePosition(relativePos.right(), -3, 1);
+				case MASON_WORKSHOP -> relativePosition(-1, -3, 1);
+				case MINE_ENTRANCE -> null;
+				case PALISADE_GATEHOUSE, COPPER_PALISADE_GATEHOUSE -> null;
+				case PALISADE_WALL -> null;
+				case ROADWRIGHT_WORKSHOP -> relativePosition(-1, -3, 1);
+				case SCRIBE_OFFICE -> relativePosition(relativePos.right(), -3, 1);
+				case SHEPHERD_HUT -> relativePosition(relativePos.right(), -3, 1);
+				case SMITHY -> relativePosition(relativePos.right(), -3, 1);
+				case SIMPLE_HOUSING_SHELTER -> relativePosition(-1, 0, 1);
+				case TRADING_POST -> relativePosition(-1, -3, 1);
+			};
 		}
 
 		if (pairedPosition == null) {
@@ -1609,8 +1712,32 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.LEATHERWORKER_WORKSHOP
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.LIBRARY
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.SHEPHERD_HUT
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.FORESTER_WORKSHOP
 				&& relativePos.right() == -1
+				&& relativePos.forward() == -2
+				&& relativePos.up() == 1)
+			|| ((buildSite.blueprintId() == SettlementBuildSiteType.BEEKEEPER_APIARY
+				|| buildSite.blueprintId() == SettlementBuildSiteType.GARDENER_SHED
+				|| buildSite.blueprintId() == SettlementBuildSiteType.GUARD_POST
+				|| buildSite.blueprintId() == SettlementBuildSiteType.SCRIBE_OFFICE
+				|| buildSite.blueprintId() == SettlementBuildSiteType.SMITHY)
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER
@@ -1652,8 +1779,32 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.LEATHERWORKER_WORKSHOP
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.LIBRARY
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.SHEPHERD_HUT
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.FORESTER_WORKSHOP
 				&& relativePos.right() == -1
+				&& relativePos.forward() == -3
+				&& relativePos.up() == 1)
+			|| ((buildSite.blueprintId() == SettlementBuildSiteType.BEEKEEPER_APIARY
+				|| buildSite.blueprintId() == SettlementBuildSiteType.GARDENER_SHED
+				|| buildSite.blueprintId() == SettlementBuildSiteType.GUARD_POST
+				|| buildSite.blueprintId() == SettlementBuildSiteType.SCRIBE_OFFICE
+				|| buildSite.blueprintId() == SettlementBuildSiteType.SMITHY)
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER
@@ -1867,8 +2018,8 @@ public final class SettlementConstructionWork {
 		return task.targetPos().above().equals(task.buildSite().workstationPos());
 	}
 
-	private static void steerWorkerTowardTask(Villager worker, BlockPos standPos) {
-		worker.getNavigation().moveTo(standPos.getX() + 0.5D, standPos.getY(), standPos.getZ() + 0.5D, CONSTRUCTION_WORK_SPEED);
+	private static void steerWorkerTowardTask(ServerLevel level, SettlementState settlement, Villager worker, BlockPos standPos) {
+		SettlementNavigation.moveToRoutineTarget(level, settlement, worker, standPos, CONSTRUCTION_WORK_SPEED);
 	}
 
 	private static boolean isWithinWorkReach(Villager worker, BlockPos targetPos) {

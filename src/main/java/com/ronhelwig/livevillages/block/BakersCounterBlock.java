@@ -164,6 +164,7 @@ public class BakersCounterBlock extends BaseEntityBlock {
 		}
 
 		if (level.getBlockEntity(pos) instanceof BakersCounterBlockEntity bakersCounter) {
+			SettlementBakerWork.reconcileBakeryIngredientDisplaysNear((ServerLevel) level, pos);
 			player.openMenu(bakersCounter);
 			return InteractionResult.SUCCESS_SERVER;
 		}

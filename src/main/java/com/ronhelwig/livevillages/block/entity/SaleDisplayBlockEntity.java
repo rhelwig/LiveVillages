@@ -72,9 +72,11 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 	@Override
 	public GlassDisplayCaseOpenData getScreenOpeningData(ServerPlayer player) {
 		ServerLevel serverLevel = (ServerLevel) player.level();
+		SettlementBakerWork.reconcileBakeryIngredientDisplaysNear(serverLevel, worldPosition);
 		return new GlassDisplayCaseOpenData(
 			worldPosition.immutable(),
 			SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
+			SettlementBakerWork.bakerySettlementTierAt(serverLevel, worldPosition),
 			SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition),
 			SettlementBakerWork.bakeryBarterPricesAt(serverLevel, worldPosition)
 		);
@@ -83,6 +85,7 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 	@Override
 	public AbstractContainerMenu createMenu(int syncId, Inventory inventory, Player player) {
 		ServerLevel serverLevel = (ServerLevel) player.level();
+		SettlementBakerWork.reconcileBakeryIngredientDisplaysNear(serverLevel, worldPosition);
 		return new GlassDisplayCaseMenu(
 			syncId,
 			inventory,
@@ -91,6 +94,7 @@ public abstract class SaleDisplayBlockEntity extends BlockEntity implements Cont
 			new GlassDisplayCaseOpenData(
 				worldPosition.immutable(),
 				SettlementBakerWork.hasBakeryContext(serverLevel, worldPosition),
+				SettlementBakerWork.bakerySettlementTierAt(serverLevel, worldPosition),
 				SettlementBakerWork.bakeryBountiesAt(serverLevel, worldPosition),
 				SettlementBakerWork.bakeryBarterPricesAt(serverLevel, worldPosition)
 			)

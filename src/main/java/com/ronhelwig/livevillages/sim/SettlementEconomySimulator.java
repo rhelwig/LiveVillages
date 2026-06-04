@@ -164,20 +164,30 @@ public final class SettlementEconomySimulator {
 		int masons = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.MASON, useLoadedVillagerFoodWork);
 		int constructionSupport = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.CONSTRUCTION_SUPPORT, useLoadedVillagerFoodWork);
 		int fishermen = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.FISHERMAN, useLoadedVillagerFoodWork);
-		int gardeners = effectiveRoleCount(settlement, nearbyProfessions, "gardener", useLoadedVillagerFoodWork);
+		int gardeners = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.GARDENER, useLoadedVillagerFoodWork);
+		int beekeepers = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.BEEKEEPER, useLoadedVillagerFoodWork);
 		int foresters = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.FORESTER, useLoadedVillagerFoodWork);
 		int miners = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.MINER, useLoadedVillagerFoodWork);
 		int trademasters = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.TRADEMASTER, useLoadedVillagerFoodWork);
 		int portmasters = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.PORTMASTER, useLoadedVillagerFoodWork);
+		int clerics = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.CLERIC, useLoadedVillagerFoodWork);
+		int librarians = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.LIBRARIAN, useLoadedVillagerFoodWork);
+		int leatherworkers = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.LEATHERWORKER, useLoadedVillagerFoodWork);
+		int shepherds = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.SHEPHERD, useLoadedVillagerFoodWork);
+		int armorers = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.ARMORER, useLoadedVillagerFoodWork);
+		int toolsmiths = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.TOOLSMITH, useLoadedVillagerFoodWork);
+		int weaponsmiths = effectiveRoleCount(settlement, nearbyProfessions, SettlementRoleKeys.WEAPONSMITH, useLoadedVillagerFoodWork);
 		SettlementTradeRange.TradeRangeProfile tradeRange = SettlementTradeRange.profile(settlement, infrastructure);
 
-		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 5.0D) + gardeners * 1.5D, elapsedDays));
+		addGoods(stock, "wheat", scaledAmount((population * 2.0D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 5.0D), elapsedDays));
 		addGoods(stock, "bread", scaledAmount((population * 0.75D * civilianScale) + (useLoadedVillagerFoodWork || bakers > 0 ? 0.0D : farmers * 1.5D) + trademasters * 0.5D, elapsedDays));
-		addGoods(stock, "carrot", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
-		addGoods(stock, "potato", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D) + gardeners * 3.0D, elapsedDays));
-		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 0.9D) + gardeners * 1.5D, elapsedDays));
+		addGoods(stock, "carrot", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D), elapsedDays));
+		addGoods(stock, "potato", scaledAmount((population * 0.35D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 1.25D), elapsedDays));
+		addGoods(stock, "beetroot", scaledAmount((population * 0.18D * civilianScale) + (useLoadedVillagerFoodWork ? 0.0D : farmers * 0.9D), elapsedDays));
+		addRoleGoods(level, settlement, stock, SettlementRoleKeys.GARDENER, "egg", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : gardeners * 1.0D, elapsedDays));
+		addRoleGoods(level, settlement, stock, SettlementRoleKeys.GARDENER, "flower", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : gardeners * 0.75D, elapsedDays));
 		addGoods(stock, "beef", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.5D * civilianScale, elapsedDays));
-		addGoods(stock, "mutton", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
+		addGoods(stock, "mutton", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : shepherds * 0.6D * civilianScale, elapsedDays));
 		addGoods(stock, "pork", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : butchers * 1.0D * civilianScale, elapsedDays));
 		addGoods(stock, "cod", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : SettlementFishermanWork.dailyCatchRate(fishermen, infrastructure, 0), elapsedDays));
 		addGoods(stock, "logs", scaledAmount(population * 0.5D, elapsedDays));
@@ -189,6 +199,9 @@ public final class SettlementEconomySimulator {
 		addRoleGoods(level, settlement, stock, SettlementRoleKeys.FORESTER, "stick", scaledAmount(foresters * 2.0D, elapsedDays));
 		addRoleGoods(level, settlement, stock, SettlementRoleKeys.FORESTER, "apple", scaledAmount(foresters * 0.5D, elapsedDays));
 		addRoleGoods(level, settlement, stock, SettlementRoleKeys.FORESTER, "oak_sapling", scaledAmount(foresters * 1.0D, elapsedDays));
+		addRoleGoods(level, settlement, stock, SettlementRoleKeys.BEEKEEPER, "honey_bottle", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : beekeepers * 1.5D, elapsedDays));
+		addRoleGoods(level, settlement, stock, SettlementRoleKeys.BEEKEEPER, "honeycomb", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : beekeepers * 1.0D, elapsedDays));
+		addRoleGoods(level, settlement, stock, SettlementRoleKeys.BEEKEEPER, "candle", scaledAmount(useLoadedVillagerFoodWork ? 0.0D : beekeepers * 0.5D, elapsedDays));
 		addGoods(stock, "cobblestone", scaledAmount((population * 0.45D) + constructionSupport * 1.5D, elapsedDays));
 		addRoleMinedGoods(level, settlement, stock, SettlementRoleKeys.MINER, "cobblestone", scaledAmount(miners * 6.0D, elapsedDays));
 		addRoleGoods(level, settlement, stock, SettlementRoleKeys.MASON, "cobblestone", scaledAmount(masons * 1.5D, elapsedDays));
@@ -221,13 +234,88 @@ public final class SettlementEconomySimulator {
 			: bakers;
 		SettlementBakerWork.applyBakingProduction(level, settlement, stock, elapsedDays, effectiveBakers);
 
+		if (!useLoadedVillagerFoodWork) {
+			applyAbstractVanillaProfessionProduction(
+				settlement,
+				stock,
+				elapsedDays,
+				clerics,
+				librarians,
+				leatherworkers,
+				shepherds,
+				armorers,
+				toolsmiths,
+				weaponsmiths
+			);
+		}
+
 		if (useLoadedVillagerFoodWork) {
 			SettlementFarmerWork.applyLoadedFarmerWork(level, settlement, stock, elapsedDays);
 			SettlementButcherWork.applyLoadedButcherWork(level, settlement, stock, butchers, previousTick, currentTick);
-			SettlementFishermanWork.applyLoadedFishingWork(level, settlement, stock, fishermen, previousTick, currentTick, infrastructure);
+			SettlementButcherWork.applyLoadedShepherdWork(level, settlement, stock, shepherds, previousTick, currentTick);
 		}
 
 		SettlementRefining.refineTowardSettlementTargets(settlement, stock);
+	}
+
+	private static void applyAbstractVanillaProfessionProduction(
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		double elapsedDays,
+		int clerics,
+		int librarians,
+		int leatherworkers,
+		int shepherds,
+		int armorers,
+		int toolsmiths,
+		int weaponsmiths
+	) {
+		produceFromRecipe(stock, "healing_potion", scaledAmount(clerics, elapsedDays), Map.of("glass_bottle", 1, "nether_wart", 1, "glistering_melon_slice", 1));
+
+		int librarianActions = scaledAmount(librarians, elapsedDays);
+		int bookshelfNeed = Math.max(0, SettlementEconomyRules.targetForGoods(settlement, "bookshelf") - stock.getOrDefault("bookshelf", 0));
+		int bookshelves = produceFromRecipe(stock, "bookshelf", Math.min(librarianActions, bookshelfNeed), Map.of("book", 3, "planks", 6));
+		produceFromRecipe(stock, "book", librarianActions - bookshelves, Map.of("paper", 3, "leather", 1));
+
+		int leatherworkerActions = scaledAmount(leatherworkers, elapsedDays);
+		leatherworkerActions -= produceFromRecipe(stock, "leather_chestplate", leatherworkerActions, Map.of("leather", 8));
+		leatherworkerActions -= produceFromRecipe(stock, "leather_leggings", leatherworkerActions, Map.of("leather", 7));
+		leatherworkerActions -= produceFromRecipe(stock, "leather_helmet", leatherworkerActions, Map.of("leather", 5));
+		produceFromRecipe(stock, "leather_boots", leatherworkerActions, Map.of("leather", 4));
+
+		int shepherdActions = scaledAmount(shepherds, elapsedDays);
+		int bedNeed = Math.max(0, SettlementEconomyRules.targetForGoods(settlement, "bed") - stock.getOrDefault("bed", 0));
+		int beds = produceFromRecipe(stock, "bed", Math.min(shepherdActions, bedNeed), Map.of("wool", 3, "planks", 3));
+		addGoods(stock, "wool", Math.max(0, shepherdActions - beds));
+
+		produceFromRecipe(stock, "iron_chestplate", scaledAmount(armorers, elapsedDays), Map.of("iron_ingot", 8));
+		produceFromRecipe(stock, "iron_pickaxe", scaledAmount(toolsmiths, elapsedDays), Map.of("iron_ingot", 3, "stick", 2));
+		produceFromRecipe(stock, "iron_sword", scaledAmount(weaponsmiths, elapsedDays), Map.of("iron_ingot", 2, "stick", 1));
+	}
+
+	private static int produceFromRecipe(Map<String, Integer> stock, String outputGoodsKey, int requested, Map<String, Integer> inputs) {
+		int produced = 0;
+
+		while (produced < requested && hasRecipeInputs(stock, inputs)) {
+			for (Map.Entry<String, Integer> input : inputs.entrySet()) {
+				consumeGoods(stock, input.getKey(), input.getValue());
+			}
+
+			addGoods(stock, outputGoodsKey, 1);
+			produced++;
+		}
+
+		return produced;
+	}
+
+	private static boolean hasRecipeInputs(Map<String, Integer> stock, Map<String, Integer> inputs) {
+		for (Map.Entry<String, Integer> input : inputs.entrySet()) {
+			if (stock.getOrDefault(input.getKey(), 0) < input.getValue()) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private static int effectiveRoleCount(SettlementState settlement, Map<String, Integer> nearbyProfessions, String roleKey, boolean useNearbyProfessions) {
@@ -552,7 +640,8 @@ public final class SettlementEconomySimulator {
 		double fortificationSupport = defenseLevel * 0.08D;
 		double palisadeSupport = palisadeSecurityBonus(infrastructure);
 		double lighthouseSupport = lighthouseSecurityBonus(infrastructure);
-		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport + palisadeSupport + lighthouseSupport, 0.05D, 0.95D);
+		double trophySupport = guardTrophySecurityBonus(settlement.stock());
+		double targetSecurity = clamp(baseSecurity + defenderPressure + routeSupport + fortificationSupport + palisadeSupport + lighthouseSupport + trophySupport, 0.05D, 0.95D);
 		double blend = clamp(elapsedDays * 0.4D, 0.15D, 1.0D);
 		return clamp(settlement.security() + (targetSecurity - settlement.security()) * blend, 0.0D, 1.0D);
 	}
@@ -571,14 +660,28 @@ public final class SettlementEconomySimulator {
 		double upkeepRatio = upkeepSupply.ratio();
 		double housingRatio = housingCapacity / (double) Math.max(1, population);
 		double varietyBonus = foodVariety(stock) * 0.03D;
+		double gardenerBonus = Math.min(0.08D, roleCount(settlement, SettlementRoleKeys.GARDENER) * 0.02D);
+		double beekeeperBonus = Math.min(0.06D, roleCount(settlement, SettlementRoleKeys.BEEKEEPER) * 0.02D);
+		double trophyBonus = guardTrophyComfortBonus(stock);
 		double targetComfort = 0.55D
 			+ clamp(foodRatio, 0.0D, 1.1D) * 0.25D
 			+ clamp(upkeepRatio, 0.0D, 1.0D) * 0.10D
 			+ clamp(housingRatio - 0.75D, 0.0D, 0.35D)
 			+ security * 0.10D
+			+ gardenerBonus
+			+ beekeeperBonus
+			+ trophyBonus
 			+ varietyBonus;
 		double blend = clamp(elapsedDays * 0.35D, 0.15D, 1.0D);
 		return clamp(settlement.comfort() + (targetComfort - settlement.comfort()) * blend, 0.35D, 1.35D);
+	}
+
+	private static double guardTrophySecurityBonus(Map<String, Integer> stock) {
+		return Math.min(0.06D, stock.getOrDefault("desecrated_enemy_banner", 0) * 0.015D);
+	}
+
+	private static double guardTrophyComfortBonus(Map<String, Integer> stock) {
+		return Math.min(0.03D, stock.getOrDefault("desecrated_enemy_banner", 0) * 0.005D);
 	}
 
 	private static GrowthResult applyGrowth(
@@ -741,6 +844,14 @@ public final class SettlementEconomySimulator {
 		SettlementTradeRange.TradeRangeProfile sourceRange,
 		SettlementTradeRange.TradeRangeProfile candidateRange
 	) {
+		if (distanceBlocks <= SettlementTradeRange.localLandRouteRangeBlocks()) {
+			return true;
+		}
+
+		if (!sourceRange.hasCartographerSupport() && !candidateRange.hasCartographerSupport()) {
+			return false;
+		}
+
 		return distanceBlocks <= Math.max(sourceRange.landRouteRangeBlocks(), candidateRange.landRouteRangeBlocks());
 	}
 
