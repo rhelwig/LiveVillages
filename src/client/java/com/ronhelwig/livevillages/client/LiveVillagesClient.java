@@ -2,7 +2,9 @@ package com.ronhelwig.livevillages.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 
 import com.ronhelwig.livevillages.client.hud.SettlementInventoryOverlay;
 import com.ronhelwig.livevillages.client.render.BuildSiteWireframePreview;
@@ -17,6 +19,7 @@ import com.ronhelwig.livevillages.client.screen.ScribeDeskScreen;
 import com.ronhelwig.livevillages.client.screen.SurveyorMapScreen;
 import com.ronhelwig.livevillages.client.screen.TradeBoardScreen;
 import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
+import com.ronhelwig.livevillages.content.LiveVillagesEntityTypes;
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
 
 public class LiveVillagesClient implements ClientModInitializer {
@@ -27,6 +30,7 @@ public class LiveVillagesClient implements ClientModInitializer {
 		MenuScreens.register(LiveVillagesMenus.GLASS_DISPLAY_CASE, GlassDisplayCaseScreen::new);
 		MenuScreens.register(LiveVillagesMenus.SCRIBE_DESK, ScribeDeskScreen::new);
 		MenuScreens.register(LiveVillagesMenus.TRADE_BOARD, TradeBoardScreen::new);
+		EntityRendererRegistry.register(LiveVillagesEntityTypes.SLING_STONE, ThrownItemRenderer::new);
 		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.MILEPOST, MilepostBlockEntityRenderer::new);
 		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.TRADE_BOARD, TradeBoardBlockEntityRenderer::new);
 		TradeBoardScreen.registerNetworking();

@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import com.ronhelwig.livevillages.command.LiveVillagesDebugCommands;
 import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.content.LiveVillagesEntityTypes;
 import com.ronhelwig.livevillages.content.LiveVillagesItems;
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
@@ -37,6 +38,7 @@ public class LiveVillages implements ModInitializer {
 	public void onInitialize() {
 		LiveVillagesConfig.load();
 		LiveVillagesGameRules.register();
+		LiveVillagesEntityTypes.register();
 		LiveVillagesItems.register();
 		LiveVillagesBlocks.register();
 		LiveVillagesVillagerProfessions.register();

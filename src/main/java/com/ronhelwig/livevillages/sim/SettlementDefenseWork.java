@@ -66,6 +66,7 @@ public final class SettlementDefenseWork {
 	private static final long TASK_MEMORY_TICKS = 40L;
 	private static final long MELEE_ATTACK_COOLDOWN_TICKS = 20L;
 	private static final long RANGED_ATTACK_COOLDOWN_TICKS = 30L;
+	private static final long SLING_ATTACK_COOLDOWN_TICKS = 16L;
 	private static final long GUARD_PATROL_DECIDE_INTERVAL_TICKS = 260L;
 	private static final long GUARD_ESCORT_DECIDE_INTERVAL_TICKS = 80L;
 	private static final int GUARD_ESCORT_SEARCH_RADIUS_BLOCKS = 36;
@@ -395,8 +396,12 @@ public final class SettlementDefenseWork {
 	}
 
 	private static boolean rangedAttackCooldownReady(Villager defender, long tick) {
+		return rangedAttackCooldownReady(defender, tick, RANGED_ATTACK_COOLDOWN_TICKS);
+	}
+
+	private static boolean rangedAttackCooldownReady(Villager defender, long tick, long cooldownTicks) {
 		Long lastAttackTick = LAST_ATTACK_TICKS.get(defender.getUUID().toString());
-		return lastAttackTick == null || tick - lastAttackTick >= RANGED_ATTACK_COOLDOWN_TICKS;
+		return lastAttackTick == null || tick - lastAttackTick >= cooldownTicks;
 	}
 
 	private static void signalDefenderMeleeImpact(ServerLevel level, Monster target) {
@@ -1176,7 +1181,7 @@ public final class SettlementDefenseWork {
 		defender.getNavigation().stop();
 		showSling(defender);
 
-		if (!rangedAttackCooldownReady(defender, tick)) {
+		if (!rangedAttackCooldownReady(defender, tick, SLING_ATTACK_COOLDOWN_TICKS)) {
 			return true;
 		}
 

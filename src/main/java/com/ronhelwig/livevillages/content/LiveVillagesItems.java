@@ -6,11 +6,13 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ToolMaterial;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.item.CrookedStaffItem;
 import com.ronhelwig.livevillages.item.MaterialArrowItem;
+import com.ronhelwig.livevillages.item.SlingItem;
 
 public final class LiveVillagesItems {
 	public static final MaterialArrowItem COPPERHEAD_ARROW = registerItem(
@@ -27,7 +29,7 @@ public final class LiveVillagesItems {
 	);
 	public static final Item SLING = registerItem(
 		"sling",
-		new Item(new Item.Properties().setId(itemKey("sling")))
+		new SlingItem(new Item.Properties().setId(itemKey("sling")).durability(128).repairable(Items.LEATHER))
 	);
 	public static final Item CROOKED_STAFF = registerItem(
 		"crooked_staff",
