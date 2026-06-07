@@ -998,7 +998,8 @@ public final class SettlementDefenseWork {
 	}
 
 	private static boolean isCombatCapableFieldWorker(Holder<VillagerProfession> profession) {
-		return profession.is(VillagerProfession.BUTCHER)
+		return profession.is(VillagerProfession.FARMER)
+			|| profession.is(VillagerProfession.BUTCHER)
 			|| profession.is(VillagerProfession.FISHERMAN)
 			|| profession.is(VillagerProfession.FLETCHER)
 			|| profession.is(VillagerProfession.SHEPHERD)
@@ -1021,6 +1022,11 @@ public final class SettlementDefenseWork {
 			if (!villager.getMainHandItem().is(Items.IRON_AXE)) {
 				villager.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
 			}
+			return;
+		}
+
+		if (profession.is(VillagerProfession.FARMER)) {
+			showScythe(villager);
 			return;
 		}
 
@@ -1064,7 +1070,18 @@ public final class SettlementDefenseWork {
 		}
 	}
 
+	private static void showScythe(Villager villager) {
+		if (!villager.getMainHandItem().is(LiveVillagesItems.SCYTHE)) {
+			villager.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(LiveVillagesItems.SCYTHE));
+		}
+	}
+
 	private static void showCloseDefenseWeapon(Villager villager) {
+		if (villager.getVillagerData().profession().is(VillagerProfession.FARMER)) {
+			showScythe(villager);
+			return;
+		}
+
 		if (villager.getVillagerData().profession().is(VillagerProfession.SHEPHERD)
 			&& !villager.getMainHandItem().is(LiveVillagesItems.CROOKED_STAFF)) {
 			villager.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(LiveVillagesItems.CROOKED_STAFF));
@@ -1309,6 +1326,10 @@ public final class SettlementDefenseWork {
 		}
 
 		if (weapon.is(Items.WOODEN_SWORD) || weapon.is(Items.GOLDEN_SWORD)) {
+			return 4.0F;
+		}
+
+		if (weapon.is(LiveVillagesItems.SCYTHE)) {
 			return 4.0F;
 		}
 

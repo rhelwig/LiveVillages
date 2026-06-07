@@ -12,6 +12,7 @@ import net.minecraft.world.item.ToolMaterial;
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.item.CrookedStaffItem;
 import com.ronhelwig.livevillages.item.MaterialArrowItem;
+import com.ronhelwig.livevillages.item.ScytheItem;
 import com.ronhelwig.livevillages.item.SlingItem;
 
 public final class LiveVillagesItems {
@@ -37,7 +38,7 @@ public final class LiveVillagesItems {
 	);
 	public static final Item SCYTHE = registerItem(
 		"scythe",
-		new Item(new Item.Properties().setId(itemKey("scythe")))
+		new ScytheItem(new Item.Properties().setId(itemKey("scythe")).sword(ToolMaterial.IRON, 2.0F, -2.8F))
 	);
 
 	private LiveVillagesItems() {
