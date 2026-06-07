@@ -143,6 +143,22 @@ public final class SettlementGoods {
 			return "shears";
 		}
 
+		if (stack.is(Items.STRING)) {
+			return "string";
+		}
+
+		if (stack.is(LiveVillagesItems.SLING)) {
+			return "sling";
+		}
+
+		if (stack.is(LiveVillagesItems.CROOKED_STAFF)) {
+			return "crooked_staff";
+		}
+
+		if (stack.is(LiveVillagesItems.SCYTHE)) {
+			return "scythe";
+		}
+
 		if (isHealingPotion(stack)) {
 			return "healing_potion";
 		}

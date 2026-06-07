@@ -75,6 +75,10 @@ public final class TradeBoardTradeRules {
 		"honeycomb",
 		"candle",
 		"shears",
+		"string",
+		"sling",
+		"crooked_staff",
+		"scythe",
 		"healing_potion",
 		"leather_helmet",
 		"leather_chestplate",
@@ -251,6 +255,8 @@ public final class TradeBoardTradeRules {
 			case "honeycomb" -> 4;
 			case "candle" -> 8;
 			case "shears" -> 1;
+			case "string" -> 8;
+			case "sling", "crooked_staff", "scythe" -> 1;
 			case "healing_potion" -> 1;
 			case "leather_helmet", "leather_chestplate", "leather_leggings", "leather_boots" -> 1;
 			case "iron_sword", "iron_pickaxe", "iron_helmet", "iron_chestplate", "iron_leggings", "iron_boots", "shield" -> 1;
@@ -648,6 +654,10 @@ public final class TradeBoardTradeRules {
 			case "honeycomb" -> Items.HONEYCOMB;
 			case "candle" -> Items.CANDLE;
 			case "shears" -> Items.SHEARS;
+			case "string" -> Items.STRING;
+			case "sling" -> LiveVillagesItems.SLING;
+			case "crooked_staff" -> LiveVillagesItems.CROOKED_STAFF;
+			case "scythe" -> LiveVillagesItems.SCYTHE;
 			case "leather_helmet" -> Items.LEATHER_HELMET;
 			case "leather_chestplate" -> Items.LEATHER_CHESTPLATE;
 			case "leather_leggings" -> Items.LEATHER_LEGGINGS;
@@ -935,6 +945,9 @@ public final class TradeBoardTradeRules {
 			case "iron_leggings" -> new ProductionRecipe("iron_leggings", 1, Map.of("iron_ingot", 7));
 			case "iron_boots" -> new ProductionRecipe("iron_boots", 1, Map.of("iron_ingot", 4));
 			case "shield" -> new ProductionRecipe("shield", 1, Map.of("iron_ingot", 1, "planks", 6));
+			case "sling" -> new ProductionRecipe("sling", 1, Map.of("leather", 1, "string", 4));
+			case "crooked_staff" -> new ProductionRecipe("crooked_staff", 1, Map.of("stick", 3));
+			case "scythe" -> new ProductionRecipe("scythe", 1, Map.of("iron_ingot", 2, "stick", 2));
 			case "planks" -> new ProductionRecipe("planks", 4, Map.of("logs", 1));
 			case "stairs" -> new ProductionRecipe("stairs", 4, Map.of("logs", 2));
 			case "slab" -> new ProductionRecipe("slab", 8, Map.of("logs", 1));
@@ -978,12 +991,12 @@ public final class TradeBoardTradeRules {
 		}
 
 		return switch (goodsKey) {
-			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "flower", "cobblestone", "dirt", "bone_meal", "sand", "torch" -> 1;
+			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "string", "crooked_staff", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "flower", "cobblestone", "dirt", "bone_meal", "sand", "torch" -> 1;
 			case "diamondhead_arrow" -> 4;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
 			case "chest", "ladder", "campfire", "redstone" -> 1;
 			case "iron_bars" -> 2;
-			case "glass", "bed", "book", "bookshelf", "healing_potion", "lantern", "milepost", "trade_board", "carpenter_bench", "bakers_counter", "forester_table", "miner_workstation", "surveyor_table", "portmaster_anchor", "lighthouse", "scribe_desk", "guard_post", "gardener_workstation", "honey_separator", "pumpkin_pie", "milk_bucket", "shears", "bee_hive" -> 2;
+			case "glass", "bed", "book", "bookshelf", "healing_potion", "lantern", "milepost", "trade_board", "carpenter_bench", "bakers_counter", "forester_table", "miner_workstation", "surveyor_table", "portmaster_anchor", "lighthouse", "scribe_desk", "guard_post", "gardener_workstation", "honey_separator", "pumpkin_pie", "milk_bucket", "shears", "sling", "bee_hive" -> 2;
 			case "beef" -> 2;
 			case "cod" -> 2;
 			case "mutton" -> 2;
@@ -992,7 +1005,7 @@ public final class TradeBoardTradeRules {
 			case "leather_helmet", "leather_chestplate", "leather_leggings", "leather_boots" -> 2;
 			case "coal" -> 2;
 			case "iron_ingot", "gold_ingot", "copper_ingot", "raw_iron", "raw_copper" -> 2;
-			case "iron_sword", "iron_pickaxe", "iron_helmet", "iron_chestplate", "iron_leggings", "iron_boots", "shield" -> 3;
+			case "iron_sword", "iron_pickaxe", "iron_helmet", "iron_chestplate", "iron_leggings", "iron_boots", "shield", "scythe" -> 3;
 			case "desecrated_enemy_banner" -> 2;
 			case "cake" -> 3;
 			case "diamond" -> 4;
@@ -1117,6 +1130,10 @@ public final class TradeBoardTradeRules {
 			case "honeycomb" -> stack.is(Items.HONEYCOMB);
 			case "candle" -> stack.is(Items.CANDLE);
 			case "shears" -> stack.is(Items.SHEARS);
+			case "string" -> stack.is(Items.STRING);
+			case "sling" -> stack.is(LiveVillagesItems.SLING);
+			case "crooked_staff" -> stack.is(LiveVillagesItems.CROOKED_STAFF);
+			case "scythe" -> stack.is(LiveVillagesItems.SCYTHE);
 			case "healing_potion" -> isHealingPotion(stack);
 			case "leather_helmet" -> stack.is(Items.LEATHER_HELMET);
 			case "leather_chestplate" -> stack.is(Items.LEATHER_CHESTPLATE);

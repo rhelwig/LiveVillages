@@ -45,7 +45,10 @@ public final class SettlementConstructionWork {
 	private static final long MAX_DELIVERY_AGE_TICKS = 24_000L;
 	private static final int STOCK_ACCESS_SCAN_RADIUS_BLOCKS = 48;
 	private static final int STOCK_ACCESS_SCAN_Y_RANGE_BLOCKS = 24;
-	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE = 8;
+	private static final int MAX_CONSTRUCTION_WORKERS_PER_PASS = 8;
+	private static final long MAX_CONSTRUCTION_WORK_NANOS_PER_PASS = 25_000_000L;
+	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE = 4;
+	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_WORKER = 24;
 	private static final int MAX_UNREACHABLE_TASK_RETRIES = 3;
 	private static final int CONSTRUCTION_DELIVERY_BATCH_SIZE = 32;
 	private static final long CONSTRUCTION_DECIDE_INTERVAL_TICKS = 320L;
@@ -90,25 +93,38 @@ public final class SettlementConstructionWork {
 		}
 
 		Set<String> excludedIds = excludedWorkerIds == null ? Set.of() : excludedWorkerIds;
-		List<Villager> workers = SettlementVillagers.nearbyConstructionWorkers(level, settlement).stream()
+		List<Villager> nearbyWorkers = SettlementVillagers.nearbyConstructionWorkers(level, settlement).stream()
 			.filter(worker -> !excludedIds.contains(worker.getUUID().toString()))
 			.toList();
+		List<Villager> workers = workersForConstructionPass(nearbyWorkers, deliveries, settlement, tick);
 			
 		long entityScanTime = System.nanoTime() - methodStart;
 		if (entityScanTime > 3_000_000) { // >3ms
-			LiveVillages.LOGGER.warn("ConstructionWork: entity scan took {} ms for {} workers", Math.round(entityScanTime / 1_000_000.0D), workers.size());
+			LiveVillages.LOGGER.warn(
+				"ConstructionWork: entity scan took {} ms for {} nearby workers, processing {}",
+				Math.round(entityScanTime / 1_000_000.0D),
+				nearbyWorkers.size(),
+				workers.size()
+			);
 		}
 		boolean stockChanged = !stock.equals(stockBeforeReconcile);
 		boolean worldChanged = false;
-		boolean cleanupChanged = cleanupDeliveries(settlement, stock, workingBuildSites, deliveries, workers, excludedIds, tick);
+		boolean cleanupChanged = cleanupDeliveries(settlement, stock, workingBuildSites, deliveries, nearbyWorkers, excludedIds, tick);
 		boolean deliveriesChanged = cleanupChanged;
 		stockChanged |= cleanupChanged;
-		Optional<BlockPos> stockAccessPos = SettlementStockAccess.findStockAccessPos(level, settlement, workingBuildSites);
+		Optional<BlockPos> stockAccessPos = Optional.empty();
+		boolean stockAccessResolved = false;
 
 		if (!workers.isEmpty()) {
 			Set<String> claimedBlocks = claimedDeliveryBlocks(settlement, deliveries);
+			int processedWorkers = 0;
 
 			for (Villager worker : workers) {
+				if (processedWorkers > 0 && System.nanoTime() - methodStart > MAX_CONSTRUCTION_WORK_NANOS_PER_PASS) {
+					break;
+				}
+
+				processedWorkers++;
 				String workerId = worker.getUUID().toString();
 				SettlementConstructionDelivery delivery = deliveries.get(workerId);
 
@@ -175,23 +191,30 @@ public final class SettlementConstructionWork {
 
 				claimedBlocks.add(task.claimKey());
 
-				if (shouldPickUpSuppliesFirst(level, task) && stockAccessPos.isPresent() && shouldUseStockAccessPickup(worker, stockAccessPos.get())) {
-					BlockPos supplyPos = stockAccessPos.get();
-					steerWorkerTowardTask(level, settlement, worker, supplyPos);
-
-					if (isWithinWorkReach(worker, supplyPos)) {
-						DeliveryPickupResult pickupResult = pickUpConstructionDelivery(stock, deliveries, workerId, settlement, task, tick);
-
-						if (pickupResult.buildSiteChanged()) {
-							workingBuildSites.set(task.siteIndex(), pickupResult.buildSite());
-							buildSitesChanged = true;
-						}
-
-						stockChanged |= pickupResult.stockChanged();
-						deliveriesChanged |= pickupResult.deliveryChanged();
+				if (shouldPickUpSuppliesFirst(level, task)) {
+					if (!stockAccessResolved) {
+						stockAccessPos = SettlementStockAccess.findStockAccessPos(level, settlement, workingBuildSites);
+						stockAccessResolved = true;
 					}
 
-					continue;
+					if (stockAccessPos.isPresent() && shouldUseStockAccessPickup(worker, stockAccessPos.get())) {
+						BlockPos supplyPos = stockAccessPos.get();
+						steerWorkerTowardTask(level, settlement, worker, supplyPos);
+
+						if (isWithinWorkReach(worker, supplyPos)) {
+							DeliveryPickupResult pickupResult = pickUpConstructionDelivery(stock, deliveries, workerId, settlement, task, tick);
+
+							if (pickupResult.buildSiteChanged()) {
+								workingBuildSites.set(task.siteIndex(), pickupResult.buildSite());
+								buildSitesChanged = true;
+							}
+
+							stockChanged |= pickupResult.stockChanged();
+							deliveriesChanged |= pickupResult.deliveryChanged();
+						}
+
+						continue;
+					}
 				}
 
 				steerWorkerTowardTask(level, settlement, worker, task.standPos());
@@ -218,6 +241,52 @@ public final class SettlementConstructionWork {
 		}
 
 		return new ConstructionWorkResult(List.copyOf(workingBuildSites), stockChanged, buildSitesChanged, worldChanged, deliveriesChanged);
+	}
+
+	private static List<Villager> workersForConstructionPass(
+		List<Villager> workers,
+		Map<String, SettlementConstructionDelivery> deliveries,
+		SettlementState settlement,
+		long tick
+	) {
+		if (workers.size() <= MAX_CONSTRUCTION_WORKERS_PER_PASS) {
+			return workers;
+		}
+
+		List<Villager> selectedWorkers = new ArrayList<>(MAX_CONSTRUCTION_WORKERS_PER_PASS);
+
+		for (Villager worker : workers) {
+			SettlementConstructionDelivery delivery = deliveries.get(worker.getUUID().toString());
+
+			if (delivery == null || !delivery.settlementId().equals(settlement.id())) {
+				continue;
+			}
+
+			selectedWorkers.add(worker);
+
+			if (selectedWorkers.size() >= MAX_CONSTRUCTION_WORKERS_PER_PASS) {
+				return List.copyOf(selectedWorkers);
+			}
+		}
+
+		List<Villager> idleWorkers = workers.stream()
+			.filter(worker -> {
+				SettlementConstructionDelivery delivery = deliveries.get(worker.getUUID().toString());
+				return delivery == null || !delivery.settlementId().equals(settlement.id());
+			})
+			.toList();
+
+		if (idleWorkers.isEmpty()) {
+			return List.copyOf(selectedWorkers);
+		}
+
+		int startIndex = Math.floorMod((int) (tick / 20L), idleWorkers.size());
+
+		for (int step = 0; step < idleWorkers.size() && selectedWorkers.size() < MAX_CONSTRUCTION_WORKERS_PER_PASS; step++) {
+			selectedWorkers.add(idleWorkers.get((startIndex + step) % idleWorkers.size()));
+		}
+
+		return List.copyOf(selectedWorkers);
 	}
 
 	public static ConstructionWorkResult maintainLoadedOutpostConstruction(
@@ -941,8 +1010,13 @@ public final class SettlementConstructionWork {
 		ConstructionTask bestTask = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 		int bestAffinity = Integer.MAX_VALUE;
+		int totalCandidateBlocksChecked = 0;
+		int startSiteIndex = buildSites.isEmpty()
+			? 0
+			: Math.floorMod(worker.getUUID().hashCode() + (int) (tick / CONSTRUCTION_DECIDE_INTERVAL_TICKS), buildSites.size());
 
-		for (int siteIndex = 0; siteIndex < buildSites.size(); siteIndex++) {
+		for (int siteStep = 0; siteStep < buildSites.size() && totalCandidateBlocksChecked < MAX_CONSTRUCTION_TASK_CANDIDATES_PER_WORKER; siteStep++) {
+			int siteIndex = (startSiteIndex + siteStep) % buildSites.size();
 			SettlementBuildSite buildSite = buildSites.get(siteIndex);
 
 			if (buildSite.complete()) {
@@ -1000,8 +1074,10 @@ public final class SettlementConstructionWork {
 				}
 
 				candidateBlocksChecked++;
+				totalCandidateBlocksChecked++;
 
-				if (candidateBlocksChecked > MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE) {
+				if (candidateBlocksChecked > MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE
+					|| totalCandidateBlocksChecked > MAX_CONSTRUCTION_TASK_CANDIDATES_PER_WORKER) {
 					break;
 				}
 

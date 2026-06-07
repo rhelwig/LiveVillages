@@ -55,6 +55,9 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int SHARED_MAP_MAX_SAMPLES_PER_UPDATE = 1_200;
 	private static final int SHARED_MAP_REFRESH_TICKS = 600;
 	private static final int SHARED_MAP_MAX_CELLS_PER_DIMENSION = 40_000;
+	private static final int LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS = 600;
+	private static final int LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS = 200;
+	private static final int LOADED_ROADWORK_MAINTENANCE_INTERVAL_TICKS = 200;
 	private static final long VIRTUAL_TRADING_POST_MIN_AGE_TICKS = Math.round(2.0D * SettlementEconomyRules.TICKS_PER_DAY);
 	private static final int VIRTUAL_TRADING_POST_MIN_POPULATION = 2;
 	private static final int VIRTUAL_TRADING_POST_MIN_STOCK = 48;
@@ -1329,29 +1332,36 @@ public class LiveVillagesSavedData extends SavedData {
 					: settlement.withPopulation(actualPopulation);
 				Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 				changed |= OutpostGear.maintainOutpostEquipment(level, workingSettlement, stock) > 0;
-				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
-				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
 				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+				boolean discoveryDue = activeBuildSites.isEmpty()
+					|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
+
+				if (discoveryDue) {
+					changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+					changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+					activeBuildSites = getBuildSitesForSettlement(settlement.id());
+				}
+
 				SettlementConstructionWork.ConstructionWorkResult constructionResult = SettlementConstructionWork.maintainLoadedOutpostConstruction(
 					level,
 					workingSettlement,
@@ -1389,47 +1399,62 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
 				: settlement.withPopulation(actualPopulation);
-			long homesStart = System.nanoTime();
-			changed |= SettlementVillagers.ensureVillagerHomes(level, workingSettlement);
-			changed |= SettlementVillagers.ensureVillagerGatheringPoint(level, workingSettlement);
-			SettlementVillagers.logEveningReturnDiagnostics(level, workingSettlement);
-			long homesTime = System.nanoTime() - homesStart;
-			if (homesTime > 100_000_000) { // >100ms
-				LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());
-			}
-			changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
-			changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
-			changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-			changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
-			changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-			changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
 			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+			boolean homeMaintenanceDue = activeBuildSites.isEmpty()
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_homes", LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS);
+
+			if (homeMaintenanceDue) {
+				long homesStart = System.nanoTime();
+				changed |= SettlementVillagers.ensureVillagerHomes(level, workingSettlement);
+				changed |= SettlementVillagers.ensureVillagerGatheringPoint(level, workingSettlement);
+				SettlementVillagers.logEveningReturnDiagnostics(level, workingSettlement);
+				long homesTime = System.nanoTime() - homesStart;
+				if (homesTime > 100_000_000) { // >100ms
+					LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());
+				}
+			}
+
+			boolean discoveryDue = activeBuildSites.isEmpty()
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
+
+			if (discoveryDue) {
+				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
+				changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
+				changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
+				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+				activeBuildSites = getBuildSitesForSettlement(settlement.id());
+			}
+
 			long lastRoadworkCatchupTick = loadedRoadworkCatchupTicks.getOrDefault(
 				workingSettlement.id(),
 				Math.max(0L, currentTick - DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS)
 			);
 			long elapsedRoadworkCatchupTicks = Math.max(0L, currentTick - lastRoadworkCatchupTick);
 			boolean roadworkCatchupChanged = false;
+			boolean roadworkDue = isThrottledConstructionStepDue(workingSettlement, currentTick, "roadwork", LOADED_ROADWORK_MAINTENANCE_INTERVAL_TICKS);
+			SettlementRoadwrightWork.RoadworkResult roadworkResult = SettlementRoadwrightWork.RoadworkResult.unchanged();
 
-			if (elapsedRoadworkCatchupTicks >= SettlementEconomyRules.MIN_SIMULATION_TICKS) {
+			if (roadworkDue && elapsedRoadworkCatchupTicks >= SettlementEconomyRules.MIN_SIMULATION_TICKS) {
 				long roadworkCatchupStart = System.nanoTime();
 				SettlementRoadwrightWork.RoadworkCatchupResult roadworkCatchupResult = SettlementRoadwrightWork.applyLoadedRoadworkCatchup(
 					level,
@@ -1449,22 +1474,24 @@ public class LiveVillagesSavedData extends SavedData {
 				roadworkCatchupChanged = roadworkCatchupResult.worldChanged();
 			}
 
-			Long previousRoadworkCatchupTick = loadedRoadworkCatchupTicks.put(workingSettlement.id(), currentTick);
-			changed |= previousRoadworkCatchupTick == null || previousRoadworkCatchupTick.longValue() != currentTick;
-			long roadworkStart = System.nanoTime();
-			SettlementRoadwrightWork.RoadworkResult roadworkResult = SettlementRoadwrightWork.maintainLoadedRoadwork(
-				level,
-				workingSettlement,
-				stock,
-				activeBuildSites,
-				getSettlementsInDimension(server, settlement.dimension()),
-				getRoutesForSettlement(settlement.id())
-			);
-			long roadworkTime = System.nanoTime() - roadworkStart;
-			if (roadworkTime > 100_000_000) { // >100ms
-				LiveVillages.LOGGER.warn("Roadwork maintenance took {} ms for settlement {}", Math.round(roadworkTime / 1_000_000.0D), settlement.id());
+			if (roadworkDue) {
+				Long previousRoadworkCatchupTick = loadedRoadworkCatchupTicks.put(workingSettlement.id(), currentTick);
+				changed |= previousRoadworkCatchupTick == null || previousRoadworkCatchupTick.longValue() != currentTick;
+				long roadworkStart = System.nanoTime();
+				roadworkResult = SettlementRoadwrightWork.maintainLoadedRoadwork(
+					level,
+					workingSettlement,
+					stock,
+					activeBuildSites,
+					getSettlementsInDimension(server, settlement.dimension()),
+					getRoutesForSettlement(settlement.id())
+				);
+				long roadworkTime = System.nanoTime() - roadworkStart;
+				if (roadworkTime > 100_000_000) { // >100ms
+					LiveVillages.LOGGER.warn("Roadwork maintenance took {} ms for settlement {}", Math.round(roadworkTime / 1_000_000.0D), settlement.id());
+				}
+				storeRoadworkPlans(workingSettlement.id(), SettlementRoadwrightWork.persistentPlansForSettlement(level, workingSettlement, currentTick));
 			}
-			storeRoadworkPlans(workingSettlement.id(), SettlementRoadwrightWork.persistentPlansForSettlement(level, workingSettlement, currentTick));
 
 			if (activeBuildSites.isEmpty()) {
 				boolean stockChanged = !stock.equals(workingSettlement.stock());
@@ -1524,6 +1551,14 @@ public class LiveVillagesSavedData extends SavedData {
 
 		long phase = stableModulo(settlement.id() + "|" + operationKey, intervalTicks);
 		return Math.floorMod(currentTick - phase, intervalTicks) < LiveVillagesScheduler.LOADED_MAINTENANCE_CHECK_INTERVAL;
+	}
+
+	private static boolean isThrottledConstructionStepDue(SettlementState settlement, long currentTick, String operationKey, int intervalTicks) {
+		int stepTicks = Math.max(1, LiveVillagesScheduler.TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
+		int stepSlots = Math.max(1, (intervalTicks + stepTicks - 1) / stepTicks);
+		long step = Math.floorDiv(currentTick, stepTicks);
+		long phase = stableModulo(settlement.id() + "|" + operationKey, stepSlots);
+		return Math.floorMod(step - phase, stepSlots) == 0;
 	}
 
 	private static long stableModulo(String key, long modulo) {

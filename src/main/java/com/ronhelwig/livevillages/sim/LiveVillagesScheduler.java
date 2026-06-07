@@ -15,6 +15,12 @@ public final class LiveVillagesScheduler {
 	public static final int TICKS_BETWEEN_CYCLES = 200;
 	public static final int LOADED_MAINTENANCE_CHECK_INTERVAL = 20;
 	public static final int REGIONS_PER_CYCLE = 3;
+	private static final int SHARED_MAINTENANCE_OFFSET = 0;
+	private static final int FARMER_MAINTENANCE_OFFSET = 3;
+	private static final int RESOURCE_MAINTENANCE_OFFSET = 6;
+	private static final int DEFENSE_MAINTENANCE_OFFSET = 10;
+	private static final int CONSTRUCTION_MAINTENANCE_OFFSET = 14;
+	private static final int REPORT_MAINTENANCE_OFFSET = 17;
 
 	private LiveVillagesScheduler() {
 	}
@@ -33,7 +39,7 @@ public final class LiveVillagesScheduler {
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(server);
 		boolean economyCycleDue = (currentTick % TICKS_BETWEEN_CYCLES) == 0;
 
-		if ((currentTick % LOADED_MAINTENANCE_CHECK_INTERVAL) == 0) {
+		if (isLoadedMaintenancePhase(currentTick, SHARED_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainSharedMapKnowledge(server);
 			long elapsed = System.nanoTime() - start;
@@ -56,35 +62,45 @@ public final class LiveVillagesScheduler {
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Outpost raid maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+		}
 
-			start = System.nanoTime();
+		if (isLoadedMaintenancePhase(currentTick, FARMER_MAINTENANCE_OFFSET)) {
+			long start = System.nanoTime();
 			savedData.maintainLoadedFarmerState(server, TICKS_BETWEEN_FARMER_MAINTENANCE);
-			elapsed = System.nanoTime() - start;
+			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) { // Log if > 10ms
 				LiveVillages.LOGGER.warn("Farmer maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+		}
 
-			start = System.nanoTime();
+		if (isLoadedMaintenancePhase(currentTick, RESOURCE_MAINTENANCE_OFFSET)) {
+			long start = System.nanoTime();
 			savedData.maintainLoadedResourceState(server, TICKS_BETWEEN_RESOURCE_MAINTENANCE);
-			elapsed = System.nanoTime() - start;
+			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Resource maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+		}
 
-			start = System.nanoTime();
+		if (isLoadedMaintenancePhase(currentTick, DEFENSE_MAINTENANCE_OFFSET)) {
+			long start = System.nanoTime();
 			savedData.maintainLoadedDefenseState(server);
-			elapsed = System.nanoTime() - start;
+			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Defense maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+		}
 
-			start = System.nanoTime();
+		if (isLoadedMaintenancePhase(currentTick, CONSTRUCTION_MAINTENANCE_OFFSET)) {
+			long start = System.nanoTime();
 			savedData.maintainLoadedConstructionState(server, TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
-			elapsed = System.nanoTime() - start;
+			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Construction maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
 			}
+		}
 
+		if (isLoadedMaintenancePhase(currentTick, REPORT_MAINTENANCE_OFFSET)) {
 			SettlementProfessionReports.writeLoadedDailyReports(server, savedData.getSettlements());
 		}
 
@@ -104,5 +120,9 @@ public final class LiveVillagesScheduler {
 		
 		long cycleElapsed = System.nanoTime() - cycleStart;
 		LiveVillages.LOGGER.info("Economy cycle completed in {} ms", Math.round(cycleElapsed / 1_000_000.0D));
+	}
+
+	private static boolean isLoadedMaintenancePhase(int currentTick, int offset) {
+		return Math.floorMod(currentTick - offset, LOADED_MAINTENANCE_CHECK_INTERVAL) == 0;
 	}
 }

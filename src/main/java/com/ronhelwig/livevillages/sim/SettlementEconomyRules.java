@@ -55,6 +55,10 @@ public final class SettlementEconomyRules {
 		new TargetRule("honeycomb", population -> 0),
 		new TargetRule("candle", population -> 0),
 		new TargetRule("shears", population -> 0),
+		new TargetRule("string", population -> 0),
+		new TargetRule("sling", population -> 0),
+		new TargetRule("crooked_staff", population -> 0),
+		new TargetRule("scythe", population -> 0),
 		new TargetRule("healing_potion", population -> 1 + population / 8),
 		new TargetRule("leather_helmet", population -> 0),
 		new TargetRule("leather_chestplate", population -> 1 + population / 8),
@@ -317,6 +321,27 @@ public final class SettlementEconomyRules {
 			if (outpostReserve > 0) {
 				return outpostReserve;
 			}
+		}
+
+		int farmers = settlement.population().getOrDefault(SettlementRoleKeys.FARMER, 0);
+		int gardeners = settlement.population().getOrDefault(SettlementRoleKeys.GARDENER, 0);
+		int shepherds = settlement.population().getOrDefault(SettlementRoleKeys.SHEPHERD, 0);
+
+		if (goodsKey.equals("sling")) {
+			int slingUsers = gardeners + shepherds;
+			return slingUsers > 0 ? Math.max(1, slingUsers) : 0;
+		}
+
+		if (goodsKey.equals("crooked_staff")) {
+			return shepherds > 0 ? Math.max(1, shepherds) : 0;
+		}
+
+		if (goodsKey.equals("scythe")) {
+			return farmers > 0 ? Math.max(1, farmers) : 0;
+		}
+
+		if (goodsKey.equals("string") && gardeners + shepherds > 0) {
+			return 8;
 		}
 
 		if (settlement.population().getOrDefault(SettlementRoleKeys.FORESTER, 0) > 0) {
