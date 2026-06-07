@@ -48,6 +48,7 @@ public final class SettlementInventoryOverlay {
 	private static final int LEFT_COLUMN_WIDTH = 180;
 	private static final int RIGHT_COLUMN_WIDTH = 132;
 	private static final int POPULATION_TASK_COLUMN_WIDTH = 228;
+	private static final int ROLE_COLUMN_GAP = 12;
 	private static final int MAX_OVERVIEW_ROLE_ROWS = 8;
 	private static final int MAX_INVENTORY_ROWS = 18;
 	private static final int MAX_NEED_ROWS = 12;
@@ -200,7 +201,7 @@ public final class SettlementInventoryOverlay {
 
 		rightY = drawGoodsSection(graphics, font, rightX, rightY, RIGHT_COLUMN_WIDTH, "Top Needs", settlement.shortages(), 6, true, 0xFFF0D6B2);
 		rightY += LINE_HEIGHT;
-		drawProjectSection(graphics, font, rightX, rightY, RIGHT_COLUMN_WIDTH, "Projects & Sites", settlement.projects(), 4);
+		drawProjectSection(graphics, font, rightX, rightY, POPULATION_TASK_COLUMN_WIDTH, "Projects & Sites", settlement.projects(), 4);
 	}
 
 	private static void renderInventory(
@@ -308,13 +309,33 @@ public final class SettlementInventoryOverlay {
 			return renderLine(graphics, font, x, currentY, "None recorded", 0xFF9F8E72);
 		}
 
+		if (entries.size() > maxRows && width >= 160) {
+			int columnWidth = (width - ROLE_COLUMN_GAP) / 2;
+			int visibleRows = Math.min(maxRows, (entries.size() + 1) / 2);
+			int visibleEntries = Math.min(entries.size(), visibleRows * 2);
+
+			for (int row = 0; row < visibleRows; row++) {
+				drawRoleEntry(graphics, font, x, currentY, columnWidth, entries.get(row));
+				int rightIndex = row + visibleRows;
+				if (rightIndex < visibleEntries) {
+					drawRoleEntry(graphics, font, x + columnWidth + ROLE_COLUMN_GAP, currentY, columnWidth, entries.get(rightIndex));
+				}
+				currentY += LINE_HEIGHT;
+			}
+
+			int hiddenCount = entries.size() - visibleEntries;
+			if (hiddenCount > 0) {
+				currentY = renderLine(graphics, font, x, currentY, "+" + hiddenCount + " more", 0xFF9F8E72);
+			}
+
+			return currentY;
+		}
+
 		int visibleRows = Math.min(maxRows, entries.size());
 
 		for (int index = 0; index < visibleRows; index++) {
-			TradeBoardRoleView entry = entries.get(index);
-			String countText = Integer.toString(entry.count());
-			String line = trimToWidth(font, entry.label(), width - font.width(countText) - 6) + " " + countText;
-			currentY = renderLine(graphics, font, x, currentY, line, 0xFFE8DDC8);
+			drawRoleEntry(graphics, font, x, currentY, width, entries.get(index));
+			currentY += LINE_HEIGHT;
 		}
 
 		int hiddenCount = entries.size() - visibleRows;
@@ -323,6 +344,12 @@ public final class SettlementInventoryOverlay {
 		}
 
 		return currentY;
+	}
+
+	private static void drawRoleEntry(GuiGraphicsExtractor graphics, Font font, int x, int y, int width, TradeBoardRoleView entry) {
+		String countText = Integer.toString(entry.count());
+		String line = trimToWidth(font, entry.label(), width - font.width(countText) - 6) + " " + countText;
+		graphics.text(font, line, x, y, 0xFFE8DDC8, true);
 	}
 
 	private static int drawTaskSection(
@@ -413,7 +440,7 @@ public final class SettlementInventoryOverlay {
 		}
 
 		currentY = renderLine(graphics, font, x, currentY, "Sites: " + construction.activeBuildSites() + "  Workers: " + construction.eligibleWorkers(), 0xFFE8DDC8);
-		currentY = renderLine(graphics, font, x, currentY, trimToWidth(font, "Pending: " + construction.pendingBlocks() + "  Missing: " + construction.missingMaterialBlocks(), width), 0xFFE8DDC8);
+		currentY = renderLine(graphics, font, x, currentY, trimToWidth(font, "Pending: " + construction.pendingBlocks() + "  Materials: " + construction.missingMaterialBlocks(), width), 0xFFE8DDC8);
 		currentY = renderLine(graphics, font, x, currentY, "Blocked: " + construction.blockedBlocks() + "  Carrying: " + construction.carriedSupplies(), 0xFFE8DDC8);
 		return currentY;
 	}

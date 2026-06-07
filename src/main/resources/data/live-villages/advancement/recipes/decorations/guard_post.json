@@ -1,6 +1,16 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_iron_ingot": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_ingot"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
     "has_iron_bars": {
       "conditions": {
         "items": [
@@ -11,17 +21,44 @@
       },
       "trigger": "minecraft:inventory_changed"
     },
-    "has_the_recipe": {
+    "has_fence": {
       "conditions": {
-        "recipe": "live-villages:guard_post"
+        "items": [
+          {
+            "items": "#minecraft:fences"
+          }
+        ]
       },
-      "trigger": "minecraft:recipe_unlocked"
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_planks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "#minecraft:planks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_stick": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:stick"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
     }
   },
   "requirements": [
     [
+      "has_iron_ingot",
       "has_iron_bars",
-      "has_the_recipe"
+      "has_fence",
+      "has_planks",
+      "has_stick"
     ]
   ],
   "rewards": {

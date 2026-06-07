@@ -55,12 +55,13 @@ public final class LiveVillagesNetworking {
 	private static final int OVERLAY_STOCK_ROWS = 12;
 	private static final int OVERLAY_ROUTE_ROWS = 4;
 	private static final int OVERLAY_PROJECT_ROWS = 4;
-	private static final long BUILD_SITE_PREVIEW_ACTIVE_TICKS = 40L;
+	private static final long BUILD_SITE_PREVIEW_ACTIVE_TICKS = 80L;
 	private static final long TICKS_PER_DAY = 24_000L;
 	private static final int PORTMASTER_MAP_MIN_RADIUS_BLOCKS = 128;
 	private static final int PORTMASTER_MAP_MAX_RADIUS_BLOCKS = 2_048;
 	private static final int PORTMASTER_MAP_TERRAIN_RADIUS_WITHOUT_CARTOGRAPHER = 320;
 	private static final int PORTMASTER_MAP_TERRAIN_GRID_SIZE = 184;
+	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
 	private static final String MAP_MARKER_LOCAL_LIGHTHOUSE = "local_lighthouse";
 	private static final String MAP_MARKER_LOCAL_PORT = "local_port";
 	private static final String MAP_MARKER_KNOWN_LIGHTHOUSE = "known_lighthouse";
@@ -1045,13 +1046,77 @@ public final class LiveVillagesNetworking {
 		}
 
 		int distanceBlocks = (int) Math.round(Math.sqrt(bestCandidate.distanceSquared()));
+		List<BlockPos> blockerPositions = activeBuildSiteBlockers(player.level(), bestCandidate.buildSite());
 		return Optional.of(BuildSitePreviewSnapshot.active(
+			activeBuildSitePreviewStatus(bestCandidate.buildSite(), blockerPositions.size()),
 			bestCandidate.settlement().name(),
 			bestCandidate.buildSite().id(),
 			buildSiteTypeLabel(bestCandidate.buildSite().blueprintId()),
 			distanceBlocks,
+			blockerPositions,
 			bestCandidate.previewBlocks()
 		));
+	}
+
+	private static String activeBuildSitePreviewStatus(SettlementBuildSite buildSite, int activeBlockedBlocks) {
+		int missingMaterialBlocks = 0;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL) {
+				missingMaterialBlocks++;
+			}
+		}
+
+		if (activeBlockedBlocks > 0 && missingMaterialBlocks > 0) {
+			return "Magenta blocks are blocked: " + activeBlockedBlocks + ". Awaiting materials: " + missingMaterialBlocks + ".";
+		}
+
+		if (activeBlockedBlocks > 0) {
+			return "Magenta blocks are blocked: " + activeBlockedBlocks + ".";
+		}
+
+		if (missingMaterialBlocks > 0) {
+			return "Awaiting construction materials: " + missingMaterialBlocks + ".";
+		}
+
+		return "";
+	}
+
+	private static List<BlockPos> activeBuildSiteBlockers(ServerLevel level, SettlementBuildSite buildSite) {
+		return buildSite.blocks().stream()
+			.filter(block -> activeBuildSiteBlocker(level, buildSite, block))
+			.map(block -> SettlementConstruction.buildSiteBlockPos(buildSite, block))
+			.flatMap(Optional::stream)
+			.map(BlockPos::immutable)
+			.toList();
+	}
+
+	private static boolean activeBuildSiteBlocker(ServerLevel level, SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		if (block.status() != SettlementBuildBlockStatus.BLOCKED) {
+			return false;
+		}
+
+		Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+		BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+
+		if (blockPos.isEmpty() || plannedState == null || !level.hasChunkAt(blockPos.get())) {
+			return false;
+		}
+
+		BlockState currentState = level.getBlockState(blockPos.get());
+
+		if (currentState.equals(plannedState)
+			|| currentState.is(plannedState.getBlock())
+			|| SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
+			|| (!BLOCKED_REASON_UNSUPPORTED.equals(block.blocker()) && SettlementConstruction.isBuildSiteReplaceable(currentState))) {
+			return false;
+		}
+
+		if (BLOCKED_REASON_UNSUPPORTED.equals(block.blocker())) {
+			return true;
+		}
+
+		return !plannedState.isAir() || !currentState.isAir();
 	}
 
 	private static boolean isBetterPreviewCandidate(BuildSitePreviewCandidate candidate, BuildSitePreviewCandidate bestCandidate) {

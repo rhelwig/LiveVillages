@@ -803,7 +803,7 @@ public final class SettlementButcherWork {
 		}
 
 		int neededCapacity = Math.max(strayAnimals.size(), animals.size() - totalCapacity);
-		return findPenPlan(level, settlement, strayAnimals.isEmpty() ? animals : strayAnimals, neededCapacity);
+		return findPenPlan(level, settlement, strayAnimals.isEmpty() ? animals : strayAnimals, neededCapacity, pens);
 	}
 
 	private static Optional<AnimalPen> usablePenForType(
@@ -825,7 +825,8 @@ public final class SettlementButcherWork {
 			level,
 			settlement,
 			survey.animals().stream().filter(livestockType::matches).toList(),
-			1
+			1,
+			pens
 		);
 
 		if (plan.isPresent() && isPenPlanBuilt(level, plan.get())) {
@@ -839,7 +840,8 @@ public final class SettlementButcherWork {
 		ServerLevel level,
 		SettlementState settlement,
 		List<Animal> anchorAnimals,
-		int neededCapacity
+		int neededCapacity,
+		List<AnimalPen> existingPens
 	) {
 		if (anchorAnimals.isEmpty()) {
 			return Optional.empty();
@@ -860,7 +862,7 @@ public final class SettlementButcherWork {
 					int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
 					PenPlan plan = PenPlan.create(new BlockPos(x, y, z), interiorSize);
 
-					if (isValidPenPlan(level, settlement, plan)) {
+					if (isValidPenPlan(level, settlement, plan, existingPens)) {
 						return Optional.of(plan);
 					}
 				}
@@ -870,8 +872,12 @@ public final class SettlementButcherWork {
 		return Optional.empty();
 	}
 
-	private static boolean isValidPenPlan(ServerLevel level, SettlementState settlement, PenPlan plan) {
+	private static boolean isValidPenPlan(ServerLevel level, SettlementState settlement, PenPlan plan, List<AnimalPen> existingPens) {
 		int radius = SettlementVillagers.settlementRadiusBlocks(settlement);
+
+		if (touchesExistingPen(plan, existingPens)) {
+			return false;
+		}
 
 		for (PenBlock block : plan.boundaryBlocks()) {
 			BlockPos pos = block.pos();
@@ -901,6 +907,26 @@ public final class SettlementButcherWork {
 		}
 
 		return true;
+	}
+
+	private static boolean touchesExistingPen(PenPlan plan, List<AnimalPen> existingPens) {
+		for (AnimalPen pen : existingPens) {
+			int penMinX = pen.min().getX() - 1;
+			int penMaxX = pen.max().getX() + 1;
+			int penMinZ = pen.min().getZ() - 1;
+			int penMaxZ = pen.max().getZ() + 1;
+
+			if (rangesOverlap(plan.minX() - 1, plan.maxX() + 1, penMinX, penMaxX)
+				&& rangesOverlap(plan.minZ() - 1, plan.maxZ() + 1, penMinZ, penMaxZ)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean rangesOverlap(int firstMin, int firstMax, int secondMin, int secondMax) {
+		return firstMin <= secondMax && secondMin <= firstMax;
 	}
 
 	private static boolean isPenPlanBuilt(ServerLevel level, PenPlan plan) {

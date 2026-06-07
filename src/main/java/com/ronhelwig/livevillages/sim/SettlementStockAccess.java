@@ -29,7 +29,7 @@ final class SettlementStockAccess {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.TRADING_POST
 				&& (level.hasChunkAt(buildSite.workstationPos()) || level.hasChunkAt(buildSite.anchorPos()))) {
 				BlockPos workstationPos = SettlementConstruction.currentPlacedWorkstationPos(level, buildSite);
-				return stockAccessStandPos(level, workstationPos).or(() -> Optional.of(settlement.center()));
+				return stockAccessStandPos(level, workstationPos);
 			}
 		}
 
@@ -39,7 +39,7 @@ final class SettlementStockAccess {
 
 		if (cachedAccess != null
 			&& tick - cachedAccess.tick() <= STOCK_ACCESS_CACHE_TICKS
-			&& cachedAccess.accessPos().map(pos -> pos.equals(settlement.center()) || isStandable(level, pos)).orElse(true)) {
+			&& cachedAccess.accessPos().map(pos -> isStandable(level, pos)).orElse(true)) {
 			return cachedAccess.accessPos();
 		}
 
@@ -78,7 +78,7 @@ final class SettlementStockAccess {
 			}
 		}
 
-		Optional<BlockPos> accessPos = nearestTradeBoardAccess == null ? Optional.of(settlement.center()) : Optional.of(nearestTradeBoardAccess);
+		Optional<BlockPos> accessPos = Optional.ofNullable(nearestTradeBoardAccess);
 		STOCK_ACCESS_CACHE.put(cacheKey, new CachedStockAccess(accessPos, tick));
 		return accessPos;
 	}
@@ -138,7 +138,9 @@ final class SettlementStockAccess {
 		BlockState footState = level.getBlockState(pos);
 		BlockState headState = level.getBlockState(pos.above());
 		BlockState belowState = level.getBlockState(pos.below());
-		return footState.isAir() && headState.isAir() && !belowState.isAir();
+		return footState.isAir()
+			&& headState.isAir()
+			&& !belowState.getCollisionShape(level, pos.below()).isEmpty();
 	}
 
 	private static boolean isRoadSurfaceForAccess(BlockState state) {

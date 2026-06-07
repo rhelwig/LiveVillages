@@ -14,11 +14,15 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
@@ -28,6 +32,12 @@ import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
 public class GardenerWorkstationBlock extends HorizontalDirectionalBlock {
 	public static final MapCodec<GardenerWorkstationBlock> CODEC = simpleCodec(GardenerWorkstationBlock::new);
+	private static final VoxelShape SHAPE = Shapes.or(
+		Block.box(1.0D, 0.0D, 1.0D, 15.0D, 3.0D, 15.0D),
+		Block.box(2.0D, 3.0D, 2.0D, 14.0D, 6.0D, 14.0D),
+		Block.box(3.0D, 6.0D, 4.0D, 6.0D, 12.0D, 7.0D),
+		Block.box(9.0D, 6.0D, 5.0D, 12.0D, 11.0D, 8.0D)
+	);
 
 	public GardenerWorkstationBlock(BlockBehaviour.Properties properties) {
 		super(properties);
@@ -47,6 +57,16 @@ public class GardenerWorkstationBlock extends HorizontalDirectionalBlock {
 	@Override
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
 		return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+	}
+
+	@Override
+	protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+		return SHAPE;
+	}
+
+	@Override
+	protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+		return SHAPE;
 	}
 
 	@Override

@@ -5035,7 +5035,7 @@ public final class SettlementConstruction {
 		}
 
 		if (structureKind == StructureKind.LIBRARY) {
-			return Blocks.LECTERN.defaultBlockState().setValue(LecternBlock.FACING, facing);
+			return Blocks.LECTERN.defaultBlockState().setValue(LecternBlock.FACING, facing.getOpposite());
 		}
 
 		if (structureKind == StructureKind.SHEPHERD_HUT) {
@@ -5125,14 +5125,13 @@ public final class SettlementConstruction {
 			return explicitFacing;
 		}
 
-		if (structureKind == StructureKind.CARPENTER_WORKSHOP
-			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
-			|| structureKind == StructureKind.MASON_WORKSHOP
-			|| structureKind == StructureKind.FORESTER_WORKSHOP
-			|| structureKind == StructureKind.FLETCHER_HUT
-			|| structureKind == StructureKind.BUTCHER_SHOP) {
+		if (usesFiveByEightGabledRoof(structureKind)) {
 			if (up == 3 && (right == blueprint.minRight() || right == blueprint.maxRight())) {
 				return right == blueprint.minRight() ? facing.getCounterClockWise() : facing.getClockWise();
+			}
+
+			if (up == 4 && (forward == blueprint.minForward() || forward == blueprint.maxForward())) {
+				return forward == blueprint.minForward() ? facing.getOpposite() : facing;
 			}
 
 			if (up == 5 && right != 0) {
@@ -5157,6 +5156,24 @@ public final class SettlementConstruction {
 		}
 
 		return facing;
+	}
+
+	private static boolean usesFiveByEightGabledRoof(StructureKind structureKind) {
+		return structureKind == StructureKind.CARPENTER_WORKSHOP
+			|| structureKind == StructureKind.ROADWRIGHT_WORKSHOP
+			|| structureKind == StructureKind.MASON_WORKSHOP
+			|| structureKind == StructureKind.FORESTER_WORKSHOP
+			|| structureKind == StructureKind.FLETCHER_HUT
+			|| structureKind == StructureKind.BUTCHER_SHOP
+			|| structureKind == StructureKind.CLERIC_SHRINE
+			|| structureKind == StructureKind.LEATHERWORKER_WORKSHOP
+			|| structureKind == StructureKind.LIBRARY
+			|| structureKind == StructureKind.SHEPHERD_HUT
+			|| structureKind == StructureKind.SMITHY
+			|| structureKind == StructureKind.SCRIBE_OFFICE
+			|| structureKind == StructureKind.GUARD_POST
+			|| structureKind == StructureKind.GARDENER_SHED
+			|| structureKind == StructureKind.BEEKEEPER_APIARY;
 	}
 
 	private static Direction explicitBlueprintFacing(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {

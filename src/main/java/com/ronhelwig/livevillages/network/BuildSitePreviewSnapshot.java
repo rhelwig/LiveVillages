@@ -45,13 +45,15 @@ public record BuildSitePreviewSnapshot(
 	}
 
 	public static BuildSitePreviewSnapshot active(
+		String statusMessage,
 		String settlementName,
 		String buildSiteId,
 		String buildSiteType,
 		int distanceBlocks,
+		List<BlockPos> blockerPositions,
 		List<BuildSitePreviewBlockView> blocks
 	) {
-		return new BuildSitePreviewSnapshot("", settlementName, buildSiteId, buildSiteType, distanceBlocks, false, true, List.of(), blocks);
+		return new BuildSitePreviewSnapshot(statusMessage, settlementName, buildSiteId, buildSiteType, distanceBlocks, false, true, blockerPositions, blocks);
 	}
 
 	public static BuildSitePreviewSnapshot prospective(

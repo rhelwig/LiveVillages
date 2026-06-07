@@ -46,6 +46,7 @@ public final class BuildSiteWireframePreview {
 		)
 	);
 	private static final int REFRESH_INTERVAL_TICKS = 10;
+	private static final int STATUS_MESSAGE_REFRESH_TICKS = 50;
 	private static final int RED_WIREFRAME_COLOR = 0xFFFF2222;
 	private static final int AMBER_WIREFRAME_COLOR = 0xFFFFB347;
 	private static final int PLACEMENT_WIREFRAME_COLOR = 0xFF66FF66;
@@ -59,6 +60,7 @@ public final class BuildSiteWireframePreview {
 	private static long nextRefreshTick;
 	private static BuildSitePreviewSnapshot latestSnapshot;
 	private static String lastStatusMessage = "";
+	private static long lastStatusMessageTick = Long.MIN_VALUE;
 
 	private BuildSiteWireframePreview() {
 	}
@@ -67,8 +69,13 @@ public final class BuildSiteWireframePreview {
 		ClientTickEvents.END_CLIENT_TICK.register(BuildSiteWireframePreview::tick);
 		ClientPlayNetworking.registerGlobalReceiver(BuildSitePreviewStatePayload.TYPE, (payload, context) -> {
 			latestSnapshot = payload.snapshot();
-			if (!latestSnapshot.statusMessage().equals(lastStatusMessage) && !latestSnapshot.statusMessage().isBlank()) {
-				showActionbar(Minecraft.getInstance(), latestSnapshot.statusMessage());
+			Minecraft client = Minecraft.getInstance();
+			long gameTime = client.level == null ? 0L : client.level.getGameTime();
+			if (!latestSnapshot.statusMessage().isBlank()
+				&& (!latestSnapshot.statusMessage().equals(lastStatusMessage)
+					|| gameTime - lastStatusMessageTick >= STATUS_MESSAGE_REFRESH_TICKS)) {
+				showActionbar(client, latestSnapshot.statusMessage());
+				lastStatusMessageTick = gameTime;
 			}
 			lastStatusMessage = latestSnapshot.statusMessage();
 			waitingForSnapshot = false;
@@ -83,6 +90,7 @@ public final class BuildSiteWireframePreview {
 			waitingForSnapshot = false;
 			nextRefreshTick = 0L;
 			lastStatusMessage = "";
+			lastStatusMessageTick = Long.MIN_VALUE;
 
 			if (visible) {
 				showActionbar(client, "Build preview on");
@@ -98,6 +106,7 @@ public final class BuildSiteWireframePreview {
 			waitingForSnapshot = false;
 			nextRefreshTick = 0L;
 			lastStatusMessage = "";
+			lastStatusMessageTick = Long.MIN_VALUE;
 			return;
 		}
 
