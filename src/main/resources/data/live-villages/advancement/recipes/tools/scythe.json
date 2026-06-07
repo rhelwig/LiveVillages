@@ -24,7 +24,9 @@
   },
   "requirements": [
     [
-      "has_iron_ingot",
+      "has_iron_ingot"
+    ],
+    [
       "has_stick"
     ]
   ],

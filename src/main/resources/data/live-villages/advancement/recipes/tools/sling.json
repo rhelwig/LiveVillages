@@ -11,11 +11,11 @@
       },
       "trigger": "minecraft:inventory_changed"
     },
-    "has_stick": {
+    "has_leather": {
       "conditions": {
         "items": [
           {
-            "items": "minecraft:stick"
+            "items": "minecraft:leather"
           }
         ]
       },
@@ -24,8 +24,10 @@
   },
   "requirements": [
     [
-      "has_string",
-      "has_stick"
+      "has_string"
+    ],
+    [
+      "has_leather"
     ]
   ],
   "rewards": {

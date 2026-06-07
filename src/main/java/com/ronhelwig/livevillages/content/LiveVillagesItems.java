@@ -6,8 +6,10 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ToolMaterial;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.item.CrookedStaffItem;
 import com.ronhelwig.livevillages.item.MaterialArrowItem;
 
 public final class LiveVillagesItems {
@@ -29,7 +31,7 @@ public final class LiveVillagesItems {
 	);
 	public static final Item CROOKED_STAFF = registerItem(
 		"crooked_staff",
-		new Item(new Item.Properties().setId(itemKey("crooked_staff")))
+		new CrookedStaffItem(new Item.Properties().setId(itemKey("crooked_staff")).sword(ToolMaterial.WOOD, 3.0F, -2.0F))
 	);
 	public static final Item SCYTHE = registerItem(
 		"scythe",

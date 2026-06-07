@@ -926,7 +926,7 @@ Additional shared or planned workstations and civic structures include:
 - Field workers without a more specific weapon rule should fall back to at least a `Wooden Sword`.
 - Deskworker professions such as `Scribe`, `Trademaster`, `Cartographer`, `Cleric`, and `Librarian` should stay unarmed and run from hostile mobs.
 - `Sling`: a weaker bow-class ranged weapon with built-in unlimited low-power ammunition. The first pass registers a lightweight craftable item, uses it for visible Gardener and Shepherd presentation, and lets loaded Gardeners and Shepherds fire weak line-of-sight sling shots during bell-response defense.
-- `Crooked Staff`: an improvised melee weapon better than a stick but weaker than any proper vanilla weapon. The first pass registers a lightweight craftable item, uses it for Shepherd excess-flock culling presentation, and switches Shepherds to it for close bell-response defense.
+- `Crooked Staff`: an improvised fast wooden melee weapon better than a stick but weaker than any proper vanilla weapon overall. It should deal `3` attack damage, use `2.0` attack speed, carry wooden durability/repair/enchanting behavior, use Shepherd excess-flock culling presentation, switch Shepherds to it for close bell-response defense, and let players right-click farm herd animals to pull nearby same-type animals into a tighter group.
 - `Scythe`: a tool-weapon better than a `Crooked Staff` but still weaker than any proper vanilla weapon. The first pass registers a lightweight craftable item and uses it for Farmer harvest and grass-trimming presentation.
 - `Farmers` carry hoes and scythes.
 - `Gardeners` carry slings.
