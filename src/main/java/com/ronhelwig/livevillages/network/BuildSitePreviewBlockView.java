@@ -68,6 +68,7 @@ public record BuildSitePreviewBlockView(
 			case "cobblestone" -> isStoneFamilyItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "glass" -> stack.is(Items.GLASS) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "glass_display_case" -> blockItem != null && LiveVillagesBlocks.isGlassDisplayCase(blockItem.getBlock().defaultBlockState()) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "smithing_station" -> isSmithingStationItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "iron_bars" -> stack.is(Items.IRON_BARS) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "copper_bars" -> blockItem != null && isCopperBars(blockItem) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "stairs" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_STAIRS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
@@ -105,5 +106,15 @@ public record BuildSitePreviewBlockView(
 
 	private static boolean isCopperBars(BlockItem blockItem) {
 		return BuiltInRegistries.BLOCK.getKey(blockItem.getBlock()).getPath().endsWith("copper_bars");
+	}
+
+	private static boolean isSmithingStationItem(BlockItem blockItem) {
+		if (blockItem == null) {
+			return false;
+		}
+
+		return blockItem.getBlock().defaultBlockState().is(Blocks.BLAST_FURNACE)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.SMITHING_TABLE)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.GRINDSTONE);
 	}
 }

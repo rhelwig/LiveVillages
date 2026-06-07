@@ -1,5 +1,5 @@
 {
-  "parent": "live-villages:block/framed_glass_display_case",
+  "parent": "live-villages:block/framed_glass_display_case_inventory",
   "textures": {
     "frame": "minecraft:block/gold_block",
     "middle_shelf": {

@@ -3887,6 +3887,10 @@ public final class SettlementConstruction {
 			return false;
 		}
 
+		if ("smithing_station".equals(materialKey)) {
+			return isSmithingStation(currentState) && isSmithingStation(plannedState);
+		}
+
 		if (!matchesMaterialFamily(currentState, plannedState, materialKey)) {
 			return false;
 		}
@@ -3940,9 +3944,16 @@ public final class SettlementConstruction {
 			case "logs" -> currentState.is(BlockTags.LOGS) && plannedState.is(BlockTags.LOGS);
 			case "planks" -> currentState.is(BlockTags.PLANKS) && plannedState.is(BlockTags.PLANKS);
 			case "slab" -> currentState.is(BlockTags.WOODEN_SLABS) && plannedState.getBlock() instanceof SlabBlock;
+			case "smithing_station" -> isSmithingStation(currentState) && isSmithingStation(plannedState);
 			case "stairs" -> currentState.is(BlockTags.WOODEN_STAIRS) && plannedState.getBlock() instanceof StairBlock;
 			default -> false;
 		};
+	}
+
+	private static boolean isSmithingStation(BlockState state) {
+		return state.is(Blocks.BLAST_FURNACE)
+			|| state.is(Blocks.SMITHING_TABLE)
+			|| state.is(Blocks.GRINDSTONE);
 	}
 
 	private static boolean sharesPlacementProperties(BlockState currentState, BlockState plannedState) {

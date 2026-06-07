@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "live-villages:block/glass_display_case"
+    "model": "live-villages:block/glass_display_case_inventory"
   }
 }

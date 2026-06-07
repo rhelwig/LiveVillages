@@ -51,6 +51,7 @@ import com.ronhelwig.livevillages.sim.StructureBlueprintCapture;
 public final class LiveVillagesNetworking {
 	private static final double OVERLAY_MAX_DISTANCE_BLOCKS = 192.0D;
 	private static final double BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS = 192.0D;
+	private static final double ACTIVE_BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS = 64.0D;
 	private static final int SURVEYOR_MAP_RADIUS_BLOCKS = 96;
 	private static final int OVERLAY_STOCK_ROWS = 12;
 	private static final int OVERLAY_ROUTE_ROWS = 4;
@@ -992,7 +993,7 @@ public final class LiveVillagesNetworking {
 
 	private static Optional<BuildSitePreviewSnapshot> buildNearestBuildSitePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(player.level().getServer());
-		double maxDistanceSquared = BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS * BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS;
+		double maxDistanceSquared = ACTIVE_BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS * ACTIVE_BUILD_SITE_PREVIEW_MAX_DISTANCE_BLOCKS;
 		BuildSitePreviewCandidate bestCandidate = null;
 
 		for (SettlementBuildSite buildSite : savedData.getBuildSites()) {
@@ -1016,13 +1017,7 @@ public final class LiveVillagesNetworking {
 				continue;
 			}
 
-			double distanceSquared = Math.min(
-				Math.min(
-					previewBuildSite.origin().distSqr(player.blockPosition()),
-					previewBuildSite.workstationPos().distSqr(player.blockPosition())
-				),
-				previewBuildSite.anchorPos().distSqr(player.blockPosition())
-			);
+			double distanceSquared = activeBuildSitePreviewDistanceSquared(previewBuildSite, previewBlocks, player.blockPosition());
 			if (distanceSquared > maxDistanceSquared) {
 				continue;
 			}
@@ -1056,6 +1051,26 @@ public final class LiveVillagesNetworking {
 			blockerPositions,
 			bestCandidate.previewBlocks()
 		));
+	}
+
+	private static double activeBuildSitePreviewDistanceSquared(
+		SettlementBuildSite buildSite,
+		List<BuildSitePreviewBlockView> previewBlocks,
+		BlockPos playerPos
+	) {
+		double distanceSquared = Math.min(
+			Math.min(
+				buildSite.origin().distSqr(playerPos),
+				buildSite.workstationPos().distSqr(playerPos)
+			),
+			buildSite.anchorPos().distSqr(playerPos)
+		);
+
+		for (BuildSitePreviewBlockView block : previewBlocks) {
+			distanceSquared = Math.min(distanceSquared, block.pos().distSqr(playerPos));
+		}
+
+		return distanceSquared;
 	}
 
 	private static String activeBuildSitePreviewStatus(SettlementBuildSite buildSite, int activeBlockedBlocks) {
