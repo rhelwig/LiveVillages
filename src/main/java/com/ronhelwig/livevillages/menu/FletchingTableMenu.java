@@ -1,7 +1,9 @@
 package com.ronhelwig.livevillages.menu;
 
 import java.util.List;
+import java.util.Optional;
 
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Container;
@@ -17,6 +19,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
+import com.ronhelwig.livevillages.sim.SettlementConstruction;
+import com.ronhelwig.livevillages.sim.SettlementState;
 
 public class FletchingTableMenu extends AbstractContainerMenu {
 	public static final int SHAFT_SLOT = 0;
@@ -38,6 +42,7 @@ public class FletchingTableMenu extends AbstractContainerMenu {
 
 	private final ContainerLevelAccess access;
 	private final DataSlot selectedRecipeIndex = DataSlot.standalone();
+	private final DataSlot settlementTier = DataSlot.standalone();
 	private final List<FletchingTableRecipe> visibleRecipes = FletchingTableRecipes.all();
 	private final ResultContainer resultContainer = new ResultContainer();
 	private long lastSoundTime;
@@ -111,6 +116,13 @@ public class FletchingTableMenu extends AbstractContainerMenu {
 		});
 		addStandardInventorySlots(inventory, PLAYER_INV_X, PLAYER_INV_Y);
 		addDataSlot(selectedRecipeIndex);
+		access.execute((level, pos) -> {
+			if (level instanceof ServerLevel serverLevel) {
+				Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(serverLevel, pos);
+				settlementTier.set(settlement.map(SettlementState::tier).orElse(1));
+			}
+		});
+		addDataSlot(settlementTier);
 		selectedRecipeIndex.set(-1);
 	}
 
@@ -128,6 +140,10 @@ public class FletchingTableMenu extends AbstractContainerMenu {
 
 	public boolean isRecipeCraftable(int index) {
 		return isValidRecipeIndex(index) && visibleRecipes.get(index).matches(shaftSlot.getItem(), fletchingSlot.getItem(), headSlot.getItem());
+	}
+
+	public int settlementTier() {
+		return Math.max(1, settlementTier.get());
 	}
 
 	public void registerUpdateListener(Runnable listener) {

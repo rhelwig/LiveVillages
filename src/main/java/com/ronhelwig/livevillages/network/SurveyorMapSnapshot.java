@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 public record SurveyorMapSnapshot(
 	String statusMessage,
 	String settlementName,
+	int settlementTier,
 	String timeLabel,
 	BlockPos center,
 	int radius,
@@ -28,6 +29,7 @@ public record SurveyorMapSnapshot(
 	public static final Codec<SurveyorMapSnapshot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.STRING.optionalFieldOf("status_message", "").forGetter(SurveyorMapSnapshot::statusMessage),
 		Codec.STRING.optionalFieldOf("settlement_name", "").forGetter(SurveyorMapSnapshot::settlementName),
+		Codec.INT.optionalFieldOf("settlement_tier", 1).forGetter(SurveyorMapSnapshot::settlementTier),
 		Codec.STRING.optionalFieldOf("time_label", "").forGetter(SurveyorMapSnapshot::timeLabel),
 		BlockPos.CODEC.fieldOf("center").forGetter(SurveyorMapSnapshot::center),
 		Codec.INT.optionalFieldOf("radius", 64).forGetter(SurveyorMapSnapshot::radius),
@@ -59,7 +61,7 @@ public record SurveyorMapSnapshot(
 	}
 
 	public static SurveyorMapSnapshot unavailable(String statusMessage, BlockPos center) {
-		return new SurveyorMapSnapshot(statusMessage, "", "", center, 64, 64, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), false, List.of());
+		return new SurveyorMapSnapshot(statusMessage, "", 1, "", center, 64, 64, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), false, List.of());
 	}
 
 	public boolean available() {

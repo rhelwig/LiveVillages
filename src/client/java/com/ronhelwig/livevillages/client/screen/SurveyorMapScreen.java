@@ -19,12 +19,14 @@ public class SurveyorMapScreen extends Screen {
 	private static final int PADDING = 10;
 
 	private final SurveyorMapSnapshot snapshot;
+	private final SettlementScreenTheme theme;
 	private final boolean[][] revealedCells;
 	private float playerYawDegrees = 180.0F;
 
 	public SurveyorMapScreen(SurveyorMapSnapshot snapshot) {
 		super(Component.literal("Village Survey Map"));
 		this.snapshot = snapshot;
+		this.theme = SettlementScreenTheme.forTier(snapshot.settlementTier());
 		this.revealedCells = buildRevealedCells(snapshot);
 	}
 
@@ -53,20 +55,20 @@ public class SurveyorMapScreen extends Screen {
 		int compassTop = mapTop + 2;
 		int legendTop = compassTop + COMPASS_SIZE + 10;
 
-		graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xEE1F1A17);
-		graphics.fill(left + 1, top + 1, left + panelWidth - 1, top + 18, 0xFF5F4E31);
-		graphics.outline(left, top, panelWidth, panelHeight, 0xFFB69155);
-		graphics.fill(mapLeft, mapTop, mapLeft + MAP_SIZE, mapTop + MAP_SIZE, 0xFF243022);
-		graphics.outline(mapLeft, mapTop, MAP_SIZE, MAP_SIZE, 0xFF827456);
+		graphics.fill(left, top, left + panelWidth, top + panelHeight, theme.overlay());
+		graphics.fill(left + 1, top + 1, left + panelWidth - 1, top + 18, theme.header());
+		graphics.outline(left, top, panelWidth, panelHeight, theme.border());
+		graphics.fill(mapLeft, mapTop, mapLeft + MAP_SIZE, mapTop + MAP_SIZE, theme.body());
+		graphics.outline(mapLeft, mapTop, MAP_SIZE, MAP_SIZE, theme.divider());
 
-		graphics.text(font, snapshot.available() ? snapshot.settlementName() + " Survey" : "Survey unavailable", left + PADDING, top + 5, 0xFFF8E6BE, false);
+		graphics.text(font, snapshot.available() ? snapshot.settlementName() + " Survey" : "Survey unavailable", left + PADDING, top + 5, theme.titleText(), false);
 		if (snapshot.available() && !snapshot.timeLabel().isBlank()) {
 			String timeLabel = snapshot.timeLabel();
-			graphics.text(font, timeLabel, left + panelWidth - PADDING - font.width(timeLabel), top + 5, 0xFFE8DDC8, false);
+			graphics.text(font, timeLabel, left + panelWidth - PADDING - font.width(timeLabel), top + 5, theme.bodyText(), false);
 		}
 
 		if (!snapshot.available()) {
-			graphics.text(font, snapshot.statusMessage(), mapLeft, mapTop + 8, 0xFFE8DDC8, false);
+			graphics.text(font, snapshot.statusMessage(), mapLeft, mapTop + 8, theme.bodyText(), false);
 			return;
 		}
 
@@ -145,14 +147,14 @@ public class SurveyorMapScreen extends Screen {
 		int centerX = left + COMPASS_SIZE / 2;
 		int centerY = top + COMPASS_SIZE / 2;
 
-		graphics.fill(left, top, left + COMPASS_SIZE, top + COMPASS_SIZE, 0xCC17120F);
-		graphics.outline(left, top, COMPASS_SIZE, COMPASS_SIZE, 0xFF9B8151);
-		graphics.fill(centerX, centerY, centerX + 1, centerY + 1, 0xFFF2CF84);
+		graphics.fill(left, top, left + COMPASS_SIZE, top + COMPASS_SIZE, theme.panelFill());
+		graphics.outline(left, top, COMPASS_SIZE, COMPASS_SIZE, theme.panelOutline());
+		graphics.fill(centerX, centerY, centerX + 1, centerY + 1, theme.accentText());
 
-		drawCompassDirection(graphics, font, centerX, centerY, 0, -1, "N", 0xFFF8E6BE, true);
-		drawCompassDirection(graphics, font, centerX, centerY, 1, 0, "E", 0xFFAE9B7B, false);
-		drawCompassDirection(graphics, font, centerX, centerY, 0, 1, "S", 0xFFAE9B7B, false);
-		drawCompassDirection(graphics, font, centerX, centerY, -1, 0, "W", 0xFFAE9B7B, false);
+		drawCompassDirection(graphics, font, centerX, centerY, 0, -1, "N", theme.titleText(), true);
+		drawCompassDirection(graphics, font, centerX, centerY, 1, 0, "E", theme.secondaryText(), false);
+		drawCompassDirection(graphics, font, centerX, centerY, 0, 1, "S", theme.secondaryText(), false);
+		drawCompassDirection(graphics, font, centerX, centerY, -1, 0, "W", theme.secondaryText(), false);
 	}
 
 	private void drawCompassDirection(
@@ -173,7 +175,7 @@ public class SurveyorMapScreen extends Screen {
 		for (int step = 1; step <= 5; step++) {
 			int x = centerX + (int) Math.round(transformed[0] * step);
 			int y = centerY + (int) Math.round(transformed[1] * step);
-			graphics.fill(x, y, x + 1, y + 1, highlight ? 0xFFF2CF84 : 0xFF7C6743);
+			graphics.fill(x, y, x + 1, y + 1, highlight ? theme.accentText() : theme.divider());
 		}
 
 		graphics.text(font, label, armX - font.width(label) / 2, armY - 4, color, false);
@@ -214,7 +216,7 @@ public class SurveyorMapScreen extends Screen {
 	}
 
 	private void drawLegend(GuiGraphicsExtractor graphics, Font font, int x, int y) {
-		graphics.text(font, "Legend", x, y, 0xFFF2CF84, false);
+		graphics.text(font, "Legend", x, y, theme.accentText(), false);
 		y += 12;
 		y = legendRow(graphics, font, x, y, 0xFFB99758, "Trail");
 		y = legendRow(graphics, font, x, y, 0xFF2E5EA8, "Water");
@@ -232,12 +234,12 @@ public class SurveyorMapScreen extends Screen {
 		y = legendRow(graphics, font, x, y, 0xFFFF66DD, "Planned work");
 		y = legendRow(graphics, font, x, y, 0xFFD6B15F, "Boundary");
 		y += 8;
-		graphics.text(font, "Esc closes", x, y, 0xFF9F8E72, false);
+		graphics.text(font, "Esc closes", x, y, theme.mutedText(), false);
 	}
 
 	private int legendRow(GuiGraphicsExtractor graphics, Font font, int x, int y, int color, String label) {
 		graphics.fill(x, y + 2, x + 8, y + 8, color);
-		graphics.text(font, label, x + 12, y, 0xFFE8DDC8, false);
+		graphics.text(font, label, x + 12, y, theme.bodyText(), false);
 		return y + 10;
 	}
 
@@ -287,9 +289,9 @@ public class SurveyorMapScreen extends Screen {
 
 		int left = Math.min(mouseX + 8, mapLeft + MAP_SIZE - font.width(label) - 8);
 		int top = Math.max(mapTop + 2, mouseY - 12);
-		graphics.fill(left - 3, top - 2, left + font.width(label) + 3, top + 10, 0xEE1F1A17);
-		graphics.outline(left - 3, top - 2, font.width(label) + 6, 12, 0xFFB69155);
-		graphics.text(font, label, left, top, 0xFFF8E6BE, false);
+		graphics.fill(left - 3, top - 2, left + font.width(label) + 3, top + 10, theme.overlay());
+		graphics.outline(left - 3, top - 2, font.width(label) + 6, 12, theme.border());
+		graphics.text(font, label, left, top, theme.titleText(), false);
 	}
 
 	private void drawOffMapPointIndicators(GuiGraphicsExtractor graphics, int mapLeft, int mapTop) {
@@ -306,7 +308,7 @@ public class SurveyorMapScreen extends Screen {
 
 			int color = pointColor(point.kind());
 			graphics.fill(indicator.x() - 1, indicator.y() - 1, indicator.x() + 2, indicator.y() + 2, color);
-			graphics.outline(indicator.x() - 3, indicator.y() - 3, 6, 6, 0xFF243022);
+			graphics.outline(indicator.x() - 3, indicator.y() - 3, 6, 6, theme.body());
 			graphics.fill(indicator.innerX(), indicator.innerY(), indicator.x() + 1, indicator.y() + 1, color);
 		}
 	}

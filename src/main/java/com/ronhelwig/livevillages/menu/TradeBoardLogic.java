@@ -490,6 +490,7 @@ public final class TradeBoardLogic {
 
 	private static String projectLabel(SettlementProject project, Function<String, String> settlementNameResolver) {
 		return switch (project.type()) {
+			case TRADING_POST -> "Trading Post";
 			case HOUSING -> "Housing Shelter";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
 			case DOCK -> "Dock";
@@ -514,7 +515,7 @@ public final class TradeBoardLogic {
 		combined.addAll(buildSiteProjectViews(buildSites));
 		combined.addAll(queuedProjects.stream()
 			.sorted(
-				Comparator.comparingInt((SettlementProject project) -> project.type() == SettlementProjectType.ROAD ? 0 : 1)
+				Comparator.comparingInt((SettlementProject project) -> project.type() == SettlementProjectType.TRADING_POST ? 0 : project.type() == SettlementProjectType.ROAD ? 1 : 2)
 					.thenComparing(Comparator.comparingInt(SettlementProject::progressPercent).reversed())
 			)
 			.map(project -> new TradeBoardProjectView(projectLabel(project, settlementNameResolver), project.progressPercent()))

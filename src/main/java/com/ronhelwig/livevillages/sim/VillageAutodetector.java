@@ -1,7 +1,9 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -126,6 +128,10 @@ public final class VillageAutodetector {
 					updatedSettlement = updatedSettlement.withPopulation(SettlementVillagers.createOperationalPopulation(estimatedPopulation));
 				}
 
+				if (settlement.kind() == SettlementKind.VILLAGE && settlement.stock().isEmpty()) {
+					updatedSettlement = updatedSettlement.withStock(starterStockForPopulation(Math.max(estimatedPopulation, updatedSettlement.totalPopulation()), nearbyHomes));
+				}
+
 				if (!updatedSettlement.equals(settlement)) {
 					savedData.putSettlement(updatedSettlement);
 				}
@@ -148,7 +154,7 @@ public final class VillageAutodetector {
 				1,
 				SettlementVillagers.createOperationalPopulation(estimatedPopulation),
 				java.util.Map.of(),
-				java.util.Map.of(),
+				starterStockForPopulation(estimatedPopulation, nearbyHomes),
 				(int) nearbyHomes,
 				1.0D,
 				0.0D,
@@ -159,6 +165,26 @@ public final class VillageAutodetector {
 			currentTick
 		);
 		savedData.putSettlement(settlement);
+	}
+
+	private static Map<String, Integer> starterStockForPopulation(int estimatedPopulation, long nearbyHomes) {
+		int population = Math.max(1, estimatedPopulation);
+		int homes = Math.max(1, (int) nearbyHomes);
+		Map<String, Integer> stock = new LinkedHashMap<>();
+
+		stock.put("bread", population * 7);
+		stock.put("baked_potato", population * 3);
+		stock.put("carrot", population * 2);
+		stock.put("beetroot", population * 2);
+		stock.put("wheat", 16 + population * 6);
+		stock.put("logs", 24 + population * 8 + homes * 2);
+		stock.put("planks", 48 + population * 12 + homes * 4);
+		stock.put("cobblestone", 48 + population * 12 + homes * 3);
+		stock.put("stick", 8 + population * 2);
+		stock.put("dirt", 16 + population * 4);
+		stock.put("ladder", Math.max(4, population));
+
+		return stock;
 	}
 
 	public static boolean isLikelyVillage(ServerLevel level, BlockPos center) {

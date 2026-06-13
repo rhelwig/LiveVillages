@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -58,10 +59,20 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS = 600;
 	private static final int LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS = 200;
 	private static final int LOADED_ROADWORK_MAINTENANCE_INTERVAL_TICKS = 200;
-	private static final long VIRTUAL_TRADING_POST_MIN_AGE_TICKS = Math.round(2.0D * SettlementEconomyRules.TICKS_PER_DAY);
-	private static final int VIRTUAL_TRADING_POST_MIN_POPULATION = 2;
-	private static final int VIRTUAL_TRADING_POST_MIN_STOCK = 48;
-	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18 };
+	private static final int VIRTUAL_TRADING_POST_BELL_SEARCH_RADIUS_BLOCKS = 48;
+	private static final int VIRTUAL_TRADING_POST_BELL_SEARCH_HALF_HEIGHT_BLOCKS = 24;
+	private static final int[] VIRTUAL_TRADING_POST_BELL_SEARCH_RADII = { 3, 4, 5, 6, 8, 10, 12, 16, 20, 24 };
+	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18, 22, 26, 30 };
+	private static final int VIRTUAL_TRADING_POST_SIDE_SEARCH_BLOCKS = 5;
+	private static final Map<String, Integer> VIRTUAL_TRADING_POST_STARTER_STOCK = Map.of(
+		"bread", 56,
+		"baked_potato", 24,
+		"logs", 88,
+		"planks", 149,
+		"cobblestone", 106,
+		"stick", 24,
+		"dirt", 48
+	);
 	private static final com.mojang.serialization.MapCodec<SupplementalPersistence> SUPPLEMENTAL_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(SupplementalPersistence::playerStandings),
 		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(SupplementalPersistence::raids),
@@ -1420,6 +1431,7 @@ public class LiveVillagesSavedData extends SavedData {
 
 			if (discoveryDue) {
 				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+				changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
 				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
@@ -1438,7 +1450,6 @@ public class LiveVillagesSavedData extends SavedData {
 				changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
 				changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-				changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
 				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
 				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
@@ -1581,13 +1592,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos tablePos : SettlementConstruction.findPlacedCartographyTables(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CARTOGRAPHER_HOUSE, tablePos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartCartographerHouseAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				tablePos,
-				SettlementConstruction.cartographerHouseFacingFor(settlement, tablePos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartCartographerHouseAtWorkstation(
+					level,
+					tablePos,
+					SettlementConstruction.cartographerHouseFacingFor(settlement, tablePos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1598,6 +1613,17 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		return changed;
+	}
+
+	private SettlementConstruction.WorkstationBuildResult tryStartVanillaWorkstationBuild(
+		ServerLevel level,
+		BlockPos workstationPos,
+		Supplier<SettlementConstruction.WorkstationBuildResult> starter
+	) {
+		SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.withBlockedStructureSignsSuppressed(starter);
+		SettlementConstruction.removeCantBuildHereSignsAroundWorkstation(level, workstationPos);
+
+		return buildResult;
 	}
 
 	private boolean tryStartPlacedTradeBoardBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -1642,7 +1668,12 @@ public class LiveVillagesSavedData extends SavedData {
 			return false;
 		}
 
-		for (VirtualTradeBoardSite site : virtualTradeBoardSites(level, settlement)) {
+		boolean stockChanged = ensureVirtualTradingPostStarterStock(stock);
+		List<VirtualTradeBoardSite> sites = virtualTradeBoardSites(level, settlement);
+		int blockedAttempts = 0;
+		int completedAttempts = 0;
+
+		for (VirtualTradeBoardSite site : sites) {
 			BlockState boardState = LiveVillagesBlocks.TRADE_BOARD.defaultBlockState().setValue(TradeBoardBlock.FACING, site.facing());
 			level.setBlock(site.pos(), boardState, 3);
 			if (level.getBlockEntity(site.pos()) instanceof TradeBoardBlockEntity tradeBoard) {
@@ -1661,14 +1692,42 @@ public class LiveVillagesSavedData extends SavedData {
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
-				boolean changed = !buildResult.buildSite().equals(previousBuildSite);
+				boolean changed = stockChanged || !buildResult.buildSite().equals(previousBuildSite);
+				LiveVillages.LOGGER.info("Materialized virtual Trading Post for settlement {} with Trade Board at {}", settlement.id(), site.pos());
 				return ensureWorkforceIfNeeded(level, settlement) || changed;
+			}
+
+			if (buildResult.isBlocked()) {
+				blockedAttempts++;
+			} else if (buildResult.isCompleted()) {
+				completedAttempts++;
 			}
 
 			level.setBlock(site.pos(), Blocks.AIR.defaultBlockState(), 3);
 		}
 
-		return false;
+		LiveVillages.LOGGER.warn(
+			"Could not materialize virtual Trading Post for settlement {}; candidates={} blocked={} already_sheltered={}",
+			settlement.id(),
+			sites.size(),
+			blockedAttempts,
+			completedAttempts
+		);
+		return stockChanged;
+	}
+
+	private boolean ensureVirtualTradingPostStarterStock(Map<String, Integer> stock) {
+		boolean changed = false;
+
+		for (Map.Entry<String, Integer> entry : VIRTUAL_TRADING_POST_STARTER_STOCK.entrySet()) {
+			int current = stock.getOrDefault(entry.getKey(), 0);
+			if (current < entry.getValue()) {
+				stock.put(entry.getKey(), entry.getValue());
+				changed = true;
+			}
+		}
+
+		return changed;
 	}
 
 	private boolean hasLinkedTradeBoard(ServerLevel level, SettlementState settlement) {
@@ -1683,36 +1742,88 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private boolean shouldMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement) {
-		long ageTicks = Math.max(0L, level.getServer().getTickCount() - settlement.createdTick());
-		if (ageTicks < VIRTUAL_TRADING_POST_MIN_AGE_TICKS) {
-			return false;
-		}
-
-		int totalStock = settlement.stock().values().stream().mapToInt(Integer::intValue).sum();
-		return settlement.totalPopulation() >= VIRTUAL_TRADING_POST_MIN_POPULATION
-			|| totalStock >= VIRTUAL_TRADING_POST_MIN_STOCK;
+		return settlement.totalPopulation() > 0;
 	}
 
 	private List<VirtualTradeBoardSite> virtualTradeBoardSites(ServerLevel level, SettlementState settlement) {
 		List<VirtualTradeBoardSite> sites = new ArrayList<>();
+		Set<Long> seen = new HashSet<>();
 
-		for (int radius : VIRTUAL_TRADING_POST_SEARCH_RADII) {
+		nearestLoadedBell(level, settlement).ifPresent(bellPos ->
+			addVirtualTradeBoardSitesNearAnchor(level, sites, seen, bellPos, VIRTUAL_TRADING_POST_BELL_SEARCH_RADII)
+		);
+
+		addVirtualTradeBoardSitesNearAnchor(level, sites, seen, settlement.center(), VIRTUAL_TRADING_POST_SEARCH_RADII);
+
+		return sites;
+	}
+
+	private void addVirtualTradeBoardSitesNearAnchor(
+		ServerLevel level,
+		List<VirtualTradeBoardSite> sites,
+		Set<Long> seen,
+		BlockPos anchor,
+		int[] searchRadii
+	) {
+		for (int radius : searchRadii) {
 			for (Direction facing : Direction.Plane.HORIZONTAL) {
 				Direction lateral = facing.getClockWise();
 
-				for (int sideOffset = 0; sideOffset <= 2; sideOffset++) {
+				for (int sideOffset = 0; sideOffset <= VIRTUAL_TRADING_POST_SIDE_SEARCH_BLOCKS; sideOffset++) {
 					for (int sign : sideOffset == 0 ? List.of(0) : List.of(-1, 1)) {
-						BlockPos columnPos = settlement.center()
+						BlockPos columnPos = anchor
 							.relative(facing, radius)
 							.relative(lateral, sideOffset * sign);
-						virtualTradeBoardPlacementPos(level, columnPos)
-							.ifPresent(pos -> sites.add(new VirtualTradeBoardSite(pos, facing)));
+						virtualTradeBoardPlacementPos(level, columnPos).ifPresent(pos -> {
+							if (seen.add(pos.asLong())) {
+								sites.add(new VirtualTradeBoardSite(pos, facing.getOpposite()));
+							}
+						});
+					}
+				}
+			}
+		}
+	}
+
+	private Optional<BlockPos> nearestLoadedBell(ServerLevel level, SettlementState settlement) {
+		int radius = Math.min(SettlementVillagers.settlementRadiusBlocks(settlement), VIRTUAL_TRADING_POST_BELL_SEARCH_RADIUS_BLOCKS);
+		int minY = Math.max(level.getMinY(), settlement.center().getY() - VIRTUAL_TRADING_POST_BELL_SEARCH_HALF_HEIGHT_BLOCKS);
+		int maxY = Math.min(level.getMaxY(), settlement.center().getY() + VIRTUAL_TRADING_POST_BELL_SEARCH_HALF_HEIGHT_BLOCKS);
+		long maxDistanceSqr = (long) radius * radius;
+		BlockPos nearestBell = null;
+		double nearestDistanceSqr = Double.POSITIVE_INFINITY;
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int x = settlement.center().getX() - radius; x <= settlement.center().getX() + radius; x++) {
+			for (int z = settlement.center().getZ() - radius; z <= settlement.center().getZ() + radius; z++) {
+				double horizontalDistanceSqr = settlement.center().distToCenterSqr(x + 0.5D, settlement.center().getY() + 0.5D, z + 0.5D);
+
+				if (horizontalDistanceSqr > maxDistanceSqr) {
+					continue;
+				}
+
+				scanPos.set(x, settlement.center().getY(), z);
+				if (!level.hasChunkAt(scanPos)) {
+					continue;
+				}
+
+				for (int y = minY; y <= maxY; y++) {
+					scanPos.set(x, y, z);
+
+					if (!level.getBlockState(scanPos).is(Blocks.BELL)) {
+						continue;
+					}
+
+					double distanceSqr = scanPos.distSqr(settlement.center());
+					if (distanceSqr < nearestDistanceSqr) {
+						nearestDistanceSqr = distanceSqr;
+						nearestBell = scanPos.immutable();
 					}
 				}
 			}
 		}
 
-		return sites;
+		return Optional.ofNullable(nearestBell);
 	}
 
 	private Optional<BlockPos> virtualTradeBoardPlacementPos(ServerLevel level, BlockPos columnPos) {
@@ -1748,13 +1859,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos smokerPos : SettlementConstruction.findPlacedSmokers(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BUTCHER_SHOP, smokerPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartButcherShopAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				smokerPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, smokerPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartButcherShopAtWorkstation(
+					level,
+					smokerPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, smokerPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1773,13 +1888,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos stonecutterPos : SettlementConstruction.findPlacedStonecutters(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MASON_WORKSHOP, stonecutterPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartMasonWorkshopAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				stonecutterPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, stonecutterPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartMasonWorkshopAtWorkstation(
+					level,
+					stonecutterPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, stonecutterPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1861,13 +1980,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos tablePos : SettlementConstruction.findPlacedFletchingTables(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.FLETCHER_HUT, tablePos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartFletcherHutAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				tablePos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, tablePos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartFletcherHutAtWorkstation(
+					level,
+					tablePos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, tablePos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1886,13 +2009,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos brewingStandPos : SettlementConstruction.findPlacedBrewingStands(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CLERIC_SHRINE, brewingStandPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartClericShrineAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				brewingStandPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, brewingStandPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartClericShrineAtWorkstation(
+					level,
+					brewingStandPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, brewingStandPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1911,13 +2038,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos cauldronPos : SettlementConstruction.findPlacedCauldrons(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LEATHERWORKER_WORKSHOP, cauldronPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLeatherworkerWorkshopAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				cauldronPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, cauldronPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartLeatherworkerWorkshopAtWorkstation(
+					level,
+					cauldronPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, cauldronPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1936,13 +2067,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos lecternPos : SettlementConstruction.findPlacedLecterns(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIBRARY, lecternPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartLibraryAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				lecternPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, lecternPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartLibraryAtWorkstation(
+					level,
+					lecternPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, lecternPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1961,13 +2096,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos loomPos : SettlementConstruction.findPlacedLooms(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SHEPHERD_HUT, loomPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartShepherdHutAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				loomPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, loomPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartShepherdHutAtWorkstation(
+					level,
+					loomPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, loomPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {
@@ -1986,13 +2125,17 @@ public class LiveVillagesSavedData extends SavedData {
 		for (BlockPos workstationPos : SettlementConstruction.findPlacedSmithingWorkstations(level, settlement)) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SMITHY, workstationPos);
 
-			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartSmithyAtWorkstation(
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
 				level,
 				workstationPos,
-				SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos),
-				settlement.id(),
-				stock,
-				existingBuildSite
+				() -> SettlementConstruction.tryStartSmithyAtWorkstation(
+					level,
+					workstationPos,
+					SettlementConstruction.fletcherHutFacingFor(settlement, workstationPos),
+					settlement.id(),
+					stock,
+					existingBuildSite
+				)
 			);
 
 			if (buildResult.isStarted() || buildResult.isResumed()) {

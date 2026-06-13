@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -105,6 +106,7 @@ public final class SettlementConstruction {
 	private static final int MIN_HARBOR_DEEP_WATER_COLUMNS = 12;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final String STRUCTURE_MARGIN_GROUND_BACKFILL_KEY = "__margin_ground_backfill__";
+	private static final ThreadLocal<Boolean> SUPPRESS_BLOCKED_STRUCTURE_SIGNS = ThreadLocal.withInitial(() -> false);
 	/*
 	 * Blueprint legend:
 	 *
@@ -1945,6 +1947,7 @@ public final class SettlementConstruction {
 
 	public static CompletionResult tryCompleteProject(ServerLevel level, SettlementState settlement, SettlementProject project, Map<String, Integer> stock) {
 		return switch (project.type()) {
+			case TRADING_POST -> CompletionResult.notCompleted();
 			case HOUSING -> tryBuildHousingShelter(level, settlement, stock);
 			case CARPENTER_WORKSHOP -> tryBuildCarpenterWorkshop(level, settlement, stock);
 			case DOCK -> tryBuildDock(level, settlement, stock);
@@ -2169,6 +2172,17 @@ public final class SettlementConstruction {
 		), stock, level.getServer().getTickCount()));
 	}
 
+	public static WorkstationBuildResult withBlockedStructureSignsSuppressed(Supplier<WorkstationBuildResult> starter) {
+		boolean previous = SUPPRESS_BLOCKED_STRUCTURE_SIGNS.get();
+		SUPPRESS_BLOCKED_STRUCTURE_SIGNS.set(true);
+
+		try {
+			return starter.get();
+		} finally {
+			SUPPRESS_BLOCKED_STRUCTURE_SIGNS.set(previous);
+		}
+	}
+
 	public static WorkstationBuildResult tryStartRoadwrightWorkshopAtWorkstation(
 		ServerLevel level,
 		BlockPos tablePos,
@@ -2320,6 +2334,10 @@ public final class SettlementConstruction {
 	) {
 		if (existingBuildSite.isPresent()) {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
+		}
+
+		if (isPositionInExistingShelteredStructure(level, workstationPos)) {
+			return WorkstationBuildResult.completed();
 		}
 
 		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
@@ -4426,7 +4444,7 @@ public final class SettlementConstruction {
 		);
 
 		if (!placement.valid() || placement.site() == null) {
-			if (placeBlockedSign) {
+			if (placeBlockedSign && !SUPPRESS_BLOCKED_STRUCTURE_SIGNS.get()) {
 				placeCantBuildHereSign(level, workstationPos, signFacing, placement.statusMessage());
 			}
 
@@ -8160,6 +8178,20 @@ public final class SettlementConstruction {
 			}
 
 			return;
+		}
+	}
+
+	public static void removeCantBuildHereSignsAroundWorkstation(ServerLevel level, BlockPos workstationPos) {
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos signPos = workstationPos.relative(direction);
+
+			if (!level.hasChunkAt(signPos) || !(level.getBlockState(signPos).getBlock() instanceof StandingSignBlock)) {
+				continue;
+			}
+
+			if (level.getBlockEntity(signPos) instanceof SignBlockEntity signBlockEntity && isCantBuildHereSign(signBlockEntity)) {
+				level.setBlock(signPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+			}
 		}
 	}
 

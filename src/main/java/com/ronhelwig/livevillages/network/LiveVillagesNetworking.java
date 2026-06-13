@@ -167,6 +167,7 @@ public final class LiveVillagesNetworking {
 		return new SurveyorMapSnapshot(
 			"",
 			settlement.get().name(),
+			settlement.get().tier(),
 			buildSurveyTimeLabel(level),
 			settlement.get().center(),
 			mapRadius,
@@ -602,6 +603,10 @@ public final class LiveVillagesNetworking {
 			return Optional.empty();
 		}
 
+		if (isLoneWorkstationPreviewItem(item) && SettlementConstruction.isPositionInExistingShelteredStructure(level, placementPos)) {
+			return Optional.empty();
+		}
+
 		SettlementConstruction.StructurePreview preview;
 		String settlementName;
 
@@ -865,6 +870,30 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.PALISADE_POINT_ITEM
 			|| item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM
 			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
+			|| item == Items.CARTOGRAPHY_TABLE
+			|| item == Items.SMOKER
+			|| item == Items.STONECUTTER
+			|| item == Items.FLETCHING_TABLE
+			|| item == Items.BREWING_STAND
+			|| item == Items.CAULDRON
+			|| item == Items.LECTERN
+			|| item == Items.LOOM
+			|| item == Items.BLAST_FURNACE
+			|| item == Items.SMITHING_TABLE
+			|| item == Items.GRINDSTONE;
+	}
+
+	private static boolean isLoneWorkstationPreviewItem(Item item) {
+		return item == LiveVillagesBlocks.BAKERS_COUNTER_ITEM
+			|| item == LiveVillagesBlocks.CARPENTER_BENCH_ITEM
+			|| item == LiveVillagesBlocks.MINER_WORKSTATION_ITEM
+			|| item == LiveVillagesBlocks.SURVEYOR_TABLE_ITEM
+			|| item == LiveVillagesBlocks.SCRIBE_DESK_ITEM
+			|| item == LiveVillagesBlocks.GARDENER_WORKSTATION_ITEM
+			|| item == LiveVillagesBlocks.HONEY_SEPARATOR_ITEM
+			|| item == LiveVillagesBlocks.GUARD_POST_ITEM
+			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
+			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
 			|| item == Items.STONECUTTER

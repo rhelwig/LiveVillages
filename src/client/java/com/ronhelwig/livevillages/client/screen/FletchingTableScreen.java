@@ -31,13 +31,14 @@ public class FletchingTableScreen extends AbstractContainerScreen<FletchingTable
 
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+		SettlementScreenTheme theme = theme();
 		extractTransparentBackground(graphics);
-		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xEE201915);
-		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + TITLE_BAR_HEIGHT, 0xFF6A4E2B);
-		graphics.fill(leftPos + 1, topPos + INPUT_BAND_TOP, leftPos + imageWidth - 1, topPos + INPUT_BAND_BOTTOM, 0xFF2A2119);
-		graphics.fill(leftPos + 1, topPos + INFO_BAND_TOP, leftPos + imageWidth - 1, topPos + INFO_BAND_BOTTOM, 0xFF241D17);
-		graphics.fill(leftPos + 1, topPos + INFO_BAND_BOTTOM + 1, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF1E1812);
-		graphics.outline(leftPos, topPos, imageWidth, imageHeight, 0xFFB78B46);
+		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, theme.overlay());
+		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + TITLE_BAR_HEIGHT, theme.header());
+		graphics.fill(leftPos + 1, topPos + INPUT_BAND_TOP, leftPos + imageWidth - 1, topPos + INPUT_BAND_BOTTOM, theme.body());
+		graphics.fill(leftPos + 1, topPos + INFO_BAND_TOP, leftPos + imageWidth - 1, topPos + INFO_BAND_BOTTOM, theme.panelFill());
+		graphics.fill(leftPos + 1, topPos + INFO_BAND_BOTTOM + 1, leftPos + imageWidth - 1, topPos + imageHeight - 1, theme.body());
+		graphics.outline(leftPos, topPos, imageWidth, imageHeight, theme.border());
 
 		drawSlotFrame(graphics, leftPos + FletchingTableMenu.SHAFT_SLOT_X, topPos + FletchingTableMenu.INPUT_ROW_Y);
 		drawSlotFrame(graphics, leftPos + FletchingTableMenu.FLETCHING_SLOT_X, topPos + FletchingTableMenu.INPUT_ROW_Y);
@@ -50,30 +51,32 @@ public class FletchingTableScreen extends AbstractContainerScreen<FletchingTable
 	@Override
 	protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
 		Font font = this.font;
-		graphics.text(font, title, titleLabelX, titleLabelY, 0xFFF5E6C8, false);
-		graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xFFD8C4A0, false);
-		centerSlotLabel(graphics, font, "Shaft", FletchingTableMenu.SHAFT_SLOT_X + 8, 26, 0xFFCFB98E);
-		centerSlotLabel(graphics, font, "Fletch", FletchingTableMenu.FLETCHING_SLOT_X + 8, 26, 0xFFCFB98E);
-		centerSlotLabel(graphics, font, "Head", FletchingTableMenu.HEAD_SLOT_X + 8, 26, 0xFFCFB98E);
-		centerSlotLabel(graphics, font, "Batch", FletchingTableMenu.RESULT_SLOT_X + 8, 26, 0xFFCFB98E);
+		SettlementScreenTheme theme = theme();
+		graphics.text(font, title, titleLabelX, titleLabelY, theme.titleText(), false);
+		graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, theme.secondaryText(), false);
+		centerSlotLabel(graphics, font, "Shaft", FletchingTableMenu.SHAFT_SLOT_X + 8, 26, theme.secondaryText());
+		centerSlotLabel(graphics, font, "Fletch", FletchingTableMenu.FLETCHING_SLOT_X + 8, 26, theme.secondaryText());
+		centerSlotLabel(graphics, font, "Head", FletchingTableMenu.HEAD_SLOT_X + 8, 26, theme.secondaryText());
+		centerSlotLabel(graphics, font, "Batch", FletchingTableMenu.RESULT_SLOT_X + 8, 26, theme.secondaryText());
 
 		FletchingTableRecipe recipe = selectedRecipe();
 		if (recipe != null) {
-			graphics.text(font, recipe.assemble().getHoverName(), 28, 76, 0xFFF2CF84, false);
-			graphics.text(font, recipeDescription(recipe), 28, 88, 0xFFE6D7BC, false);
-			graphics.text(font, craftHint(), 28, 100, recipeCraftable() ? 0xFFB8D49A : 0xFFC69482, false);
+			graphics.text(font, recipe.assemble().getHoverName(), 28, 76, theme.accentText(), false);
+			graphics.text(font, recipeDescription(recipe), 28, 88, theme.bodyText(), false);
+			graphics.text(font, craftHint(), 28, 100, recipeCraftable() ? theme.successText() : theme.failureText(), false);
 		} else {
-			graphics.text(font, "Drop a head material to preview the batch result.", 28, 76, 0xFF9F8E72, false);
-			graphics.text(font, INPUT_EXPLANATION, 28, 88, 0xFF9F8E72, false);
+			graphics.text(font, "Drop a head material to preview the batch result.", 28, 76, theme.mutedText(), false);
+			graphics.text(font, INPUT_EXPLANATION, 28, 88, theme.mutedText(), false);
 		}
 	}
 
 	private void drawInputLane(GuiGraphicsExtractor graphics) {
+		SettlementScreenTheme theme = theme();
 		int arrowMidY = topPos + FletchingTableMenu.INPUT_ROW_Y + 8;
 		int startX = leftPos + FletchingTableMenu.HEAD_SLOT_X + 22;
 		int endX = leftPos + FletchingTableMenu.RESULT_SLOT_X - 6;
-		graphics.fill(startX, arrowMidY, endX, arrowMidY + 1, 0xFF8A6B39);
-		graphics.fill(endX - 5, arrowMidY - 2, endX, arrowMidY + 3, 0xFF8A6B39);
+		graphics.fill(startX, arrowMidY, endX, arrowMidY + 1, theme.border());
+		graphics.fill(endX - 5, arrowMidY - 2, endX, arrowMidY + 3, theme.border());
 	}
 
 	private void drawGhostSlotIcons(GuiGraphicsExtractor graphics) {
@@ -95,12 +98,13 @@ public class FletchingTableScreen extends AbstractContainerScreen<FletchingTable
 		int screenX = leftPos + x;
 		int screenY = topPos + y;
 		graphics.item(stack, screenX, screenY);
-		graphics.fill(screenX, screenY, screenX + 16, screenY + 16, 0xBB201915);
+		graphics.fill(screenX, screenY, screenX + 16, screenY + 16, theme().overlay());
 	}
 
 	private void drawSlotFrame(GuiGraphicsExtractor graphics, int x, int y) {
-		graphics.fill(x - 1, y - 1, x + 17, y + 17, 0xFF16120F);
-		graphics.outline(x - 1, y - 1, 18, 18, 0xFF8A6B39);
+		SettlementScreenTheme theme = theme();
+		graphics.fill(x - 1, y - 1, x + 17, y + 17, theme.panelFill());
+		graphics.outline(x - 1, y - 1, 18, 18, theme.panelOutline());
 	}
 
 	private void centerSlotLabel(GuiGraphicsExtractor graphics, Font font, String label, int centerX, int y, int color) {
@@ -147,6 +151,10 @@ public class FletchingTableScreen extends AbstractContainerScreen<FletchingTable
 
 	private Item defaultHeadItem(FletchingTableRecipe recipe) {
 		return recipe == null ? Items.FLINT : recipe.headItem();
+	}
+
+	private SettlementScreenTheme theme() {
+		return SettlementScreenTheme.forTier(menu.settlementTier());
 	}
 
 	private void containerChanged() {

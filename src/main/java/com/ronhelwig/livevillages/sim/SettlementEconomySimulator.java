@@ -388,6 +388,10 @@ public final class SettlementEconomySimulator {
 		List<SettlementProject> projects = new ArrayList<>();
 
 		for (SettlementProject project : settlement.projects()) {
+			if (project.type() == SettlementProjectType.TRADING_POST && infrastructure.tradingPosts() + infrastructure.incompleteTradingPosts() > 0) {
+				continue;
+			}
+
 			if (project.type() == SettlementProjectType.DOCK && infrastructure.incompleteDocks() > 0) {
 				continue;
 			}
@@ -412,6 +416,11 @@ public final class SettlementEconomySimulator {
 		int population = settlement.totalPopulation();
 		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity());
 		boolean needsHousing = population > 0 && effectiveHousing < population + 1;
+
+		if (population > 0
+			&& infrastructure.tradingPosts() + infrastructure.incompleteTradingPosts() + countProjectType(projects, SettlementProjectType.TRADING_POST) < 1) {
+			projects.add(new SettlementProject(nextProjectId(projects, "trading-post"), SettlementProjectType.TRADING_POST, "", 0.0D, 0.35D));
+		}
 
 		if (needsHousing && !hasProjectType(projects, SettlementProjectType.HOUSING)) {
 			projects.add(new SettlementProject(nextProjectId(projects, "housing"), SettlementProjectType.HOUSING, "", 0.0D, 1.2D));
@@ -565,6 +574,7 @@ public final class SettlementEconomySimulator {
 		boolean useWorldConstruction = loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement);
 
 		for (SettlementProject project : projects) {
+			boolean wasComplete = project.progress() + 1.0E-6D >= project.requiredProgress();
 			double newProgress = Math.min(project.requiredProgress(), project.progress() + (projectWorkRate(settlement, project.type()) * elapsedDays));
 			SettlementProject progressed = project.withProgress(newProgress);
 
@@ -574,6 +584,21 @@ public final class SettlementEconomySimulator {
 			}
 
 			switch (project.type()) {
+				case TRADING_POST -> {
+					if (useWorldConstruction) {
+						remainingProjects.add(progressed);
+						continue;
+					}
+
+					if (wasComplete || tryConsumeCost(stock, project.type().stockCost())) {
+						remainingProjects.add(progressed);
+						continue;
+					}
+
+					double blockedProgress = Math.max(0.0D, project.requiredProgress() - 0.01D);
+					remainingProjects.add(progressed.withProgress(Math.min(progressed.progress(), blockedProgress)));
+					continue;
+				}
 				case HOUSING -> {
 					if (useWorldConstruction) {
 						SettlementConstruction.CompletionResult completionResult = SettlementConstruction.tryCompleteProject(level, settlement, project, stock);
@@ -928,6 +953,7 @@ public final class SettlementEconomySimulator {
 		double stoneConstruction = masons * 1.4D + constructionSupport * 1.0D;
 
 		return SettlementEconomyRules.scaledWorkerDailyRate(switch (type) {
+			case TRADING_POST -> Math.max(0.8D, baseLabor + woodConstruction + stoneConstruction * 0.35D + unemployed * 0.8D + trademasters * 1.2D);
 			case HOUSING -> Math.max(0.6D, baseLabor + woodConstruction + stoneConstruction * 0.8D + unemployed * 0.7D + trademasters * 0.8D);
 			case CARPENTER_WORKSHOP, COMPOSTER, STORAGE, DOCK -> Math.max(0.5D, baseLabor + woodConstruction + stoneConstruction * 0.45D + unemployed * 0.5D + trademasters * 0.6D);
 			case LIGHTHOUSE -> Math.max(0.55D, baseLabor + stoneConstruction * 1.3D + woodConstruction * 0.35D + unemployed * 0.45D + trademasters * 0.75D);

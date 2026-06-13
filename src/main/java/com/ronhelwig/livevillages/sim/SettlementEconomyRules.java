@@ -521,6 +521,10 @@ public final class SettlementEconomyRules {
 		int demand = 0;
 
 		for (SettlementProject project : settlement.projects()) {
+			if (project.type() == SettlementProjectType.TRADING_POST && project.progress() + 1.0E-6D >= project.requiredProgress()) {
+				continue;
+			}
+
 			demand += project.type().stockCost().getOrDefault(goodsKey, 0);
 		}
 
