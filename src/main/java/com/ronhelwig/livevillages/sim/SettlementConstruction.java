@@ -135,6 +135,150 @@ public final class SettlementConstruction {
 	 * F/B/R/L = face forward / backward / right / left
 	 * f/b/r/l = same facing, but use top-half stairs
 	 */
+	private static final String[][] FIVE_BY_EIGHT_GABLED_HUT_ORIENTATIONS = new String[][] {
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L"
+		},
+		{
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		}
+	};
+	private static final String[][] FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS = new String[][] {
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"l...r",
+			"l...r",
+			".fff."
+		},
+		{
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L",
+			"R...L"
+		},
+		{
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L.",
+			".R.L."
+		},
+		{
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			".....",
+			"....."
+		}
+	};
 	private static final StructureBlueprint CARPENTER_WORKSHOP_BLUEPRINT = new StructureBlueprint(
 		-2,
 		-4,
@@ -210,7 +354,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS
 	);
 	private static final StructureBlueprint ROADWRIGHT_WORKSHOP_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -287,7 +432,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS
 	);
 	private static final StructureBlueprint MASON_WORKSHOP_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -364,7 +510,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS
 	);
 	private static final StructureBlueprint FORESTER_WORKSHOP_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -441,7 +588,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS
 	);
 	private static final StructureBlueprint MINE_ENTRANCE_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -672,7 +820,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_WITH_PORCH_STAIR_ORIENTATIONS
 	);
 	private static final StructureBlueprint SCRIBE_OFFICE_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -749,7 +898,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_ORIENTATIONS
 	);
 	private static final StructureBlueprint GUARD_POST_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -772,18 +922,18 @@ public final class SettlementConstruction {
 				"PBABP",
 				"PAAAP",
 				"LPDPL",
-				"FATF",
-				"FAAAG",
-				"LAWAL"
+				"GAAAG",
+				"FAAAF",
+				"LFWFL"
 			},
 			{
 				"LPVPL",
 				"PAAAP",
-				"VAAAT",
+				"VAAAV",
 				"PAAAP",
 				"LIDIL",
-				"FAAAF",
-				"FAAAG",
+				"AAAAA",
+				"AAAAA",
 				"LAAAL"
 			},
 			{
@@ -792,8 +942,8 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"PAAAP",
 				"LPPPL",
-				"FFFFF",
-				"FAAAG",
+				"FAAAF",
+				"FAAAF",
 				"LFFFL"
 			},
 			{
@@ -826,7 +976,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_ORIENTATIONS
 	);
 	private static final StructureBlueprint GARDENER_SHED_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -903,7 +1054,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_ORIENTATIONS
 	);
 	private static final StructureBlueprint BEEKEEPER_APIARY_BLUEPRINT = new StructureBlueprint(
 		-2,
@@ -980,7 +1132,8 @@ public final class SettlementConstruction {
 				"AABAA",
 				"AABAA"
 			}
-		}
+		},
+		FIVE_BY_EIGHT_GABLED_HUT_ORIENTATIONS
 	);
 	private static final StructureBlueprint CARTOGRAPHER_HOUSE_BLUEPRINT = new StructureBlueprint(
 		-6,
