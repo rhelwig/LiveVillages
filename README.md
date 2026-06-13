@@ -1,58 +1,70 @@
 # Live Villages
 
-Live Villages is a Fabric mod for Minecraft Java that makes settlements feel more self-directed. Villages already track needs, projects, stored goods, and trade routes, while the player nudges those systems by building infrastructure and changing incentives. Harbors are supported today, and hostile outposts remain part of the longer-term scope.
+Live Villages is a Fabric mod for Minecraft Java that turns villages into persistent, self-directed settlements. Villages track population, housing, stock, wealth, construction projects, routes, workstations, and professional labor, while the player influences those systems by building infrastructure, solving shortages, opening trade, and defending the settlement.
 
 The project currently targets Minecraft Java `26.1.1`, Fabric Loader `0.18.6`, Fabric API `0.145.3+26.1.1`, and Java `25`.
 
 ## Current State
 
-This repository is in active development and already contains a playable foundation rather than only design scaffolding. Current implemented systems include:
+Live Villages is in active development and already has a playable foundation. The current focus is completing MVP tier 1, creating promotional material such as screenshots and videos, and publishing an initial version. It is not a finished release, but the current build includes real settlement state, visible loaded-world work, staged construction, and several custom blocks, items, and professions.
+
+Implemented systems include:
 
 - persistent settlement simulation for population, stock, wealth, housing, comfort, security, growth, projects, and routes
-- village autodetection plus saved settlement and route state
-- a working `Trade Board` UI for settlement overview, shortages, surpluses, trade pressure, workforce, routes, and project summaries
-- staged village construction for settlement-linked structures instead of instant full builds
-- harbor trade support through `Portmaster's Anchor`, `Lighthouse`, terrain charting, and land/water trade-range bonuses
-- loaded-world villager work for roles such as `Carpenter`, `Butcher`, `Portmaster`, and `Roadwright`, alongside abstract catch-up simulation when chunks are unloaded
-- custom professions, workstations, structure anchors, and support tooling for inspecting and debugging settlements
+- village autodetection plus saved settlement, route, build-site, villager-home, and profession state
+- a `Trade Board` UI for settlement status, wants, surplus goods, trade offers, workforce, routes, projects, and support
+- player-assisted staged construction with build-site previews instead of instant full structures
+- loaded-world profession behavior backed by abstract catch-up simulation when chunks are unloaded
+- land and harbor trade support through routes, docks, `Portmaster's Anchor`, `Lighthouse`, terrain charting, and route quality
+- settlement-aware profession work for farming, baking, forestry, fishing, mining, roadwork, beekeeping, gardening, herding, butchery, masonry, smithing, guards, scribes, and more
+- bakery storefronts with `Baker's Counter`, `Glass Display Case` variants, visible display stock, ingredient bounties, and local bakery sales
+- first-pass custom tools and weapons: `Sling`, `Crooked Staff`, `Scythe`, special arrows, and profession-specific equipment presentation
+- hostile outpost foundations, standing/trust, raids, outpost stock, and martial/logistics planning in active development
 
 The full design and implementation specification lives in [docs/SPECS.md](docs/SPECS.md).
 
+## How It Plays
+
+Live Villages is designed around influence rather than micromanagement. You do not assign every villager a task by hand. Instead, you place useful infrastructure, provide missing materials, improve safety, create roads and harbors, and trade with the settlement's shared stock.
+
+A typical play loop:
+
+- place or find a `Trade Board` to inspect a village's needs, projects, stock, workforce, routes, and trade offers
+- add workstations or structure anchors so the village can recruit professions and start new builds
+- use the `O` preview overlay to inspect staged build sites and see what is missing or blocked
+- donate or trade materials to clear shortages and help villagers complete construction
+- improve farms, bakeries, roads, defenses, forests, mines, livestock areas, docks, and lighthouses so the settlement becomes more capable
+- watch loaded villagers perform representative work while unloaded settlements continue through abstract simulation
+
+The goal is for a settlement to feel like a place with its own needs and plans. The player is important, but the village should not feel like a static decoration waiting for commands.
+
 ## Player-Facing Content
 
-Blocks and anchors currently in the mod:
+Current custom blocks and structure anchors include:
 
-- `Trade Board`: the central settlement block for status, trading, shortages, surpluses, routes, and projects
+- `Trade Board`: the central civic block for settlement status, wants, routes, projects, and trade
+- `Baker's Counter`: bakery workstation and shared bakery sales counter
+- `Glass Display Case`: bakery display and storage block, including copper, iron, gold, and diamond variants
 - `Carpenter's Bench`: custom workstation for the `Carpenter`
 - `Forester's Table`: custom workstation for the `Forester`
 - `Surveyor's Table`: route-planning and settlement-map workstation used by the `Roadwright`
 - `Portmaster's Anchor`: harbor map and water-trade anchor
 - `Lighthouse`: harbor infrastructure that extends water trade and navigation support
 - `Milepost`: route infrastructure marker
+- `Gardener Workstation`, `Honey Separator`, `Scribe Desk`, and `Guard Post`
 - `Simple Housing Shelter` and `Housing Shelter`: placeable settlement housing anchors that start or resume staged shelter construction
 
-Custom villager professions currently registered:
+Custom and expanded professions include:
 
-- `Trademaster`
-- `Carpenter`
-- `Forester`
-- `Portmaster`
-- `Roadwright`
+- custom roles such as `Trademaster`, `Carpenter`, `Baker`, `Forester`, `Portmaster`, `Roadwright`, `Scribe`, `Guard`, `Gardener`, and `Beekeeper`
+- expanded vanilla roles including `Farmer`, `Butcher`, `Fisherman`, `Shepherd`, `Mason`, `Cartographer`, `Cleric`, `Librarian`, `Leatherworker`, `Armorer`, `Toolsmith`, `Weaponsmith`, and `Fletcher`
 
-The simulation also extends vanilla profession behavior in several areas, including settlement farming, butchery, harbor support, trading, and cartography-adjacent route systems.
+Craftable custom items include:
 
-## How It Plays
-
-Live Villages is designed around influence rather than micromanagement. Instead of telling each villager what to carry or craft, the player helps a settlement by improving its conditions: adding workstations, strengthening food supply, building housing, improving roads, making docks, defending trade corridors, or resolving shortages through trade. Placed workstations are meant to become anchors for real profession buildings rather than staying as isolated utility blocks.
-
-The `Trade Board` is the main civic block for this loop. It is where a settlement exposes what it needs, what it has too much of, which routes and projects matter, and how the player can trade against the settlement's shared stock.
-
-In the current build, a typical loop looks like this:
-
-- place a `Trade Board` in or near a village to inspect the settlement and trade with its pooled stock
-- place infrastructure such as workstations, shelter anchors, harbor anchors, or lighthouses so the settlement has more options to expand
-- use staged construction previews to see what villagers plan to build and help complete missing blocks yourself
-- check settlement overlays, route summaries, and harbor maps to see whether the village is stabilizing or bottlenecked
+- `Sling`: fast, low-power ranged weapon with built-in stone ammunition
+- `Crooked Staff`: fast wooden improvised weapon with a first-pass herding use
+- `Scythe`: slow iron farm tool and weapon with crop-harvest and trimming utility
+- `Copperhead Arrow`, `Ironhead Arrow`, and `Diamondhead Arrow`
 
 ## Controls And Debugging
 
@@ -73,6 +85,7 @@ Server/debug utilities:
 
 ## Project Docs
 
+- [docs/PROMO.md](docs/PROMO.md): public-facing Modrinth/CurseForge style description copy
 - [docs/SPECS.md](docs/SPECS.md): full gameplay and systems specification
 - [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
 - [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
@@ -91,18 +104,24 @@ Build with the Gradle wrapper:
 
 ```sh
 ./gradlew build
+```
 
-on Windows
-./gradlew.bat build
+On Windows:
+
+```bat
+gradlew.bat build
 ```
 
 Run a development client with:
 
 ```sh
 ./gradlew runClient
+```
 
-on Windows
-./gradlew.bat runClient
+On Windows:
+
+```bat
+gradlew.bat runClient
 ```
 
 The repository currently assumes Java `25`.

@@ -30,6 +30,8 @@ Instructions for future Codex/agent runs:
 - If we make changes to the code that conflict with the specification (`docs/SPECS.md`), ask the user if the changes should be incorporated into the spec or rejected.
 - If we add functionality to the code that isn't inlcuded in the specification but should be, and it doesn't conflict with existing specifications, then add it to the spec.
 - Keep track of what you are doing in `docs/IMPLEMENTATION-PLAN.md`.
+- Current priority is MVP tier 1 completion, promotional screenshots/videos, and initial publication.
+- When choosing between polish work and core MVP blockers, prefer work that moves the project toward a publishable first release unless the user says otherwise.
 
 ## Project Specific
 
