@@ -31,6 +31,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 public final class SettlementVillagers {
@@ -2903,8 +2904,9 @@ public final class SettlementVillagers {
 	}
 
 	private static boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
-		var path = villager.getNavigation().createPath(pos, poiType.value().validRange());
-		return path != null && path.canReach();
+		// Recruitment runs during loaded-settlement maintenance; avoid synchronous path bursts here.
+		// Work loops still perform bounded navigation and diagnostics after the job is assigned.
+		return true;
 	}
 
 	private static void logGatheringReturnDiagnostic(ServerLevel level, SettlementState settlement, Villager villager) {
@@ -4037,6 +4039,10 @@ public final class SettlementVillagers {
 				return beds <= 0 ? 0 : 5;
 			}
 
+			if (beds <= 0 && isConstructionSupportBootstrapProfession(level, type, workstationPos)) {
+				return 1;
+			}
+
 			return type == ProfessionDemandType.BEEKEEPER ? Math.min(1, beds) : beds;
 		}
 
@@ -4051,6 +4057,18 @@ public final class SettlementVillagers {
 		}
 
 		return beds;
+	}
+
+	private static boolean isConstructionSupportBootstrapProfession(ServerLevel level, ProfessionDemandType type, BlockPos workstationPos) {
+		if (!level.hasChunkAt(workstationPos)) {
+			return false;
+		}
+
+		return switch (type) {
+			case CARPENTER -> level.getBlockState(workstationPos).is(LiveVillagesBlocks.CARPENTER_BENCH);
+			case FORESTER -> level.getBlockState(workstationPos).is(LiveVillagesBlocks.FORESTER_TABLE);
+			default -> false;
+		};
 	}
 
 	private static boolean smithyWorkstationHasRemainingCapacity(

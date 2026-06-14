@@ -212,11 +212,7 @@ public final class BuildSiteAssistedPlacement {
 		}
 
 		BlockState heldState = blockItem.getBlock().defaultBlockState();
-		if (!SettlementConstruction.isFlexibleMaterialMatch(heldState, plannedState, expectedMaterialKey)) {
-			return plannedState;
-		}
-
-		return SettlementConstruction.copySharedPlacementProperties(heldState, plannedState);
+		return SettlementConstruction.compatibleMaterialPlacementState(heldState, plannedState, expectedMaterialKey).orElse(plannedState);
 	}
 
 	private static boolean isComplete(List<SettlementBuildBlockState> blocks) {

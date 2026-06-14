@@ -396,6 +396,11 @@ public final class SettlementEconomySimulator {
 				continue;
 			}
 
+			if (project.type() == SettlementProjectType.CARPENTER_WORKSHOP
+				&& infrastructure.carpenterBenches() + infrastructure.incompleteCarpenterWorkshops() > 0) {
+				continue;
+			}
+
 			if (project.type() == SettlementProjectType.ROAD) {
 				if (project.targetSettlementId().isBlank() || findSettlementById(allSettlements, project.targetSettlementId()).isEmpty()) {
 					continue;

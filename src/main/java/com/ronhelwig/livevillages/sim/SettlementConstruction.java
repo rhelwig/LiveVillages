@@ -4069,6 +4069,23 @@ public final class SettlementConstruction {
 		return sharesPlacementProperties(currentState, plannedState);
 	}
 
+	public static Optional<BlockState> compatibleMaterialPlacementState(BlockState materialState, BlockState plannedState, String materialKey) {
+		if (materialKey == null || materialKey.isBlank() || !matchesMaterialFamily(materialState, plannedState, materialKey)) {
+			return Optional.empty();
+		}
+
+		return Optional.of(copySharedPlacementProperties(materialState, plannedState));
+	}
+
+	public static BlockState localCompatibleMaterialPlacementState(ServerLevel level, BlockPos pos, BlockState plannedState, String materialKey) {
+		BlockState localMaterialState = localMaterialStateFor(level, pos, materialKey);
+		if (localMaterialState == null) {
+			return plannedState;
+		}
+
+		return compatibleMaterialPlacementState(localMaterialState, plannedState, materialKey).orElse(plannedState);
+	}
+
 	public static BlockState copySharedPlacementProperties(BlockState targetState, BlockState plannedState) {
 		BlockState result = targetState;
 
@@ -4098,6 +4115,25 @@ public final class SettlementConstruction {
 
 		clearBlockToWarehouse(level, pos, stock);
 		return true;
+	}
+
+	private static BlockState localMaterialStateFor(ServerLevel level, BlockPos pos, String materialKey) {
+		if (materialKey == null || materialKey.isBlank()) {
+			return null;
+		}
+
+		StructureMaterialPalette palette = materialPaletteFor(level, pos);
+		return switch (materialKey) {
+			case "logs" -> woodLogBlock(palette.woodFamily()).defaultBlockState();
+			case "planks" -> woodPlankBlock(palette.woodFamily()).defaultBlockState();
+			case "stairs" -> woodStairBlock(palette.woodFamily()).defaultBlockState();
+			case "slab" -> woodSlabBlock(palette.woodFamily()).defaultBlockState();
+			case "door" -> woodDoorBlock(palette.woodFamily()).defaultBlockState();
+			case "fence" -> woodFenceBlock(palette.woodFamily()).defaultBlockState();
+			case "fence_gate" -> woodFenceGateBlock(palette.woodFamily()).defaultBlockState();
+			case "cobblestone" -> stoneBlock(palette.stoneMaterial()).defaultBlockState();
+			default -> null;
+		};
 	}
 
 	private static boolean matchesMaterialFamily(BlockState currentState, BlockState plannedState, String materialKey) {

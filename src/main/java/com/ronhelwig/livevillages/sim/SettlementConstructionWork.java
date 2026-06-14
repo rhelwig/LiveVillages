@@ -53,10 +53,12 @@ public final class SettlementConstructionWork {
 	private static final int CONSTRUCTION_DELIVERY_BATCH_SIZE = 32;
 	private static final long CONSTRUCTION_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long UNREACHABLE_TASK_CACHE_TICKS = 200L;
+	private static final long CONSTRUCTION_NAVIGATION_RETRY_TICKS = 40L;
 	private static final double STOCK_ACCESS_ROUTE_DISTANCE_SQUARED = 256.0D;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
 	private static final Map<String, Long> UNREACHABLE_TASK_SKIP_UNTIL = new HashMap<>();
+	private static final Map<String, NavigationAttempt> CONSTRUCTION_NAVIGATION_ATTEMPTS = new HashMap<>();
 
 	private SettlementConstructionWork() {
 	}
@@ -142,7 +144,7 @@ public final class SettlementConstructionWork {
 						}
 
 						claimedBlocks.add(deliveredTask.claimKey());
-						steerWorkerTowardTask(level, settlement, worker, deliveredTask.standPos());
+						steerWorkerTowardTask(level, settlement, worker, deliveredTask.standPos(), deliveredTask.navigationPath(), tick);
 
 						if (isWithinWorkReach(worker, deliveredTask.targetPos())) {
 							ConstructionActionResult actionResult = performConstructionTask(level, stock, deliveredTask, tick, true);
@@ -199,7 +201,7 @@ public final class SettlementConstructionWork {
 
 					if (stockAccessPos.isPresent() && shouldUseStockAccessPickup(worker, stockAccessPos.get())) {
 						BlockPos supplyPos = stockAccessPos.get();
-						steerWorkerTowardTask(level, settlement, worker, supplyPos);
+						steerWorkerTowardTask(level, settlement, worker, supplyPos, null, tick);
 
 						if (isWithinWorkReach(worker, supplyPos)) {
 							DeliveryPickupResult pickupResult = pickUpConstructionDelivery(stock, deliveries, workerId, settlement, task, tick);
@@ -217,7 +219,7 @@ public final class SettlementConstructionWork {
 					}
 				}
 
-				steerWorkerTowardTask(level, settlement, worker, task.standPos());
+				steerWorkerTowardTask(level, settlement, worker, task.standPos(), task.navigationPath(), tick);
 
 				if (!isWithinWorkReach(worker, task.targetPos())) {
 					continue;
@@ -734,7 +736,7 @@ public final class SettlementConstructionWork {
 					return null;
 				}
 
-				Optional<BlockPos> standPos = standPosFor(level, worker, buildSite, targetPos.get());
+				Optional<ReachableStand> standPos = standPosFor(level, worker, buildSite, targetPos.get());
 
 				if (standPos.isEmpty()) {
 					return null;
@@ -746,7 +748,8 @@ public final class SettlementConstructionWork {
 					buildSite,
 					block,
 					targetPos.get(),
-					standPos.get(),
+					standPos.get().pos(),
+					standPos.get().path(),
 					relativePos.up(),
 					claimKey(buildSite, block)
 				);
@@ -982,14 +985,14 @@ public final class SettlementConstructionWork {
 			}
 
 			long standPosStart = System.nanoTime();
-			Optional<BlockPos> reachableStandPos = standPosFor(level, worker, bestTask.buildSite(), bestTask.targetPos());
+			Optional<ReachableStand> reachableStandPos = standPosFor(level, worker, bestTask.buildSite(), bestTask.targetPos());
 			long standPosTime = System.nanoTime() - standPosStart;
 			if (standPosTime > 50_000_000) { // >50ms
 				LiveVillages.LOGGER.warn("ConstructionWork: final standPosFor took {} ms for block at {}", Math.round(standPosTime / 1_000_000.0D), bestTask.targetPos());
 			}
 
 			if (reachableStandPos.isPresent()) {
-				return bestTask.withStandPos(reachableStandPos.get());
+				return bestTask.withReachableStand(reachableStandPos.get());
 			}
 
 			skippedUnreachableBlocks.add(bestTask.claimKey());
@@ -1096,6 +1099,7 @@ public final class SettlementConstructionWork {
 					block,
 					targetPos.get(),
 					standPos.get(),
+					null,
 					taskLayer,
 					claimKey
 				);
@@ -1201,6 +1205,7 @@ public final class SettlementConstructionWork {
 					block,
 					targetPos.get(),
 					targetPos.get(),
+					null,
 					taskLayerPriority(buildSite, relativePos.up()),
 					claimKey(buildSite, block)
 				);
@@ -1462,7 +1467,8 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
+		BlockState placementState = SettlementConstruction.localCompatibleMaterialPlacementState(level, task.targetPos(), plannedState, block.expectedMaterialKey());
+		level.setBlock(task.targetPos(), placementState, BLOCK_UPDATE_FLAGS);
 		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 		return ConstructionActionResult.placed(
 			updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
@@ -1615,8 +1621,10 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		level.setBlock(task.targetPos(), plannedState, BLOCK_UPDATE_FLAGS);
-		level.setBlock(pairedPos.get(), pairedPlannedState, BLOCK_UPDATE_FLAGS);
+		BlockState placementState = SettlementConstruction.localCompatibleMaterialPlacementState(level, task.targetPos(), plannedState, block.expectedMaterialKey());
+		BlockState pairedPlacementState = SettlementConstruction.localCompatibleMaterialPlacementState(level, pairedPos.get(), pairedPlannedState, pairedBlock.block().expectedMaterialKey());
+		level.setBlock(task.targetPos(), placementState, BLOCK_UPDATE_FLAGS);
+		level.setBlock(pairedPos.get(), pairedPlacementState, BLOCK_UPDATE_FLAGS);
 		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
 		SettlementConstruction.updateChestStateAfterPlacement(level, pairedPos.get());
 		return ConstructionActionResult.placed(
@@ -2137,8 +2145,35 @@ public final class SettlementConstructionWork {
 		return task.targetPos().above().equals(task.buildSite().workstationPos());
 	}
 
-	private static void steerWorkerTowardTask(ServerLevel level, SettlementState settlement, Villager worker, BlockPos standPos) {
-		SettlementNavigation.moveToRoutineTarget(level, settlement, worker, standPos, CONSTRUCTION_WORK_SPEED);
+	private static void steerWorkerTowardTask(ServerLevel level, SettlementState settlement, Villager worker, BlockPos standPos, Path path, long tick) {
+		String workerId = worker.getUUID().toString();
+		NavigationAttempt previousAttempt = CONSTRUCTION_NAVIGATION_ATTEMPTS.get(workerId);
+		if (previousAttempt != null
+			&& previousAttempt.target().equals(standPos)
+			&& previousAttempt.retryAfterTick() > tick
+			&& !worker.getNavigation().isDone()) {
+			return;
+		}
+
+		long navigationStart = System.nanoTime();
+		boolean moved = path != null
+			? worker.getNavigation().moveTo(path, CONSTRUCTION_WORK_SPEED)
+			: SettlementNavigation.moveToRoutineTarget(level, settlement, worker, standPos, CONSTRUCTION_WORK_SPEED);
+		long navigationTime = System.nanoTime() - navigationStart;
+		if (navigationTime > 50_000_000) {
+			LiveVillages.LOGGER.warn(
+				"ConstructionWork: navigation start took {} ms for worker {} target {} reusedPath={}",
+				Math.round(navigationTime / 1_000_000.0D),
+				workerId,
+				standPos,
+				path != null
+			);
+		}
+
+		CONSTRUCTION_NAVIGATION_ATTEMPTS.put(
+			workerId,
+			new NavigationAttempt(standPos.immutable(), tick + (moved ? CONSTRUCTION_NAVIGATION_RETRY_TICKS : CONSTRUCTION_NAVIGATION_RETRY_TICKS * 2L))
+		);
 	}
 
 	private static boolean canReachRoutineTarget(Villager worker, BlockPos targetPos) {
@@ -2162,12 +2197,12 @@ public final class SettlementConstructionWork {
 		return worker.distanceToSqr(targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D) <= CONSTRUCTION_WORK_REACH_DISTANCE_SQUARED;
 	}
 
-	private static Optional<BlockPos> standPosFor(ServerLevel level, Villager worker, SettlementBuildSite buildSite, BlockPos targetPos) {
+	private static Optional<ReachableStand> standPosFor(ServerLevel level, Villager worker, SettlementBuildSite buildSite, BlockPos targetPos) {
 		List<BlockPos> candidates = standCandidatesFor(level, buildSite, targetPos);
 		candidates.sort((a, b) -> Double.compare(a.distSqr(worker.blockPosition()), b.distSqr(worker.blockPosition())));
 
 		if (!candidates.isEmpty() && isWithinWorkReach(worker, targetPos)) {
-			return Optional.of(candidates.get(0));
+			return Optional.of(new ReachableStand(candidates.get(0), null));
 		}
 
 		for (int i = 0; i < Math.min(candidates.size(), 3); i++) {
@@ -2175,7 +2210,7 @@ public final class SettlementConstructionWork {
 			Path path = worker.getNavigation().createPath(candidate, 0);
 
 			if (path != null && path.canReach()) {
-				return Optional.of(candidate);
+				return Optional.of(new ReachableStand(candidate, path));
 			}
 		}
 
@@ -2327,12 +2362,19 @@ public final class SettlementConstructionWork {
 		SettlementBuildBlockState block,
 		BlockPos targetPos,
 		BlockPos standPos,
+		Path navigationPath,
 		int layer,
 		String claimKey
 	) {
-		private ConstructionTask withStandPos(BlockPos newStandPos) {
-			return new ConstructionTask(siteIndex, blockIndex, buildSite, block, targetPos, newStandPos, layer, claimKey);
+		private ConstructionTask withReachableStand(ReachableStand reachableStand) {
+			return new ConstructionTask(siteIndex, blockIndex, buildSite, block, targetPos, reachableStand.pos(), reachableStand.path(), layer, claimKey);
 		}
+	}
+
+	private record ReachableStand(BlockPos pos, Path path) {
+	}
+
+	private record NavigationAttempt(BlockPos target, long retryAfterTick) {
 	}
 
 	private record ConstructionActionResult(

@@ -35,6 +35,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.BlockTags;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.LiveVillagesGameRules;
@@ -64,6 +65,37 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int[] VIRTUAL_TRADING_POST_BELL_SEARCH_RADII = { 3, 4, 5, 6, 8, 10, 12, 16, 20, 24 };
 	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18, 22, 26, 30 };
 	private static final int VIRTUAL_TRADING_POST_SIDE_SEARCH_BLOCKS = 5;
+	private static final int[] AUTONOMOUS_WORKSTATION_BELL_SEARCH_RADII = { 5, 6, 8, 10, 12, 16, 20, 24, 28 };
+	private static final int[] AUTONOMOUS_WORKSTATION_SEARCH_RADII = { 8, 10, 12, 14, 16, 20, 24, 28, 32 };
+	private static final int AUTONOMOUS_WORKSTATION_SIDE_SEARCH_BLOCKS = 7;
+	private static final int AUTONOMOUS_WORKSTATION_BUILD_SITE_SPACING_BLOCKS = 8;
+	private static final int AUTONOMOUS_WORKSTATION_SUPPORT_SPACING_BLOCKS = 12;
+	private static final int MAX_AUTONOMOUS_WORKSTATION_START_ATTEMPTS_PER_PASS = 4;
+	private static final long AUTONOMOUS_WORKSTATION_FAILED_RETRY_TICKS = 2_400L;
+	private static final Set<String> WOOD_CONSTRUCTION_MATERIAL_KEYS = Set.of(
+		"logs",
+		"planks",
+		"slab",
+		"stairs",
+		"stick",
+		"fence",
+		"fence_gate",
+		"door",
+		"trapdoor",
+		"chest",
+		"carpenter_bench",
+		"forester_table"
+	);
+	private static final Set<String> STONE_AND_ORE_CONSTRUCTION_MATERIAL_KEYS = Set.of(
+		"cobblestone",
+		"stone",
+		"smooth_stone",
+		"stone_bricks",
+		"iron_ingot",
+		"copper_ingot",
+		"coal",
+		"miner_workstation"
+	);
 	private static final Map<String, Integer> VIRTUAL_TRADING_POST_STARTER_STOCK = Map.of(
 		"bread", 56,
 		"baked_potato", 24,
@@ -122,6 +154,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private long lastGlobalUpdateTick;
 	private VillageScanCursor villageScanCursor;
 	public final Map<String, CachedSurvey> surveyCache = new HashMap<>();
+	private final Map<String, Integer> autonomousSupportStartOffsets = new HashMap<>();
+	private final Map<String, Long> autonomousSupportRetryAfterTicks = new HashMap<>();
 
 	public record CachedSurvey(SettlementConstruction.InfrastructureSurvey survey, long lastSurveyTick) {
 	}
@@ -1412,6 +1446,61 @@ public class LiveVillagesSavedData extends SavedData {
 				: settlement.withPopulation(actualPopulation);
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+			boolean discoveryDue = activeBuildSites.isEmpty()
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
+			boolean catchupMaterialized = false;
+
+			if (discoveryDue) {
+				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+				MaterializationResult tradingPostMaterialization = tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
+				changed |= tradingPostMaterialization.changed();
+				catchupMaterialized |= tradingPostMaterialization.materialized();
+
+				if (!catchupMaterialized) {
+					MaterializationResult supportMaterialization = tryMaterializeAutonomousSupportWorkstation(level, workingSettlement, stock);
+					changed |= supportMaterialization.changed();
+					catchupMaterialized |= supportMaterialization.materialized();
+				}
+
+				if (!catchupMaterialized) {
+					changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
+					changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
+					changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+				}
+				activeBuildSites = getBuildSitesForSettlement(settlement.id());
+			}
+
+			if (catchupMaterialized) {
+				boolean stockChanged = !stock.equals(workingSettlement.stock());
+				SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
+
+				if (!updatedSettlement.equals(settlement)) {
+					entry.setValue(updatedSettlement);
+					changed = true;
+				}
+
+				SettlementPerformanceLog.warnIfSlow("loaded_construction_materialization", workingSettlement, taskStart, server.getTickCount());
+				continue;
+			}
+
 			boolean homeMaintenanceDue = activeBuildSites.isEmpty()
 				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_homes", LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS);
 
@@ -1424,36 +1513,6 @@ public class LiveVillagesSavedData extends SavedData {
 				if (homesTime > 100_000_000) { // >100ms
 					LiveVillages.LOGGER.warn("Ensure villager homes took {} ms for settlement {}", Math.round(homesTime / 1_000_000.0D), settlement.id());
 				}
-			}
-
-			boolean discoveryDue = activeBuildSites.isEmpty()
-				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
-
-			if (discoveryDue) {
-				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
-				changed |= tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
-				changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
-				changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-				changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
-				activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			}
 
 			long lastRoadworkCatchupTick = loadedRoadworkCatchupTicks.getOrDefault(
@@ -1583,7 +1642,18 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private static boolean ensureWorkforceIfNeeded(ServerLevel level, SettlementState settlement) {
-		return SettlementVillagers.usesActualVillagers(settlement) && SettlementVillagers.ensureWorkforce(level, settlement);
+		if (!SettlementVillagers.usesActualVillagers(settlement)) {
+			return false;
+		}
+
+		long workforceStart = System.nanoTime();
+		boolean changed = SettlementVillagers.ensureWorkforce(level, settlement);
+		long workforceTime = System.nanoTime() - workforceStart;
+		if (workforceTime > 50_000_000) {
+			LiveVillages.LOGGER.warn("Ensure workforce took {} ms for settlement {}", Math.round(workforceTime / 1_000_000.0D), settlement.id());
+		}
+
+		return changed;
 	}
 
 	private boolean tryStartVanillaCartographerHouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -1660,12 +1730,12 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private MaterializationResult tryMaterializeVirtualTradingPost(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		if (settlement.kind() == SettlementKind.OUTPOST
 			|| findBuildSite(settlement.id(), SettlementBuildSiteType.TRADING_POST).isPresent()
 			|| hasLinkedTradeBoard(level, settlement)
 			|| !shouldMaterializeVirtualTradingPost(level, settlement)) {
-			return false;
+			return MaterializationResult.unchanged();
 		}
 
 		boolean stockChanged = ensureVirtualTradingPostStarterStock(stock);
@@ -1694,7 +1764,7 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				boolean changed = stockChanged || !buildResult.buildSite().equals(previousBuildSite);
 				LiveVillages.LOGGER.info("Materialized virtual Trading Post for settlement {} with Trade Board at {}", settlement.id(), site.pos());
-				return ensureWorkforceIfNeeded(level, settlement) || changed;
+				return new MaterializationResult(changed, true);
 			}
 
 			if (buildResult.isBlocked()) {
@@ -1713,7 +1783,392 @@ public class LiveVillagesSavedData extends SavedData {
 			blockedAttempts,
 			completedAttempts
 		);
-		return stockChanged;
+		return new MaterializationResult(stockChanged, false);
+	}
+
+	private MaterializationResult tryMaterializeAutonomousSupportWorkstation(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		if (settlement.kind() == SettlementKind.OUTPOST || settlement.totalPopulation() <= 0) {
+			return MaterializationResult.unchanged();
+		}
+
+		for (AutonomousSupportNeed need : autonomousSupportNeeds(level, settlement, stock)) {
+			if (tryMaterializeAutonomousSupportWorkstation(level, settlement, stock, need.type())) {
+				return MaterializationResult.changedAndMaterialized();
+			}
+		}
+
+		return MaterializationResult.unchanged();
+	}
+
+	private List<AutonomousSupportNeed> autonomousSupportNeeds(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
+		List<AutonomousSupportNeed> needs = new ArrayList<>();
+		int woodDemand = materialDemand(activeBuildSites, WOOD_CONSTRUCTION_MATERIAL_KEYS);
+		int stoneDemand = materialDemand(activeBuildSites, STONE_AND_ORE_CONSTRUCTION_MATERIAL_KEYS);
+		int logShortage = shortage(settlement, activeBuildSites, stock, "logs");
+		int plankShortage = shortage(settlement, activeBuildSites, stock, "planks");
+		int woodworkShortage = shortage(settlement, activeBuildSites, stock, "stairs")
+			+ shortage(settlement, activeBuildSites, stock, "slab")
+			+ shortage(settlement, activeBuildSites, stock, "stick");
+		int cobbleShortage = shortage(settlement, activeBuildSites, stock, "cobblestone");
+		int ironShortage = shortage(settlement, activeBuildSites, stock, "iron_ingot");
+		int fuelShortage = Math.max(0, 8 - stock.getOrDefault("coal", 0) - stock.getOrDefault("charcoal", 0));
+
+		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.FORESTER, (logShortage * 3) + plankShortage + woodDemand + 80);
+		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.CARPENTER, (plankShortage * 2) + woodworkShortage + woodDemand + 60);
+		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.MINER, (cobbleShortage * 3) + (ironShortage * 2) + (fuelShortage * 3) + stoneDemand + 55);
+		needs.sort((left, right) -> Integer.compare(right.score(), left.score()));
+		return needs;
+	}
+
+	private void addAutonomousSupportNeed(
+		List<AutonomousSupportNeed> needs,
+		ServerLevel level,
+		SettlementState settlement,
+		AutonomousSupportType type,
+		int score
+	) {
+		if (score <= type.minimumScore() || hasAutonomousSupportWorkstation(level, settlement, type)) {
+			return;
+		}
+
+		needs.add(new AutonomousSupportNeed(type, score));
+	}
+
+	private int shortage(SettlementState settlement, List<SettlementBuildSite> activeBuildSites, Map<String, Integer> stock, String goodsKey) {
+		int target = SettlementEconomyRules.targetForGoods(settlement, activeBuildSites, goodsKey);
+		return Math.max(0, target - stock.getOrDefault(goodsKey, 0));
+	}
+
+	private int materialDemand(List<SettlementBuildSite> activeBuildSites, Set<String> materialKeys) {
+		return (int) activeBuildSites.stream()
+			.filter(buildSite -> !buildSite.complete())
+			.flatMap(buildSite -> buildSite.blocks().stream())
+			.filter(block -> materialKeys.contains(block.expectedMaterialKey()))
+			.count();
+	}
+
+	private boolean hasAutonomousSupportWorkstation(ServerLevel level, SettlementState settlement, AutonomousSupportType type) {
+		return switch (type) {
+			case CARPENTER -> findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP).isPresent()
+				|| !SettlementConstruction.findPlacedCarpenterBenches(level, settlement).isEmpty();
+			case FORESTER -> findBuildSite(settlement.id(), SettlementBuildSiteType.FORESTER_WORKSHOP).isPresent()
+				|| !SettlementConstruction.findPlacedForesterTables(level, settlement).isEmpty();
+			case MINER -> findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE).isPresent()
+				|| !SettlementConstruction.findPlacedMinerWorkstations(level, settlement).isEmpty();
+		};
+	}
+
+	private boolean tryMaterializeAutonomousSupportWorkstation(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		AutonomousSupportType type
+	) {
+		String retryKey = autonomousSupportRetryKey(settlement, type);
+		long currentTick = level.getServer().getTickCount();
+
+		if (hasAutonomousSupportWorkstation(level, settlement, type)) {
+			autonomousSupportStartOffsets.remove(retryKey);
+			autonomousSupportRetryAfterTicks.remove(retryKey);
+			return false;
+		}
+
+		long retryAfterTick = autonomousSupportRetryAfterTicks.getOrDefault(retryKey, 0L);
+		if (retryAfterTick > currentTick) {
+			return false;
+		}
+
+		int blockedAttempts = 0;
+		long sitesStart = System.nanoTime();
+		List<VirtualWorkstationSite> sites = virtualWorkstationSites(level, settlement, false);
+		long sitesTime = System.nanoTime() - sitesStart;
+		if (sitesTime > 50_000_000) {
+			LiveVillages.LOGGER.warn(
+				"Autonomous {} candidate generation took {} ms for settlement {}; candidates={}",
+				type.structureLabel(),
+				Math.round(sitesTime / 1_000_000.0D),
+				settlement.id(),
+				sites.size()
+			);
+		}
+
+		long clearanceStart = System.nanoTime();
+		AutonomousWorkstationClearance clearance = autonomousWorkstationClearance(level, settlement);
+		long clearanceTime = System.nanoTime() - clearanceStart;
+		if (clearanceTime > 50_000_000) {
+			LiveVillages.LOGGER.warn(
+				"Autonomous {} clearance cache took {} ms for settlement {}; supportPositions={} buildSiteAnchors={} buildSiteBlocks={}",
+				type.structureLabel(),
+				Math.round(clearanceTime / 1_000_000.0D),
+				settlement.id(),
+				clearance.supportPositions().size(),
+				clearance.buildSiteAnchors().size(),
+				clearance.buildSiteBlocks().size()
+			);
+		}
+
+		int attemptedSites = 0;
+		int scannedSites = 0;
+
+		if (sites.isEmpty()) {
+			autonomousSupportStartOffsets.remove(retryKey);
+			autonomousSupportRetryAfterTicks.put(retryKey, currentTick + AUTONOMOUS_WORKSTATION_FAILED_RETRY_TICKS);
+			return false;
+		}
+
+		int startOffset = Math.floorMod(autonomousSupportStartOffsets.getOrDefault(retryKey, 0), sites.size());
+		int maxAttempts = Math.min(sites.size(), MAX_AUTONOMOUS_WORKSTATION_START_ATTEMPTS_PER_PASS);
+
+		for (int offset = 0; offset < sites.size() && attemptedSites < maxAttempts; offset++) {
+			VirtualWorkstationSite site = sites.get((startOffset + offset) % sites.size());
+			scannedSites++;
+
+			if (!isAutonomousWorkstationCandidateClear(clearance, site.pos())) {
+				continue;
+			}
+
+			attemptedSites++;
+			level.setBlock(site.pos(), autonomousSupportWorkstationState(type), 3);
+			long buildStart = System.nanoTime();
+			SettlementConstruction.WorkstationBuildResult buildResult = tryStartAutonomousSupportBuildSite(level, settlement, stock, type, site);
+			long buildTime = System.nanoTime() - buildStart;
+			if (buildTime > 50_000_000) {
+				LiveVillages.LOGGER.warn(
+					"Autonomous {} build-site startup took {} ms for settlement {} at {}",
+					type.structureLabel(),
+					Math.round(buildTime / 1_000_000.0D),
+					settlement.id(),
+					site.pos()
+				);
+			}
+			SettlementConstruction.removeCantBuildHereSignsAroundWorkstation(level, site.pos());
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				autonomousSupportStartOffsets.remove(retryKey);
+				autonomousSupportRetryAfterTicks.remove(retryKey);
+				LiveVillages.LOGGER.info(
+					"Materialized autonomous {} for settlement {} with workstation at {}",
+					type.structureLabel(),
+					settlement.id(),
+					site.pos()
+				);
+				return true;
+			}
+
+			if (buildResult.isCompleted()) {
+				autonomousSupportStartOffsets.remove(retryKey);
+				autonomousSupportRetryAfterTicks.remove(retryKey);
+				LiveVillages.LOGGER.info(
+					"Placed autonomous {} workstation for settlement {} inside existing shelter at {}",
+					type.structureLabel(),
+					settlement.id(),
+					site.pos()
+				);
+				return true;
+			}
+
+			if (buildResult.isBlocked()) {
+				blockedAttempts++;
+			}
+
+			level.setBlock(site.pos(), Blocks.AIR.defaultBlockState(), 3);
+		}
+
+		int nextOffset = (startOffset + Math.max(1, scannedSites)) % sites.size();
+		autonomousSupportStartOffsets.put(retryKey, nextOffset);
+		autonomousSupportRetryAfterTicks.put(retryKey, currentTick + AUTONOMOUS_WORKSTATION_FAILED_RETRY_TICKS);
+
+		LiveVillages.LOGGER.warn(
+			"Could not materialize autonomous {} for settlement {}; candidates={} scanned={} attempted={} blocked={}",
+			type.structureLabel(),
+			settlement.id(),
+			sites.size(),
+			scannedSites,
+			attemptedSites,
+			blockedAttempts
+		);
+		return false;
+	}
+
+	private String autonomousSupportRetryKey(SettlementState settlement, AutonomousSupportType type) {
+		return settlement.id() + "|" + type.name();
+	}
+
+	private BlockState autonomousSupportWorkstationState(AutonomousSupportType type) {
+		return switch (type) {
+			case CARPENTER -> LiveVillagesBlocks.CARPENTER_BENCH.defaultBlockState();
+			case FORESTER -> LiveVillagesBlocks.FORESTER_TABLE.defaultBlockState();
+			case MINER -> LiveVillagesBlocks.MINER_WORKSTATION.defaultBlockState();
+		};
+	}
+
+	private SettlementConstruction.WorkstationBuildResult tryStartAutonomousSupportBuildSite(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		AutonomousSupportType type,
+		VirtualWorkstationSite site
+	) {
+		return SettlementConstruction.withBlockedStructureSignsSuppressed(() -> switch (type) {
+			case CARPENTER -> SettlementConstruction.tryStartCarpenterWorkshopAtWorkstation(
+				level,
+				site.pos(),
+				site.facing(),
+				settlement.id(),
+				stock,
+				Optional.empty()
+			);
+			case FORESTER -> SettlementConstruction.tryStartForesterWorkshopAtWorkstation(
+				level,
+				site.pos(),
+				site.facing(),
+				settlement.id(),
+				stock,
+				Optional.empty()
+			);
+			case MINER -> SettlementConstruction.tryStartMineEntranceAtWorkstation(
+				level,
+				site.pos(),
+				site.facing(),
+				settlement.id(),
+				stock,
+				Optional.empty()
+			);
+		});
+	}
+
+	private List<VirtualWorkstationSite> virtualWorkstationSites(ServerLevel level, SettlementState settlement) {
+		return virtualWorkstationSites(level, settlement, true);
+	}
+
+	private List<VirtualWorkstationSite> virtualWorkstationSites(ServerLevel level, SettlementState settlement, boolean requireClearCandidate) {
+		List<VirtualWorkstationSite> sites = new ArrayList<>();
+		Set<Long> seen = new HashSet<>();
+		AutonomousWorkstationClearance clearance = requireClearCandidate ? autonomousWorkstationClearance(level, settlement) : null;
+
+		nearestLoadedBell(level, settlement).ifPresent(bellPos ->
+			addVirtualWorkstationSitesNearAnchor(level, sites, seen, bellPos, AUTONOMOUS_WORKSTATION_BELL_SEARCH_RADII, clearance)
+		);
+
+		addVirtualWorkstationSitesNearAnchor(level, sites, seen, settlement.center(), AUTONOMOUS_WORKSTATION_SEARCH_RADII, clearance);
+
+		return sites;
+	}
+
+	private void addVirtualWorkstationSitesNearAnchor(
+		ServerLevel level,
+		List<VirtualWorkstationSite> sites,
+		Set<Long> seen,
+		BlockPos anchor,
+		int[] searchRadii,
+		AutonomousWorkstationClearance clearance
+	) {
+		for (int radius : searchRadii) {
+			for (Direction facing : Direction.Plane.HORIZONTAL) {
+				Direction lateral = facing.getClockWise();
+
+				for (int sideOffset = 0; sideOffset <= AUTONOMOUS_WORKSTATION_SIDE_SEARCH_BLOCKS; sideOffset++) {
+					for (int sign : sideOffset == 0 ? List.of(0) : List.of(-1, 1)) {
+						BlockPos columnPos = anchor
+							.relative(facing, radius)
+							.relative(lateral, sideOffset * sign);
+						virtualSupportWorkstationPlacementPos(level, columnPos).ifPresent(pos -> {
+							if (seen.add(pos.asLong()) && (clearance == null || isAutonomousWorkstationCandidateClear(clearance, pos))) {
+								sites.add(new VirtualWorkstationSite(pos, facing.getOpposite()));
+							}
+						});
+					}
+				}
+			}
+		}
+	}
+
+	private Optional<BlockPos> virtualSupportWorkstationPlacementPos(ServerLevel level, BlockPos columnPos) {
+		Optional<BlockPos> placementPos = virtualTradeBoardPlacementPos(level, columnPos);
+		if (placementPos.isEmpty()) {
+			return Optional.empty();
+		}
+
+		BlockPos pos = placementPos.get();
+		if (SettlementConstruction.isPositionInExistingShelteredStructure(level, pos)) {
+			return Optional.empty();
+		}
+
+		BlockPos groundPos = pos.below();
+		BlockState groundState = level.getBlockState(groundPos);
+		if (groundState.is(BlockTags.DIRT)
+			|| groundState.is(Blocks.GRASS_BLOCK)
+			|| groundState.is(Blocks.DIRT_PATH)
+			|| groundState.is(Blocks.SAND)
+			|| groundState.is(Blocks.RED_SAND)
+			|| groundState.is(Blocks.GRAVEL)
+			|| groundState.is(Blocks.STONE)) {
+			return placementPos;
+		}
+
+		return Optional.empty();
+	}
+
+	private AutonomousWorkstationClearance autonomousWorkstationClearance(ServerLevel level, SettlementState settlement) {
+		List<BlockPos> supportPositions = new ArrayList<>();
+		supportPositions.addAll(SettlementConstruction.findPlacedCarpenterBenches(level, settlement));
+		supportPositions.addAll(SettlementConstruction.findPlacedForesterTables(level, settlement));
+		supportPositions.addAll(SettlementConstruction.findPlacedMinerWorkstations(level, settlement));
+
+		List<BlockPos> buildSiteAnchors = new ArrayList<>();
+		List<BlockPos> buildSiteBlocks = new ArrayList<>();
+		for (SettlementBuildSite buildSite : getBuildSitesForSettlement(settlement.id())) {
+			buildSiteAnchors.add(buildSite.workstationPos());
+			buildSiteAnchors.add(buildSite.anchorPos());
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				SettlementConstruction.buildSiteBlockPos(buildSite, block).ifPresent(buildSiteBlocks::add);
+			}
+		}
+
+		return new AutonomousWorkstationClearance(
+			List.copyOf(supportPositions),
+			List.copyOf(buildSiteAnchors),
+			List.copyOf(buildSiteBlocks)
+		);
+	}
+
+	private boolean isAutonomousWorkstationCandidateClear(AutonomousWorkstationClearance clearance, BlockPos pos) {
+		int supportSpacingSquared = AUTONOMOUS_WORKSTATION_SUPPORT_SPACING_BLOCKS * AUTONOMOUS_WORKSTATION_SUPPORT_SPACING_BLOCKS;
+		for (BlockPos supportPos : clearance.supportPositions()) {
+			if (horizontalDistanceSquared(supportPos, pos) < supportSpacingSquared) {
+				return false;
+			}
+		}
+
+		for (BlockPos buildSiteAnchor : clearance.buildSiteAnchors()) {
+			if (horizontalDistanceSquared(buildSiteAnchor, pos) < supportSpacingSquared) {
+				return false;
+			}
+		}
+
+		int buildSiteSpacingSquared = AUTONOMOUS_WORKSTATION_BUILD_SITE_SPACING_BLOCKS * AUTONOMOUS_WORKSTATION_BUILD_SITE_SPACING_BLOCKS;
+		for (BlockPos buildSiteBlock : clearance.buildSiteBlocks()) {
+			if (horizontalDistanceSquared(buildSiteBlock, pos) < buildSiteSpacingSquared) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private int horizontalDistanceSquared(BlockPos left, BlockPos right) {
+		int dx = left.getX() - right.getX();
+		int dz = left.getZ() - right.getZ();
+		return dx * dx + dz * dz;
+	}
+
+	private void cleanupAutonomousPlacementWarningSigns(ServerLevel level, SettlementState settlement) {
+		for (VirtualWorkstationSite site : virtualWorkstationSites(level, settlement, false)) {
+			SettlementConstruction.removeCantBuildHereSignsAroundWorkstation(level, site.pos());
+		}
 	}
 
 	private boolean ensureVirtualTradingPostStarterStock(Map<String, Integer> stock) {
@@ -2648,6 +3103,51 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private record VirtualTradeBoardSite(BlockPos pos, Direction facing) {
+	}
+
+	private record MaterializationResult(boolean changed, boolean materialized) {
+		private static MaterializationResult unchanged() {
+			return new MaterializationResult(false, false);
+		}
+
+		private static MaterializationResult changedAndMaterialized() {
+			return new MaterializationResult(true, true);
+		}
+	}
+
+	private record AutonomousSupportNeed(AutonomousSupportType type, int score) {
+	}
+
+	private record AutonomousWorkstationClearance(
+		List<BlockPos> supportPositions,
+		List<BlockPos> buildSiteAnchors,
+		List<BlockPos> buildSiteBlocks
+	) {
+	}
+
+	private enum AutonomousSupportType {
+		FORESTER("Forester's Workshop", 80),
+		CARPENTER("Carpenter's Workshop", 70),
+		MINER("Mine Entrance", 75);
+
+		private final String structureLabel;
+		private final int minimumScore;
+
+		AutonomousSupportType(String structureLabel, int minimumScore) {
+			this.structureLabel = structureLabel;
+			this.minimumScore = minimumScore;
+		}
+
+		private String structureLabel() {
+			return structureLabel;
+		}
+
+		private int minimumScore() {
+			return minimumScore;
+		}
+	}
+
+	private record VirtualWorkstationSite(BlockPos pos, Direction facing) {
 	}
 
 	private List<SettlementState> getSettlementsInDimension(MinecraftServer server, net.minecraft.resources.ResourceKey<Level> dimension) {
