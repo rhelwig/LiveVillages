@@ -266,6 +266,7 @@ public final class OutpostTrust {
 		}
 
 		String name = SettlementNamer.generateUniqueName(SettlementKind.OUTPOST, level, center, savedData.getSettlements());
+		long currentTick = SettlementClock.persistentTick(level);
 		SettlementState settlement = new SettlementState(
 			id,
 			name,
@@ -282,8 +283,8 @@ public final class OutpostTrust {
 			1,
 			0.0D,
 			java.util.List.of(),
-			level.getServer().getTickCount(),
-			level.getServer().getTickCount()
+			currentTick,
+			currentTick
 		);
 		savedData.putSettlement(settlement);
 		return settlement;

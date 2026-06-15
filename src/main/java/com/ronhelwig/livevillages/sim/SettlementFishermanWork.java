@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.vehicle.boat.Boat;
 import net.minecraft.world.item.ItemStack;
@@ -113,6 +114,25 @@ public final class SettlementFishermanWork {
 		}
 
 		return Optional.of(task.taskKey());
+	}
+
+	public static boolean hasUsableLocalFishingWork(ServerLevel level, SettlementState settlement) {
+		if (!SettlementConstruction.findDockOrigins(level, settlement).isEmpty()) {
+			return true;
+		}
+
+		int radius = SettlementVillagers.settlementRadiusBlocks(settlement);
+		return level.getPoiManager().findAllClosestFirstWithType(
+			poiType -> poiType.is(PoiTypes.FISHERMAN),
+			pos -> true,
+			settlement.center(),
+			radius,
+			net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY
+		)
+			.map(com.mojang.datafixers.util.Pair::getSecond)
+			.map(BlockPos::immutable)
+			.distinct()
+			.anyMatch(jobSite -> findShoreFishingSpotNear(level, jobSite).isPresent());
 	}
 
 	public static double dailyCatchRate(int fishermen, SettlementConstruction.InfrastructureSurvey infrastructure, int activeDockBoats) {
@@ -348,6 +368,25 @@ public final class SettlementFishermanWork {
 		ShoreFishingSpot bestSpot = null;
 		double bestDistance = Double.MAX_VALUE;
 
+		for (ShoreFishingSpot spot : shoreFishingSpotsNear(level, anchor)) {
+			double distance = fisherman.blockPosition().distSqr(spot.standPos());
+
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				bestSpot = spot;
+			}
+		}
+
+		return Optional.ofNullable(bestSpot);
+	}
+
+	private static Optional<ShoreFishingSpot> findShoreFishingSpotNear(ServerLevel level, BlockPos anchor) {
+		return shoreFishingSpotsNear(level, anchor).stream().findFirst();
+	}
+
+	private static List<ShoreFishingSpot> shoreFishingSpotsNear(ServerLevel level, BlockPos anchor) {
+		List<ShoreFishingSpot> spots = new java.util.ArrayList<>();
+
 		for (int dx = -SHORELINE_SEARCH_RADIUS_BLOCKS; dx <= SHORELINE_SEARCH_RADIUS_BLOCKS; dx++) {
 			for (int dz = -SHORELINE_SEARCH_RADIUS_BLOCKS; dz <= SHORELINE_SEARCH_RADIUS_BLOCKS; dz++) {
 				BlockPos standPos = surfaceStandPos(level, anchor.offset(dx, 0, dz));
@@ -363,17 +402,12 @@ public final class SettlementFishermanWork {
 						continue;
 					}
 
-					double distance = fisherman.blockPosition().distSqr(standPos);
-
-					if (distance < bestDistance) {
-						bestDistance = distance;
-						bestSpot = new ShoreFishingSpot(standPos.immutable(), waterPos.immutable());
-					}
+					spots.add(new ShoreFishingSpot(standPos.immutable(), waterPos.immutable()));
 				}
 			}
 		}
 
-		return Optional.ofNullable(bestSpot);
+		return List.copyOf(spots);
 	}
 
 	private static BlockPos surfaceStandPos(ServerLevel level, BlockPos columnPos) {

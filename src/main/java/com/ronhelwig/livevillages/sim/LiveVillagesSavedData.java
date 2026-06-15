@@ -25,6 +25,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -48,6 +49,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final long CUSTOM_SETTLEMENT_BOOTSTRAP_RETRY_TICKS = 6_000L;
 	private static final int CUSTOM_SETTLEMENT_VILLAGER_RADIUS_BLOCKS = 32;
 	private static final int CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS = 6;
+	private static final long POPULATION_DIAGNOSTIC_INTERVAL_TICKS = 1_200L;
 	private static final int SCRIBE_ROUTE_EXCHANGE_ONE_SIDED_LIMIT = 2;
 	private static final int SCRIBE_ROUTE_EXCHANGE_TWO_SIDED_LIMIT = 3;
 	public static final int SHARED_MAP_SAMPLE_STRIDE_BLOCKS = 4;
@@ -156,6 +158,7 @@ public class LiveVillagesSavedData extends SavedData {
 	public final Map<String, CachedSurvey> surveyCache = new HashMap<>();
 	private final Map<String, Integer> autonomousSupportStartOffsets = new HashMap<>();
 	private final Map<String, Long> autonomousSupportRetryAfterTicks = new HashMap<>();
+	private final Map<String, Long> populationDiagnosticTicks = new HashMap<>();
 
 	public record CachedSurvey(SettlementConstruction.InfrastructureSurvey survey, long lastSurveyTick) {
 	}
@@ -1058,13 +1061,41 @@ public class LiveVillagesSavedData extends SavedData {
 				continue;
 			}
 
-			if (SettlementVillagers.countNearbyVillagers(level, settlement.center(), CUSTOM_SETTLEMENT_VILLAGER_RADIUS_BLOCKS) > 0) {
+			Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, settlement);
+			int actualTotalPopulation = actualPopulation.values().stream().mapToInt(Integer::intValue).sum();
+			if (actualTotalPopulation > 0) {
+				SettlementState updatedSettlement = settlement.withPopulation(actualPopulation);
+				logPopulationDiagnostic(
+					level,
+					settlement,
+					updatedSettlement,
+					0,
+					"bootstrap_blocked_actual_population",
+					"actualTotal=" + actualTotalPopulation
+				);
+
+				if (!updatedSettlement.equals(settlement)) {
+					entry.setValue(updatedSettlement);
+					changed = true;
+				}
+				continue;
+			}
+
+			int nearbyVillagers = SettlementVillagers.countNearbyVillagers(level, settlement.center(), CUSTOM_SETTLEMENT_VILLAGER_RADIUS_BLOCKS);
+			if (nearbyVillagers > 0) {
+				logPopulationDiagnostic(level, settlement, settlement, 0, "bootstrap_blocked_nearby_villagers", "nearbyWithinBootstrapRadius=" + nearbyVillagers);
 				continue;
 			}
 
 			Optional<BlockPos> spawnPos = SettlementVillagers.findSpawnPos(level, settlement.center(), CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS);
 
-			if (spawnPos.isEmpty() || !SettlementVillagers.spawnVillager(level, spawnPos.get())) {
+			if (spawnPos.isEmpty()) {
+				logPopulationDiagnostic(level, settlement, settlement, 0, "bootstrap_no_spawn_pos", "searchRadius=" + CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS);
+				continue;
+			}
+
+			if (!SettlementVillagers.spawnVillager(level, spawnPos.get())) {
+				logPopulationDiagnostic(level, settlement, settlement, 0, "bootstrap_spawn_failed", "spawnPos=" + spawnPos.get().toShortString());
 				continue;
 			}
 
@@ -1073,6 +1104,7 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementVillagers.ensureVillagerHomes(level, settlement);
 			SettlementVillagers.ensureVillagerGatheringPoint(level, settlement);
 			SettlementState updatedSettlement = settlement.withPopulation(SettlementVillagers.censusPopulation(level, settlement));
+			logPopulationDiagnostic(level, settlement, updatedSettlement, 1, "bootstrap_spawned", "spawnPos=" + spawnPos.get().toShortString());
 
 			if (!updatedSettlement.equals(settlement)) {
 				entry.setValue(updatedSettlement);
@@ -1382,28 +1414,12 @@ public class LiveVillagesSavedData extends SavedData {
 					|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
 
 				if (discoveryDue) {
-					changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+					long discoveryStepStart = System.nanoTime();
+					SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, workingSettlement);
+					changed |= tryStartPlacedWorkstationBuildSites(level, workingSettlement, stock, placedWorkstations);
+					discoveryStepStart = warnIfConstructionDiscoverySlow("outpost_placed_workstations", workingSettlement, discoveryStepStart);
 					changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+					warnIfConstructionDiscoverySlow("outpost_palisade_retirement", workingSettlement, discoveryStepStart);
 					activeBuildSites = getBuildSitesForSettlement(settlement.id());
 				}
 
@@ -1451,39 +1467,25 @@ public class LiveVillagesSavedData extends SavedData {
 			boolean catchupMaterialized = false;
 
 			if (discoveryDue) {
+				long discoveryStepStart = System.nanoTime();
 				changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
+				discoveryStepStart = warnIfConstructionDiscoverySlow("palisade_retirement", workingSettlement, discoveryStepStart);
 				MaterializationResult tradingPostMaterialization = tryMaterializeVirtualTradingPost(level, workingSettlement, stock);
 				changed |= tradingPostMaterialization.changed();
 				catchupMaterialized |= tradingPostMaterialization.materialized();
+				discoveryStepStart = warnIfConstructionDiscoverySlow("virtual_trading_post", workingSettlement, discoveryStepStart);
 
 				if (!catchupMaterialized) {
 					MaterializationResult supportMaterialization = tryMaterializeAutonomousSupportWorkstation(level, workingSettlement, stock);
 					changed |= supportMaterialization.changed();
 					catchupMaterialized |= supportMaterialization.materialized();
+					discoveryStepStart = warnIfConstructionDiscoverySlow("autonomous_support", workingSettlement, discoveryStepStart);
 				}
 
 				if (!catchupMaterialized) {
-					changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedBakeryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedMineEntranceBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedForesterWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedScribeOfficeBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedGardenerShedBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedGuardPostBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaCartographerHouseBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaButcherShopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaMasonWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaFletcherHutBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaClericShrineBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaLibraryBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaShepherdHutBuildSites(level, workingSettlement, stock);
-					changed |= tryStartVanillaSmithyBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedTradeBoardBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedPortmasterDockBuildSites(level, workingSettlement, stock);
-					changed |= tryStartPlacedLighthouseBuildSites(level, workingSettlement, stock);
+					SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, workingSettlement);
+					changed |= tryStartPlacedWorkstationBuildSites(level, workingSettlement, stock, placedWorkstations);
+					warnIfConstructionDiscoverySlow("placed_workstations", workingSettlement, discoveryStepStart);
 				}
 				activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			}
@@ -1623,6 +1625,20 @@ public class LiveVillagesSavedData extends SavedData {
 		return Math.floorMod(currentTick - phase, intervalTicks) < LiveVillagesScheduler.LOADED_MAINTENANCE_CHECK_INTERVAL;
 	}
 
+	private static long warnIfConstructionDiscoverySlow(String stepKey, SettlementState settlement, long stepStartNanos) {
+		long elapsed = System.nanoTime() - stepStartNanos;
+		if (elapsed > 50_000_000) {
+			LiveVillages.LOGGER.warn(
+				"Construction discovery step took {} ms: settlement={} step={}",
+				Math.round(elapsed / 1_000_000.0D),
+				settlement.id(),
+				stepKey
+			);
+		}
+
+		return System.nanoTime();
+	}
+
 	private static boolean isThrottledConstructionStepDue(SettlementState settlement, long currentTick, String operationKey, int intervalTicks) {
 		int stepTicks = Math.max(1, LiveVillagesScheduler.TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
 		int stepSlots = Math.max(1, (intervalTicks + stepTicks - 1) / stepTicks);
@@ -1656,10 +1672,41 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaCartographerHouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedWorkstationBuildSites(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		SettlementConstruction.PlacedWorkstations workstations
+	) {
+		boolean changed = false;
+		changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, settlement, stock, workstations.carpenterBenches());
+		changed |= tryStartPlacedBakeryBuildSites(level, settlement, stock, workstations.bakersCounters());
+		changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, settlement, stock, workstations.honeySeparators());
+		changed |= tryStartPlacedMineEntranceBuildSites(level, settlement, stock, workstations.minerWorkstations());
+		changed |= tryStartPlacedRoadwrightWorkshopBuildSites(level, settlement, stock, workstations.surveyorTables());
+		changed |= tryStartPlacedForesterWorkshopBuildSites(level, settlement, stock, workstations.foresterTables());
+		changed |= tryStartPlacedScribeOfficeBuildSites(level, settlement, stock, workstations.scribeDesks());
+		changed |= tryStartPlacedGardenerShedBuildSites(level, settlement, stock, workstations.gardenerWorkstations());
+		changed |= tryStartPlacedGuardPostBuildSites(level, settlement, stock, workstations.guardPosts());
+		changed |= tryStartVanillaCartographerHouseBuildSites(level, settlement, stock, workstations.cartographyTables());
+		changed |= tryStartVanillaButcherShopBuildSites(level, settlement, stock, workstations.smokers());
+		changed |= tryStartVanillaMasonWorkshopBuildSites(level, settlement, stock, workstations.stonecutters());
+		changed |= tryStartVanillaFletcherHutBuildSites(level, settlement, stock, workstations.fletchingTables());
+		changed |= tryStartVanillaClericShrineBuildSites(level, settlement, stock, workstations.brewingStands());
+		changed |= tryStartVanillaLeatherworkerWorkshopBuildSites(level, settlement, stock, workstations.cauldrons());
+		changed |= tryStartVanillaLibraryBuildSites(level, settlement, stock, workstations.lecterns());
+		changed |= tryStartVanillaShepherdHutBuildSites(level, settlement, stock, workstations.looms());
+		changed |= tryStartVanillaSmithyBuildSites(level, settlement, stock, workstations.smithingWorkstations());
+		changed |= tryStartPlacedTradeBoardBuildSites(level, settlement, stock, workstations.tradeBoards());
+		changed |= tryStartPlacedPortmasterDockBuildSites(level, settlement, stock, workstations.portmasterAnchors());
+		changed |= tryStartPlacedLighthouseBuildSites(level, settlement, stock, workstations.lighthouses());
+		return changed;
+	}
+
+	private boolean tryStartVanillaCartographerHouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> cartographyTables) {
 		boolean changed = false;
 
-		for (BlockPos tablePos : SettlementConstruction.findPlacedCartographyTables(level, settlement)) {
+		for (BlockPos tablePos : cartographyTables) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CARTOGRAPHER_HOUSE, tablePos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -1696,10 +1743,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return buildResult;
 	}
 
-	private boolean tryStartPlacedTradeBoardBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedTradeBoardBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> tradeBoards) {
 		boolean changed = false;
 
-		for (BlockPos boardPos : SettlementConstruction.findPlacedTradeBoards(level, settlement)) {
+		for (BlockPos boardPos : tradeBoards) {
 			if (!(level.getBlockEntity(boardPos) instanceof TradeBoardBlockEntity tradeBoard)
 				|| !tradeBoard.resolveSettlement(level).id().equals(settlement.id())) {
 				continue;
@@ -1813,22 +1860,23 @@ public class LiveVillagesSavedData extends SavedData {
 		int cobbleShortage = shortage(settlement, activeBuildSites, stock, "cobblestone");
 		int ironShortage = shortage(settlement, activeBuildSites, stock, "iron_ingot");
 		int fuelShortage = Math.max(0, 8 - stock.getOrDefault("coal", 0) - stock.getOrDefault("charcoal", 0));
+		SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, settlement);
 
-		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.FORESTER, (logShortage * 3) + plankShortage + woodDemand + 80);
-		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.CARPENTER, (plankShortage * 2) + woodworkShortage + woodDemand + 60);
-		addAutonomousSupportNeed(needs, level, settlement, AutonomousSupportType.MINER, (cobbleShortage * 3) + (ironShortage * 2) + (fuelShortage * 3) + stoneDemand + 55);
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.FORESTER, (logShortage * 3) + plankShortage + woodDemand + 80);
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.CARPENTER, (plankShortage * 2) + woodworkShortage + woodDemand + 60);
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.MINER, (cobbleShortage * 3) + (ironShortage * 2) + (fuelShortage * 3) + stoneDemand + 55);
 		needs.sort((left, right) -> Integer.compare(right.score(), left.score()));
 		return needs;
 	}
 
 	private void addAutonomousSupportNeed(
 		List<AutonomousSupportNeed> needs,
-		ServerLevel level,
 		SettlementState settlement,
+		SettlementConstruction.PlacedWorkstations placedWorkstations,
 		AutonomousSupportType type,
 		int score
 	) {
-		if (score <= type.minimumScore() || hasAutonomousSupportWorkstation(level, settlement, type)) {
+		if (score <= type.minimumScore() || hasAutonomousSupportWorkstation(settlement, type, placedWorkstations)) {
 			return;
 		}
 
@@ -1849,13 +1897,21 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private boolean hasAutonomousSupportWorkstation(ServerLevel level, SettlementState settlement, AutonomousSupportType type) {
+		return hasAutonomousSupportWorkstation(settlement, type, SettlementConstruction.scanPlacedWorkstations(level, settlement));
+	}
+
+	private boolean hasAutonomousSupportWorkstation(
+		SettlementState settlement,
+		AutonomousSupportType type,
+		SettlementConstruction.PlacedWorkstations placedWorkstations
+	) {
 		return switch (type) {
 			case CARPENTER -> findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP).isPresent()
-				|| !SettlementConstruction.findPlacedCarpenterBenches(level, settlement).isEmpty();
+				|| !placedWorkstations.carpenterBenches().isEmpty();
 			case FORESTER -> findBuildSite(settlement.id(), SettlementBuildSiteType.FORESTER_WORKSHOP).isPresent()
-				|| !SettlementConstruction.findPlacedForesterTables(level, settlement).isEmpty();
+				|| !placedWorkstations.foresterTables().isEmpty();
 			case MINER -> findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE).isPresent()
-				|| !SettlementConstruction.findPlacedMinerWorkstations(level, settlement).isEmpty();
+				|| !placedWorkstations.minerWorkstations().isEmpty();
 		};
 	}
 
@@ -2112,10 +2168,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	private AutonomousWorkstationClearance autonomousWorkstationClearance(ServerLevel level, SettlementState settlement) {
-		List<BlockPos> supportPositions = new ArrayList<>();
-		supportPositions.addAll(SettlementConstruction.findPlacedCarpenterBenches(level, settlement));
-		supportPositions.addAll(SettlementConstruction.findPlacedForesterTables(level, settlement));
-		supportPositions.addAll(SettlementConstruction.findPlacedMinerWorkstations(level, settlement));
+		List<BlockPos> supportPositions = SettlementConstruction.scanPlacedWorkstations(level, settlement).supportWorkstations();
 
 		List<BlockPos> buildSiteAnchors = new ArrayList<>();
 		List<BlockPos> buildSiteBlocks = new ArrayList<>();
@@ -2308,10 +2361,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return Optional.of(boardPos.immutable());
 	}
 
-	private boolean tryStartVanillaButcherShopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaButcherShopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> smokers) {
 		boolean changed = false;
 
-		for (BlockPos smokerPos : SettlementConstruction.findPlacedSmokers(level, settlement)) {
+		for (BlockPos smokerPos : smokers) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BUTCHER_SHOP, smokerPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2337,10 +2390,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaMasonWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaMasonWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> stonecutters) {
 		boolean changed = false;
 
-		for (BlockPos stonecutterPos : SettlementConstruction.findPlacedStonecutters(level, settlement)) {
+		for (BlockPos stonecutterPos : stonecutters) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MASON_WORKSHOP, stonecutterPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2366,10 +2419,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedPortmasterDockBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedPortmasterDockBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> portmasterAnchors) {
 		boolean changed = false;
 
-		for (BlockPos anchorPos : SettlementConstruction.findPlacedPortmasterAnchors(level, settlement)) {
+		for (BlockPos anchorPos : portmasterAnchors) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.DOCK, anchorPos);
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartDockAtPortmasterAnchor(
 				level,
@@ -2390,10 +2443,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedLighthouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedLighthouseBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> lighthouses) {
 		boolean changed = false;
 
-		for (BlockPos markerPos : SettlementConstruction.findPlacedLighthouses(level, settlement)) {
+		for (BlockPos markerPos : lighthouses) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIGHTHOUSE, markerPos);
 			Map<String, Integer> stockBeforeLighthouse = new LinkedHashMap<>(stock);
 			boolean contributedRecipeGoods = existingBuildSite.isEmpty();
@@ -2429,10 +2482,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaFletcherHutBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaFletcherHutBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> fletchingTables) {
 		boolean changed = false;
 
-		for (BlockPos tablePos : SettlementConstruction.findPlacedFletchingTables(level, settlement)) {
+		for (BlockPos tablePos : fletchingTables) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.FLETCHER_HUT, tablePos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2458,10 +2511,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaClericShrineBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaClericShrineBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> brewingStands) {
 		boolean changed = false;
 
-		for (BlockPos brewingStandPos : SettlementConstruction.findPlacedBrewingStands(level, settlement)) {
+		for (BlockPos brewingStandPos : brewingStands) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CLERIC_SHRINE, brewingStandPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2487,10 +2540,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaLeatherworkerWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaLeatherworkerWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> cauldrons) {
 		boolean changed = false;
 
-		for (BlockPos cauldronPos : SettlementConstruction.findPlacedCauldrons(level, settlement)) {
+		for (BlockPos cauldronPos : cauldrons) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LEATHERWORKER_WORKSHOP, cauldronPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2516,10 +2569,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaLibraryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaLibraryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> lecterns) {
 		boolean changed = false;
 
-		for (BlockPos lecternPos : SettlementConstruction.findPlacedLecterns(level, settlement)) {
+		for (BlockPos lecternPos : lecterns) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.LIBRARY, lecternPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2545,10 +2598,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaShepherdHutBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaShepherdHutBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> looms) {
 		boolean changed = false;
 
-		for (BlockPos loomPos : SettlementConstruction.findPlacedLooms(level, settlement)) {
+		for (BlockPos loomPos : looms) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SHEPHERD_HUT, loomPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2574,10 +2627,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartVanillaSmithyBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartVanillaSmithyBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> smithingWorkstations) {
 		boolean changed = false;
 
-		for (BlockPos workstationPos : SettlementConstruction.findPlacedSmithingWorkstations(level, settlement)) {
+		for (BlockPos workstationPos : smithingWorkstations) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SMITHY, workstationPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = tryStartVanillaWorkstationBuild(
@@ -2603,10 +2656,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedCarpenterWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedCarpenterWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> carpenterBenches) {
 		boolean changed = false;
 
-		for (BlockPos benchPos : SettlementConstruction.findPlacedCarpenterBenches(level, settlement)) {
+		for (BlockPos benchPos : carpenterBenches) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP, benchPos);
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartCarpenterWorkshopAtWorkstation(
 				level,
@@ -2627,10 +2680,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedScribeOfficeBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedScribeOfficeBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> scribeDesks) {
 		boolean changed = false;
 
-		for (BlockPos deskPos : SettlementConstruction.findPlacedScribeDesks(level, settlement)) {
+		for (BlockPos deskPos : scribeDesks) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SCRIBE_OFFICE, deskPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartScribeOfficeAtWorkstation(
@@ -2652,10 +2705,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedGuardPostBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedGuardPostBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> guardPosts) {
 		boolean changed = false;
 
-		for (BlockPos guardPostPos : SettlementConstruction.findPlacedGuardPosts(level, settlement)) {
+		for (BlockPos guardPostPos : guardPosts) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.GUARD_POST, guardPostPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartGuardPostAtWorkstation(
@@ -2677,10 +2730,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedGardenerShedBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedGardenerShedBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> gardenerWorkstations) {
 		boolean changed = false;
 
-		for (BlockPos workstationPos : SettlementConstruction.findPlacedGardenerWorkstations(level, settlement)) {
+		for (BlockPos workstationPos : gardenerWorkstations) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.GARDENER_SHED, workstationPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartGardenerShedAtWorkstation(
@@ -2702,10 +2755,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedBeekeeperApiaryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedBeekeeperApiaryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> honeySeparators) {
 		boolean changed = false;
 
-		for (BlockPos separatorPos : SettlementConstruction.findPlacedHoneySeparators(level, settlement)) {
+		for (BlockPos separatorPos : honeySeparators) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BEEKEEPER_APIARY, separatorPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartBeekeeperApiaryAtWorkstation(
@@ -2727,10 +2780,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedBakeryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedBakeryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> bakersCounters) {
 		boolean changed = false;
 
-		for (BlockPos workstationPos : SettlementConstruction.findPlacedBakersCounters(level, settlement)) {
+		for (BlockPos workstationPos : bakersCounters) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.BAKERY, workstationPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartBakeryAtWorkstation(
@@ -2752,10 +2805,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedMineEntranceBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedMineEntranceBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> minerWorkstations) {
 		boolean changed = false;
 
-		for (BlockPos workstationPos : SettlementConstruction.findPlacedMinerWorkstations(level, settlement)) {
+		for (BlockPos workstationPos : minerWorkstations) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE, workstationPos);
 
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartMineEntranceAtWorkstation(
@@ -2777,10 +2830,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedRoadwrightWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedRoadwrightWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> surveyorTables) {
 		boolean changed = false;
 
-		for (BlockPos tablePos : SettlementConstruction.findPlacedSurveyorTables(level, settlement)) {
+		for (BlockPos tablePos : surveyorTables) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.ROADWRIGHT_WORKSHOP, tablePos);
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartRoadwrightWorkshopAtWorkstation(
 				level,
@@ -2801,10 +2854,10 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
-	private boolean tryStartPlacedForesterWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+	private boolean tryStartPlacedForesterWorkshopBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> foresterTables) {
 		boolean changed = false;
 
-		for (BlockPos tablePos : SettlementConstruction.findPlacedForesterTables(level, settlement)) {
+		for (BlockPos tablePos : foresterTables) {
 			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.FORESTER_WORKSHOP, tablePos);
 			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartForesterWorkshopAtWorkstation(
 				level,
@@ -2831,8 +2884,12 @@ public class LiveVillagesSavedData extends SavedData {
 		for (Map.Entry<String, SettlementState> entry : settlements.entrySet()) {
 			SettlementState settlement = entry.getValue();
 
-			if (!settlement.region().equals(region) || settlement.lastUpdateTick() >= currentTick) {
+			if (!settlement.region().equals(region) || settlement.lastUpdateTick() == currentTick) {
 				continue;
+			}
+
+			if (settlement.lastUpdateTick() > currentTick) {
+				settlement = settlement.withLastUpdateTick(Math.max(0L, currentTick - SettlementEconomyRules.MIN_SIMULATION_TICKS));
 			}
 
 			ServerLevel level = server.getLevel(settlement.dimension());
@@ -2866,6 +2923,16 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementPerformanceLog.warnIfSlow("economy_simulation", simulationInput, simulationStart, currentTick);
 
 			SettlementState updatedSettlement = simulationResult.settlement();
+			if (loadedSettlement && level != null && SettlementVillagers.usesActualVillagers(settlement)) {
+				logPopulationDiagnostic(
+					level,
+					settlement,
+					updatedSettlement,
+					simulationResult.requestedVillagerSpawns(),
+					"economy",
+					""
+				);
+			}
 
 			if (simulationResult.requestedVillagerSpawns() > 0 && level != null && level.isLoaded(updatedSettlement.center()) && level.isPositionEntityTicking(updatedSettlement.center())) {
 				if (updatedSettlement.kind() == SettlementKind.OUTPOST) {
@@ -2890,6 +2957,15 @@ public class LiveVillagesSavedData extends SavedData {
 							.withGrowthProgress(Math.max(0.0D, updatedSettlement.growthProgress() - spawnedVillagers))
 							.withPopulation(SettlementVillagers.censusPopulation(level, updatedSettlement));
 					}
+
+					logPopulationDiagnostic(
+						level,
+						simulationResult.settlement(),
+						updatedSettlement,
+						spawnedVillagers,
+						spawnedVillagers >= simulationResult.requestedVillagerSpawns() ? "growth_spawned" : "growth_spawn_shortfall",
+						"requested=" + simulationResult.requestedVillagerSpawns()
+					);
 				}
 			}
 
@@ -3050,12 +3126,139 @@ public class LiveVillagesSavedData extends SavedData {
 			return false;
 		}
 
-		if ((currentTick - settlement.createdTick()) < CUSTOM_SETTLEMENT_BOOTSTRAP_DELAY_TICKS) {
+		if (!hasElapsed(currentTick, settlement.createdTick(), CUSTOM_SETTLEMENT_BOOTSTRAP_DELAY_TICKS)) {
 			return false;
 		}
 
 		long lastSpawnTick = bootstrapVillagerSpawnTicks.getOrDefault(settlement.id(), 0L);
-		return lastSpawnTick <= 0L || (currentTick - lastSpawnTick) >= CUSTOM_SETTLEMENT_BOOTSTRAP_RETRY_TICKS;
+		return hasElapsed(currentTick, lastSpawnTick, CUSTOM_SETTLEMENT_BOOTSTRAP_RETRY_TICKS);
+	}
+
+	private static boolean hasElapsed(long currentTick, long previousTick, long requiredElapsedTicks) {
+		return previousTick <= 0L || previousTick > currentTick || (currentTick - previousTick) >= requiredElapsedTicks;
+	}
+
+	private void logPopulationDiagnostic(
+		ServerLevel level,
+		SettlementState before,
+		SettlementState after,
+		int requestedOrSpawnedVillagers,
+		String phase,
+		String details
+	) {
+		if (level == null || before == null || after == null || phase == null) {
+			return;
+		}
+
+		boolean routineEconomyLog = "economy".equals(phase);
+		if (routineEconomyLog && before.kind() != SettlementKind.CUSTOM && requestedOrSpawnedVillagers <= 0) {
+			return;
+		}
+
+		long currentTick = level.getServer().getTickCount();
+		String key = before.dimension().identifier() + "|" + before.id() + "|" + phase;
+		long previousTick = populationDiagnosticTicks.getOrDefault(key, Long.MIN_VALUE);
+		if (previousTick != Long.MIN_VALUE && currentTick - previousTick < POPULATION_DIAGNOSTIC_INTERVAL_TICKS) {
+			return;
+		}
+
+		populationDiagnosticTicks.put(key, currentTick);
+		Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, before);
+		int ledgerBeforeTotal = populationTotal(before.population());
+		int ledgerAfterTotal = populationTotal(after.population());
+		int actualTotal = populationTotal(actualPopulation);
+		int nearbyBootstrapRadius = SettlementVillagers.countNearbyVillagers(level, before.center(), CUSTOM_SETTLEMENT_VILLAGER_RADIUS_BLOCKS);
+		List<Villager> reportableVillagers = SettlementVillagers.reportableVillagers(level, before);
+		int adults = 0;
+		int children = 0;
+		for (Villager villager : reportableVillagers) {
+			if (villager.isBaby()) {
+				children++;
+			} else {
+				adults++;
+			}
+		}
+
+		LiveVillages.LOGGER.info(
+			"Population diagnostic: settlement={} name={} phase={} ledgerBefore={} ledgerAfter={} actual={} totals={}/{}/{} adults={} children={} nearbyBootstrapRadius={} housing={} food={} comfort={} security={} growth={}->{} requestedOrSpawned={} villagers={} {}",
+			before.id(),
+			before.name(),
+			phase,
+			before.population(),
+			after.population(),
+			actualPopulation,
+			ledgerBeforeTotal,
+			ledgerAfterTotal,
+			actualTotal,
+			adults,
+			children,
+			nearbyBootstrapRadius,
+			after.housingCapacity(),
+			SettlementEconomySimulator.totalFoodStock(after.stock()),
+			roundedPercent(after.comfort()),
+			roundedPercent(after.security()),
+			roundedDouble(before.growthProgress()),
+			roundedDouble(after.growthProgress()),
+			requestedOrSpawnedVillagers,
+			villagerDiagnosticSummary(level, before, reportableVillagers),
+			details == null || details.isBlank() ? "" : details
+		);
+	}
+
+	private static int populationTotal(Map<String, Integer> population) {
+		return population.values().stream().mapToInt(Integer::intValue).sum();
+	}
+
+	private static double roundedDouble(double value) {
+		return Math.round(value * 100.0D) / 100.0D;
+	}
+
+	private static String roundedPercent(double value) {
+		return Math.round(value * 100.0D) + "%";
+	}
+
+	private static String villagerDiagnosticSummary(ServerLevel level, SettlementState settlement, List<Villager> villagers) {
+		if (villagers.isEmpty()) {
+			return "none";
+		}
+
+		StringBuilder summary = new StringBuilder();
+		int limit = Math.min(12, villagers.size());
+		for (int i = 0; i < limit; i++) {
+			Villager villager = villagers.get(i);
+			BlockPos pos = villager.blockPosition();
+			String role = SettlementVillagers.reportProfessionKey(villager);
+			String task = SettlementVillagers.reportTaskKey(level, settlement, villager);
+			int distance = (int) Math.round(Math.sqrt(pos.distSqr(settlement.center())));
+
+			if (i > 0) {
+				summary.append("; ");
+			}
+
+			summary
+				.append(shortUuid(villager))
+				.append(":role=")
+				.append(role == null || role.isBlank() ? "unknown" : role)
+				.append(",baby=")
+				.append(villager.isBaby())
+				.append(",pos=")
+				.append(pos.toShortString())
+				.append(",dist=")
+				.append(distance)
+				.append(",task=")
+				.append(task == null || task.isBlank() ? "unknown" : task);
+		}
+
+		if (villagers.size() > limit) {
+			summary.append("; +").append(villagers.size() - limit).append(" more");
+		}
+
+		return summary.toString();
+	}
+
+	private static String shortUuid(Villager villager) {
+		String uuid = villager.getUUID().toString();
+		return uuid.length() <= 8 ? uuid : uuid.substring(0, 8);
 	}
 
 	private static int spawnSettlementVillagers(ServerLevel level, SettlementState settlement, int requestedVillagers) {
@@ -3064,10 +3267,29 @@ public class LiveVillagesSavedData extends SavedData {
 		for (int i = 0; i < requestedVillagers; i++) {
 			Optional<BlockPos> spawnPos = SettlementVillagers.findSpawnPos(level, settlement.center(), CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS);
 
-			if (spawnPos.isEmpty() || !SettlementVillagers.spawnVillager(level, spawnPos.get())) {
+			if (spawnPos.isEmpty()) {
+				LiveVillages.LOGGER.info(
+					"Settlement villager spawn failed: settlement={} reason=no_spawn_pos searchRadius={} requested={} spawned={}",
+					settlement.id(),
+					CUSTOM_SETTLEMENT_SPAWN_SEARCH_RADIUS,
+					requestedVillagers,
+					spawnedVillagers
+				);
 				break;
 			}
 
+			if (!SettlementVillagers.spawnVillager(level, spawnPos.get())) {
+				LiveVillages.LOGGER.info(
+					"Settlement villager spawn failed: settlement={} reason=entity_rejected spawnPos={} requested={} spawned={}",
+					settlement.id(),
+					spawnPos.get().toShortString(),
+					requestedVillagers,
+					spawnedVillagers
+				);
+				break;
+			}
+
+			LiveVillages.LOGGER.info("Settlement villager spawned: settlement={} spawnPos={}", settlement.id(), spawnPos.get().toShortString());
 			spawnedVillagers++;
 		}
 

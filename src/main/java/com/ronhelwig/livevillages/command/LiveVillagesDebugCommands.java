@@ -25,6 +25,7 @@ import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.OutpostRaidPhase;
 import com.ronhelwig.livevillages.sim.OutpostRaidState;
 import com.ronhelwig.livevillages.sim.OutpostRaids;
+import com.ronhelwig.livevillages.sim.SettlementClock;
 import com.ronhelwig.livevillages.sim.SettlementState;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 import com.ronhelwig.livevillages.sim.SettlementKind;
@@ -173,7 +174,7 @@ public final class LiveVillagesDebugCommands {
 	private static int rescanSettlements(CommandContext<CommandSourceStack> context, int radiusChunks) {
 		CommandSourceStack source = context.getSource();
 		BlockPos origin = BlockPos.containing(source.getPosition());
-		int scannedChunks = VillageAutodetector.rescanAround(source.getLevel(), origin, radiusChunks, source.getServer().getTickCount());
+		int scannedChunks = VillageAutodetector.rescanAround(source.getLevel(), origin, radiusChunks, SettlementClock.persistentTick(source.getLevel()));
 		int settlementCount = LiveVillagesSavedData.get(source.getServer()).settlementCount();
 
 		source.sendSuccess(() -> Component.literal(

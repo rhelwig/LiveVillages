@@ -29,6 +29,7 @@ import com.ronhelwig.livevillages.menu.TradeBoardOpenData;
 import com.ronhelwig.livevillages.sim.LiveVillagesSavedData;
 import com.ronhelwig.livevillages.sim.OutpostTrust;
 import com.ronhelwig.livevillages.sim.SettlementBuildSite;
+import com.ronhelwig.livevillages.sim.SettlementClock;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementKind;
 import com.ronhelwig.livevillages.sim.SettlementNamer;
@@ -187,6 +188,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		String dimensionKey = serverLevel.dimension().identifier().toString().replace(':', '_').replace('/', '_');
 		String settlementId = "custom:" + dimensionKey + "_" + worldPosition.getX() + "_" + worldPosition.getZ();
 		String settlementName = SettlementNamer.generateUniqueName(SettlementKind.CUSTOM, serverLevel, worldPosition, savedData.getSettlements());
+		long currentTick = SettlementClock.persistentTick(serverLevel);
 		SettlementState settlement = new SettlementState(
 			settlementId,
 			settlementName,
@@ -203,8 +205,8 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 			0,
 			0.0D,
 			java.util.List.<SettlementProject>of(),
-			serverLevel.getServer().getTickCount(),
-			serverLevel.getServer().getTickCount()
+			currentTick,
+			currentTick
 		);
 		savedData.putSettlement(settlement);
 		return settlement;

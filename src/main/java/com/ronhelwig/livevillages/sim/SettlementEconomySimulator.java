@@ -27,6 +27,9 @@ public final class SettlementEconomySimulator {
 		"pork"
 	);
 	private static final double FOOD_ITEMS_PER_PERSON_PER_DAY = 2.0D;
+	private static final int ABANDONED_RECOVERY_FOOD_TARGET = 32;
+	private static final int ABANDONED_RECOVERY_MIN_FOOD = 12;
+	private static final double ABANDONED_RECOVERY_PROGRESS_PER_DAY = 0.35D;
 
 	private SettlementEconomySimulator() {
 	}
@@ -69,7 +72,20 @@ public final class SettlementEconomySimulator {
 		int population = simulationSettlement.totalPopulation();
 
 		if (population <= 0) {
-			return new SimulationResult(simulationSettlement.withLastUpdateTick(currentTick), List.of(), 0);
+			GrowthResult recoveryResult = applyAbandonedRecovery(simulationSettlement, elapsedDays);
+			SettlementState updatedSettlement = simulationSettlement.withSimulationState(
+				Map.of(),
+				simulationSettlement.wealth(),
+				simulationSettlement.stock(),
+				simulationSettlement.housingCapacity(),
+				simulationSettlement.comfort(),
+				simulationSettlement.security(),
+				simulationSettlement.defenseLevel(),
+				recoveryResult.progress(),
+				simulationSettlement.projects(),
+				currentTick
+			);
+			return new SimulationResult(updatedSettlement, List.of(), recoveryResult.requestedVillagerSpawns());
 		}
 
 		Map<String, Integer> stock = new LinkedHashMap<>(simulationSettlement.stock());
@@ -93,7 +109,8 @@ public final class SettlementEconomySimulator {
 			elapsedDays,
 			currentTick,
 			level,
-			loadedSettlement
+			loadedSettlement,
+			infrastructure
 		);
 
 		List<RouteState> activeRoutes = new ArrayList<>(routes);
@@ -419,7 +436,7 @@ public final class SettlementEconomySimulator {
 		}
 
 		int population = settlement.totalPopulation();
-		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity());
+		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity()) + infrastructure.incompleteHousingCapacity();
 		boolean needsHousing = population > 0 && effectiveHousing < population + 1;
 
 		if (population > 0
@@ -570,7 +587,8 @@ public final class SettlementEconomySimulator {
 		double elapsedDays,
 		long currentTick,
 		ServerLevel level,
-		boolean loadedSettlement
+		boolean loadedSettlement,
+		SettlementConstruction.InfrastructureSurvey infrastructure
 	) {
 		List<SettlementProject> remainingProjects = new ArrayList<>();
 		List<RouteState> createdRoutes = new ArrayList<>();
@@ -606,6 +624,18 @@ public final class SettlementEconomySimulator {
 				}
 				case HOUSING -> {
 					if (useWorldConstruction) {
+						if (infrastructure.incompleteHousingCapacity() > 0) {
+							int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity())
+								+ infrastructure.incompleteHousingCapacity();
+							if (effectiveHousing >= settlement.totalPopulation() + 1) {
+								continue;
+							}
+
+							double blockedProgress = Math.max(0.0D, project.requiredProgress() - 0.01D);
+							remainingProjects.add(progressed.withProgress(Math.min(progressed.progress(), blockedProgress)));
+							continue;
+						}
+
 						SettlementConstruction.CompletionResult completionResult = SettlementConstruction.tryCompleteProject(level, settlement, project, stock);
 
 						if (completionResult.completed()) {
@@ -741,6 +771,37 @@ public final class SettlementEconomySimulator {
 		progress = clamp(progress, 0.0D, Math.max(0.99D, freeHousing + 0.99D));
 		int requestedVillagerSpawns = freeHousing > 0 ? Math.min(1, (int) Math.floor(progress)) : 0;
 		return new GrowthResult(progress, requestedVillagerSpawns);
+	}
+
+	private static GrowthResult applyAbandonedRecovery(SettlementState settlement, double elapsedDays) {
+		if (settlement.kind() == SettlementKind.OUTPOST) {
+			return new GrowthResult(settlement.growthProgress(), 0);
+		}
+
+		int foodStock = totalFoodStock(settlement.stock());
+		int recoveryCapacity = Math.max(0, settlement.housingCapacity());
+		if (settlement.kind() == SettlementKind.CUSTOM && recoveryCapacity <= 0) {
+			recoveryCapacity = 1;
+		}
+
+		double progress = settlement.growthProgress();
+
+		if (recoveryCapacity <= 0 || foodStock < ABANDONED_RECOVERY_MIN_FOOD) {
+			progress = Math.max(0.0D, progress - elapsedDays * 0.06D);
+			return new GrowthResult(progress, 0);
+		}
+
+		double foodFactor = clamp(foodStock / (double) ABANDONED_RECOVERY_FOOD_TARGET, 0.0D, 1.25D);
+		double securityFactor = clamp(settlement.security(), 0.15D, 1.0D);
+		double comfortFactor = clamp(settlement.comfort(), 0.35D, 1.0D);
+		double capacityFactor = clamp(recoveryCapacity / 2.0D, 0.5D, 1.0D);
+		double growthRate = ABANDONED_RECOVERY_PROGRESS_PER_DAY
+			* foodFactor
+			* capacityFactor
+			* (0.55D + securityFactor * 0.25D + comfortFactor * 0.20D);
+		progress += growthRate * elapsedDays;
+		progress = clamp(progress, 0.0D, Math.max(0.99D, recoveryCapacity + 0.99D));
+		return new GrowthResult(progress, Math.min(1, (int) Math.floor(progress)));
 	}
 
 	private static GrowthResult applyOutpostGrowth(
@@ -1016,6 +1077,16 @@ public final class SettlementEconomySimulator {
 		}
 
 		return varieties;
+	}
+
+	static int totalFoodStock(Map<String, Integer> stock) {
+		int total = 0;
+
+		for (String goodsKey : FOOD_PRIORITY) {
+			total += Math.max(0, stock.getOrDefault(goodsKey, 0));
+		}
+
+		return total;
 	}
 
 	private static int roleCount(SettlementState settlement, String role) {

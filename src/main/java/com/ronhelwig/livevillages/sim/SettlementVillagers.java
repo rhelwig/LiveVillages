@@ -811,8 +811,7 @@ public final class SettlementVillagers {
 	private static boolean recruitPriorityWorkforce(ServerLevel level, SettlementState settlement, List<Villager> villagers) {
 		List<Villager> availableVillagers = villagers.stream()
 			.filter(villager -> !villager.isBaby())
-			.filter(villager -> villager.getVillagerData().profession().is(VillagerProfession.NONE)
-				|| villager.getVillagerData().profession().is(VillagerProfession.LIBRARIAN))
+			.filter(villager -> canBeRecruitedForAnyPriorityDemand(level, settlement, villager))
 			.sorted(Comparator.comparingDouble(villager -> distanceToCenterSqr(villager, settlement.center())))
 			.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 		Map<ProfessionDemandType, Integer> currentCounts = currentProfessionCounts(level, settlement, villagers);
@@ -827,7 +826,7 @@ public final class SettlementVillagers {
 			boolean assigned = false;
 			for (ProfessionDemand demand : demands) {
 				Optional<Villager> candidate = availableVillagers.stream()
-					.filter(villager -> canBeRecruitedForDemand(villager, demand.type()))
+					.filter(villager -> canBeRecruitedForDemand(level, settlement, villager, demand.type()))
 					.filter(villager -> canReachProfessionJobSite(level, settlement, villager, demand.type()))
 					.findFirst();
 				if (candidate.isEmpty()) {
@@ -866,13 +865,49 @@ public final class SettlementVillagers {
 		return changed;
 	}
 
-	private static boolean canBeRecruitedForDemand(Villager villager, ProfessionDemandType type) {
+	private static boolean canBeRecruitedForAnyPriorityDemand(ServerLevel level, SettlementState settlement, Villager villager) {
+		Holder<VillagerProfession> profession = villager.getVillagerData().profession();
+		return profession.is(VillagerProfession.NONE)
+			|| profession.is(VillagerProfession.LIBRARIAN)
+			|| canReclaimObsoleteSettlementProfession(level, settlement, villager, null);
+	}
+
+	private static boolean canBeRecruitedForDemand(ServerLevel level, SettlementState settlement, Villager villager, ProfessionDemandType type) {
 		Holder<VillagerProfession> profession = villager.getVillagerData().profession();
 		if (type == ProfessionDemandType.SCRIBE) {
 			return canBecomeScribe(villager);
 		}
 
-		return profession.is(VillagerProfession.NONE);
+		return profession.is(VillagerProfession.NONE)
+			|| canReclaimObsoleteSettlementProfession(level, settlement, villager, type);
+	}
+
+	private static boolean canReclaimObsoleteSettlementProfession(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager villager,
+		ProfessionDemandType targetType
+	) {
+		ProfessionDemandType currentType = currentProfessionType(villager);
+		if (currentType == null || currentType == targetType || currentType == ProfessionDemandType.TRADEMASTER) {
+			return false;
+		}
+
+		if (isCustomProfession(currentType)) {
+			return false;
+		}
+
+		return owningSettlementFor(level, villager)
+			.filter(owner -> owner.id().equals(settlement.id()))
+			.isPresent()
+			&& !countsTowardProfessionDemand(level, settlement, villager, currentType);
+	}
+
+	private static boolean isCustomProfession(ProfessionDemandType type) {
+		return switch (type) {
+			case TRADEMASTER, CARPENTER, SCRIBE, GUARD, GARDENER, BEEKEEPER, BAKER, ROADWRIGHT, FORESTER, MINER, PORTMASTER -> true;
+			default -> false;
+		};
 	}
 
 	private static boolean maintainAssignedWorkforce(ServerLevel level, SettlementState settlement, List<Villager> villagers) {
@@ -3666,6 +3701,10 @@ public final class SettlementVillagers {
 			return false;
 		}
 
+		if (type == ProfessionDemandType.FISHERMAN && !SettlementFishermanWork.hasUsableLocalFishingWork(level, settlement)) {
+			return false;
+		}
+
 		return owningSettlementFor(level, villager)
 			.filter(owner -> owner.id().equals(settlement.id()))
 			.isPresent()
@@ -3852,7 +3891,8 @@ public final class SettlementVillagers {
 			case MINER -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableMinerJobSite(level, villager).isPresent();
 			case PORTMASTER -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachablePortmasterJobSite(level, villager).isPresent();
 			case FLETCHER -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableFletcherJobSite(level, villager).isPresent();
-			case FISHERMAN -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
+			case FISHERMAN -> SettlementFishermanWork.hasUsableLocalFishingWork(level, settlement)
+				&& (heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableFishermanJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent());
 			case BUTCHER -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableButcherJobSite(level, villager, net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.HAS_SPACE).isPresent();
 			case FARMER -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableVanillaBedLinkedJobSite(level, villager, ProfessionDemandType.FARMER).isPresent();
 			case MASON -> heldProfessionJobSiteCounts(level, settlement, villager, type) || findReachableVanillaBedLinkedJobSite(level, villager, ProfessionDemandType.MASON).isPresent();
@@ -3905,6 +3945,10 @@ public final class SettlementVillagers {
 	}
 
 	private static int desiredFishermanCount(ServerLevel level, SettlementState settlement) {
+		if (!SettlementFishermanWork.hasUsableLocalFishingWork(level, settlement)) {
+			return 0;
+		}
+
 		long workstationCount = level.getPoiManager().findAllClosestFirstWithType(
 			poiType -> poiType.is(PoiTypes.FISHERMAN),
 			pos -> professionJobSiteBelongsToSettlement(level, settlement, ProfessionDemandType.FISHERMAN, pos),

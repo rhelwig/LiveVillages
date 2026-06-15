@@ -1939,6 +1939,7 @@ public final class SettlementConstruction {
 			buildSiteInfrastructure.completedTradingPosts(),
 			buildSiteInfrastructure.incompleteTradingPosts(),
 			buildSiteInfrastructure.incompleteCarpenterWorkshops(),
+			buildSiteInfrastructure.incompleteHousingCapacity(),
 			buildSiteInfrastructure.completedPalisadeGatehouses(),
 			buildSiteInfrastructure.completedPalisadeWallColumns(),
 			buildSiteInfrastructure.expectedPalisadeWallColumns()
@@ -2033,6 +2034,7 @@ public final class SettlementConstruction {
 		int incompleteLighthouses = 0;
 		int incompleteTradingPosts = 0;
 		int incompleteCarpenterWorkshops = 0;
+		int incompleteHousingCapacity = 0;
 		int completedPalisadeGatehouses = 0;
 		Set<String> completedPalisadeWallColumns = new HashSet<>();
 
@@ -2059,6 +2061,10 @@ public final class SettlementConstruction {
 				incompleteCarpenterWorkshops++;
 				incompleteCarpenterWorkshopWorkstations.add(buildSite.workstationPos());
 				incompleteCarpenterWorkshopWorkstations.add(buildSite.anchorPos());
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER && !buildSite.complete()) {
+				incompleteHousingCapacity += 2;
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER && !buildSite.complete()) {
+				incompleteHousingCapacity += 1;
 			} else if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
 				|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE) {
 				if (buildSite.complete()) {
@@ -2078,6 +2084,7 @@ public final class SettlementConstruction {
 			incompleteLighthouses,
 			incompleteTradingPosts,
 			incompleteCarpenterWorkshops,
+			incompleteHousingCapacity,
 			completedPalisadeGatehouses,
 			completedPalisadeWallColumns.size(),
 			expectedPalisadeWallColumns(settlement)
@@ -3398,6 +3405,42 @@ public final class SettlementConstruction {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.LIGHTHOUSE));
 	}
 
+	public static PlacedWorkstations scanPlacedWorkstations(ServerLevel level, SettlementState settlement) {
+		PlacedWorkstationScan scan = new PlacedWorkstationScan();
+		BlockPos center = settlement.center();
+		int radiusSquared = VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS * VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS;
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int x = center.getX() - VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; x <= center.getX() + VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; x++) {
+			for (int z = center.getZ() - VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; z <= center.getZ() + VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS; z++) {
+				if (center.distToCenterSqr(x + 0.5D, center.getY() + 0.5D, z + 0.5D) > radiusSquared) {
+					continue;
+				}
+
+				if (!level.hasChunkAt(new BlockPos(x, center.getY(), z))) {
+					continue;
+				}
+
+				int columnTopY = Math.min(level.getMaxY() - 1, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) + 1);
+				int columnMinY = Math.max(level.getMinY(), columnTopY - VANILLA_WORKSTATION_SCAN_DEPTH_BELOW_SURFACE_BLOCKS);
+
+				for (int y = columnTopY; y >= columnMinY; y--) {
+					scanPos.set(x, y, z);
+					BlockState state = level.getBlockState(scanPos);
+
+					if (state.isAir()) {
+						continue;
+					}
+
+					addPlacedWorkstation(scan, state, scanPos.immutable());
+				}
+			}
+		}
+
+		scan.sort(center);
+		return scan.toPlacedWorkstations();
+	}
+
 	public static List<BlockPos> findPlacedPalisadePoints(ServerLevel level, SettlementState settlement) {
 		return findPlacedWorkstations(
 			level,
@@ -3441,8 +3484,181 @@ public final class SettlementConstruction {
 			}
 		}
 
-		tablePositions.sort((left, right) -> Double.compare(left.distSqr(center), right.distSqr(center)));
+		sortPositionsByDistance(tablePositions, center);
 		return tablePositions;
+	}
+
+	private static void addPlacedWorkstation(PlacedWorkstationScan scan, BlockState state, BlockPos pos) {
+		if (state.is(Blocks.CARTOGRAPHY_TABLE)) {
+			scan.cartographyTables.add(pos);
+		} else if (state.is(Blocks.FLETCHING_TABLE)) {
+			scan.fletchingTables.add(pos);
+		} else if (state.is(Blocks.SMOKER)) {
+			scan.smokers.add(pos);
+		} else if (state.is(Blocks.STONECUTTER)) {
+			scan.stonecutters.add(pos);
+		} else if (state.is(Blocks.BREWING_STAND)) {
+			scan.brewingStands.add(pos);
+		} else if (isCauldronWorkstation(state)) {
+			scan.cauldrons.add(pos);
+		} else if (state.is(Blocks.LECTERN)) {
+			scan.lecterns.add(pos);
+		} else if (state.is(Blocks.LOOM)) {
+			scan.looms.add(pos);
+		} else if (isSmithingWorkstation(state)) {
+			scan.smithingWorkstations.add(pos);
+		} else if (state.is(LiveVillagesBlocks.TRADE_BOARD)) {
+			scan.tradeBoards.add(pos);
+		} else if (state.is(LiveVillagesBlocks.CARPENTER_BENCH)) {
+			scan.carpenterBenches.add(pos);
+		} else if (state.is(LiveVillagesBlocks.SCRIBE_DESK)) {
+			scan.scribeDesks.add(pos);
+		} else if (state.is(LiveVillagesBlocks.GUARD_POST)) {
+			scan.guardPosts.add(pos);
+		} else if (state.is(LiveVillagesBlocks.GARDENER_WORKSTATION)) {
+			scan.gardenerWorkstations.add(pos);
+		} else if (state.is(LiveVillagesBlocks.HONEY_SEPARATOR)) {
+			scan.honeySeparators.add(pos);
+		} else if (state.is(LiveVillagesBlocks.SURVEYOR_TABLE)) {
+			scan.surveyorTables.add(pos);
+		} else if (state.is(LiveVillagesBlocks.FORESTER_TABLE)) {
+			scan.foresterTables.add(pos);
+		} else if (state.is(LiveVillagesBlocks.BAKERS_COUNTER)) {
+			scan.bakersCounters.add(pos);
+		} else if (state.is(LiveVillagesBlocks.MINER_WORKSTATION)) {
+			scan.minerWorkstations.add(pos);
+		} else if (state.is(LiveVillagesBlocks.PORTMASTER_ANCHOR)) {
+			scan.portmasterAnchors.add(pos);
+		} else if (state.is(LiveVillagesBlocks.LIGHTHOUSE)) {
+			scan.lighthouses.add(pos);
+		}
+	}
+
+	private static boolean isCauldronWorkstation(BlockState state) {
+		return state.is(Blocks.CAULDRON)
+			|| state.is(Blocks.WATER_CAULDRON)
+			|| state.is(Blocks.LAVA_CAULDRON)
+			|| state.is(Blocks.POWDER_SNOW_CAULDRON);
+	}
+
+	private static boolean isSmithingWorkstation(BlockState state) {
+		return state.is(Blocks.BLAST_FURNACE)
+			|| state.is(Blocks.SMITHING_TABLE)
+			|| state.is(Blocks.GRINDSTONE);
+	}
+
+	private static void sortPositionsByDistance(List<BlockPos> positions, BlockPos center) {
+		positions.sort((left, right) -> Double.compare(left.distSqr(center), right.distSqr(center)));
+	}
+
+	private static List<BlockPos> copyPositions(List<BlockPos> positions) {
+		return positions.isEmpty() ? List.of() : List.copyOf(positions);
+	}
+
+	private static final class PlacedWorkstationScan {
+		private final List<BlockPos> cartographyTables = new ArrayList<>();
+		private final List<BlockPos> fletchingTables = new ArrayList<>();
+		private final List<BlockPos> smokers = new ArrayList<>();
+		private final List<BlockPos> stonecutters = new ArrayList<>();
+		private final List<BlockPos> brewingStands = new ArrayList<>();
+		private final List<BlockPos> cauldrons = new ArrayList<>();
+		private final List<BlockPos> lecterns = new ArrayList<>();
+		private final List<BlockPos> looms = new ArrayList<>();
+		private final List<BlockPos> smithingWorkstations = new ArrayList<>();
+		private final List<BlockPos> tradeBoards = new ArrayList<>();
+		private final List<BlockPos> carpenterBenches = new ArrayList<>();
+		private final List<BlockPos> scribeDesks = new ArrayList<>();
+		private final List<BlockPos> guardPosts = new ArrayList<>();
+		private final List<BlockPos> gardenerWorkstations = new ArrayList<>();
+		private final List<BlockPos> honeySeparators = new ArrayList<>();
+		private final List<BlockPos> surveyorTables = new ArrayList<>();
+		private final List<BlockPos> foresterTables = new ArrayList<>();
+		private final List<BlockPos> bakersCounters = new ArrayList<>();
+		private final List<BlockPos> minerWorkstations = new ArrayList<>();
+		private final List<BlockPos> portmasterAnchors = new ArrayList<>();
+		private final List<BlockPos> lighthouses = new ArrayList<>();
+
+		private void sort(BlockPos center) {
+			sortPositionsByDistance(cartographyTables, center);
+			sortPositionsByDistance(fletchingTables, center);
+			sortPositionsByDistance(smokers, center);
+			sortPositionsByDistance(stonecutters, center);
+			sortPositionsByDistance(brewingStands, center);
+			sortPositionsByDistance(cauldrons, center);
+			sortPositionsByDistance(lecterns, center);
+			sortPositionsByDistance(looms, center);
+			sortPositionsByDistance(smithingWorkstations, center);
+			sortPositionsByDistance(tradeBoards, center);
+			sortPositionsByDistance(carpenterBenches, center);
+			sortPositionsByDistance(scribeDesks, center);
+			sortPositionsByDistance(guardPosts, center);
+			sortPositionsByDistance(gardenerWorkstations, center);
+			sortPositionsByDistance(honeySeparators, center);
+			sortPositionsByDistance(surveyorTables, center);
+			sortPositionsByDistance(foresterTables, center);
+			sortPositionsByDistance(bakersCounters, center);
+			sortPositionsByDistance(minerWorkstations, center);
+			sortPositionsByDistance(portmasterAnchors, center);
+			sortPositionsByDistance(lighthouses, center);
+		}
+
+		private PlacedWorkstations toPlacedWorkstations() {
+			return new PlacedWorkstations(
+				copyPositions(cartographyTables),
+				copyPositions(fletchingTables),
+				copyPositions(smokers),
+				copyPositions(stonecutters),
+				copyPositions(brewingStands),
+				copyPositions(cauldrons),
+				copyPositions(lecterns),
+				copyPositions(looms),
+				copyPositions(smithingWorkstations),
+				copyPositions(tradeBoards),
+				copyPositions(carpenterBenches),
+				copyPositions(scribeDesks),
+				copyPositions(guardPosts),
+				copyPositions(gardenerWorkstations),
+				copyPositions(honeySeparators),
+				copyPositions(surveyorTables),
+				copyPositions(foresterTables),
+				copyPositions(bakersCounters),
+				copyPositions(minerWorkstations),
+				copyPositions(portmasterAnchors),
+				copyPositions(lighthouses)
+			);
+		}
+	}
+
+	public record PlacedWorkstations(
+		List<BlockPos> cartographyTables,
+		List<BlockPos> fletchingTables,
+		List<BlockPos> smokers,
+		List<BlockPos> stonecutters,
+		List<BlockPos> brewingStands,
+		List<BlockPos> cauldrons,
+		List<BlockPos> lecterns,
+		List<BlockPos> looms,
+		List<BlockPos> smithingWorkstations,
+		List<BlockPos> tradeBoards,
+		List<BlockPos> carpenterBenches,
+		List<BlockPos> scribeDesks,
+		List<BlockPos> guardPosts,
+		List<BlockPos> gardenerWorkstations,
+		List<BlockPos> honeySeparators,
+		List<BlockPos> surveyorTables,
+		List<BlockPos> foresterTables,
+		List<BlockPos> bakersCounters,
+		List<BlockPos> minerWorkstations,
+		List<BlockPos> portmasterAnchors,
+		List<BlockPos> lighthouses
+	) {
+		public List<BlockPos> supportWorkstations() {
+			List<BlockPos> positions = new ArrayList<>(carpenterBenches.size() + foresterTables.size() + minerWorkstations.size());
+			positions.addAll(carpenterBenches);
+			positions.addAll(foresterTables);
+			positions.addAll(minerWorkstations);
+			return positions;
+		}
 	}
 
 	public static Direction tradeBoardFacingFor(ServerLevel level, BlockPos boardPos) {
@@ -9325,12 +9541,13 @@ public final class SettlementConstruction {
 		int tradingPosts,
 		int incompleteTradingPosts,
 		int incompleteCarpenterWorkshops,
+		int incompleteHousingCapacity,
 		int palisadeGatehouses,
 		int palisadeWallColumns,
 		int expectedPalisadeWallColumns
 	) {
 		public static InfrastructureSurvey empty() {
-			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 		}
 
 		public boolean hasLargeWaterBody() {
@@ -9360,6 +9577,7 @@ public final class SettlementConstruction {
 		int incompleteLighthouses,
 		int incompleteTradingPosts,
 		int incompleteCarpenterWorkshops,
+		int incompleteHousingCapacity,
 		int completedPalisadeGatehouses,
 		int completedPalisadeWallColumns,
 		int expectedPalisadeWallColumns

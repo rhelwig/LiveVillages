@@ -30,16 +30,16 @@ public final class LiveVillagesScheduler {
 	}
 
 	private static void onEndServerTick(MinecraftServer server) {
-		int currentTick = server.getTickCount();
+		int sessionTick = server.getTickCount();
 
-		if (currentTick <= 0) {
+		if (sessionTick <= 0) {
 			return;
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(server);
-		boolean economyCycleDue = (currentTick % TICKS_BETWEEN_CYCLES) == 0;
+		boolean economyCycleDue = (sessionTick % TICKS_BETWEEN_CYCLES) == 0;
 
-		if (isLoadedMaintenancePhase(currentTick, SHARED_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, SHARED_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainSharedMapKnowledge(server);
 			long elapsed = System.nanoTime() - start;
@@ -64,7 +64,7 @@ public final class LiveVillagesScheduler {
 			}
 		}
 
-		if (isLoadedMaintenancePhase(currentTick, FARMER_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, FARMER_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainLoadedFarmerState(server, TICKS_BETWEEN_FARMER_MAINTENANCE);
 			long elapsed = System.nanoTime() - start;
@@ -73,7 +73,7 @@ public final class LiveVillagesScheduler {
 			}
 		}
 
-		if (isLoadedMaintenancePhase(currentTick, RESOURCE_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, RESOURCE_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainLoadedResourceState(server, TICKS_BETWEEN_RESOURCE_MAINTENANCE);
 			long elapsed = System.nanoTime() - start;
@@ -82,7 +82,7 @@ public final class LiveVillagesScheduler {
 			}
 		}
 
-		if (isLoadedMaintenancePhase(currentTick, DEFENSE_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, DEFENSE_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainLoadedDefenseState(server);
 			long elapsed = System.nanoTime() - start;
@@ -91,7 +91,7 @@ public final class LiveVillagesScheduler {
 			}
 		}
 
-		if (isLoadedMaintenancePhase(currentTick, CONSTRUCTION_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, CONSTRUCTION_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
 			savedData.maintainLoadedConstructionState(server, TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
 			long elapsed = System.nanoTime() - start;
@@ -100,7 +100,7 @@ public final class LiveVillagesScheduler {
 			}
 		}
 
-		if (isLoadedMaintenancePhase(currentTick, REPORT_MAINTENANCE_OFFSET)) {
+		if (isLoadedMaintenancePhase(sessionTick, REPORT_MAINTENANCE_OFFSET)) {
 			SettlementProfessionReports.writeLoadedDailyReports(server, savedData.getSettlements());
 		}
 
@@ -111,11 +111,12 @@ public final class LiveVillagesScheduler {
 		long cycleStart = System.nanoTime();
 		int settlementCount = savedData.settlementCount();
 		int regionCount = savedData.regionCount();
+		long economyTick = SettlementClock.persistentTick(server);
 		LiveVillages.LOGGER.info("Starting economy cycle: {} settlements in {} regions, processing {} regions", settlementCount, regionCount, REGIONS_PER_CYCLE);
 		
-		savedData.advanceRoundRobin(server, currentTick, REGIONS_PER_CYCLE);
+		savedData.advanceRoundRobin(server, economyTick, REGIONS_PER_CYCLE);
 		VillageAutodetector.tick(server);
-		savedData.ensureCustomSettlementVillagers(server, currentTick);
+		savedData.ensureCustomSettlementVillagers(server, economyTick);
 		SettlementProfessionReports.writeLoadedDailyReports(server, savedData.getSettlements());
 		
 		long cycleElapsed = System.nanoTime() - cycleStart;

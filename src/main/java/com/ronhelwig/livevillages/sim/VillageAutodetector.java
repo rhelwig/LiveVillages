@@ -76,7 +76,7 @@ public final class VillageAutodetector {
 	}
 
 	private static void onChunkLoad(ServerLevel level, LevelChunk chunk, boolean generated) {
-		registerVillageFromChunk(level, chunk.getPos(), level.getServer().getTickCount());
+		registerVillageFromChunk(level, chunk.getPos(), SettlementClock.persistentTick(level));
 	}
 
 	public static int rescanAround(ServerLevel level, BlockPos origin, int radiusChunks, long currentTick) {
@@ -248,7 +248,7 @@ public final class VillageAutodetector {
 
 		if (level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z()) != null) {
 			try {
-				registerVillageFromChunk(level, chunkPos, level.getServer().getTickCount());
+				registerVillageFromChunk(level, chunkPos, SettlementClock.persistentTick(level));
 			} finally {
 				PENDING_BACKGROUND_SCANS.remove(scanKey);
 			}
@@ -261,7 +261,7 @@ public final class VillageAutodetector {
 				.whenComplete((result, throwable) -> level.getServer().execute(() -> {
 					try {
 						if (throwable == null) {
-							registerVillageFromChunk(level, chunkPos, level.getServer().getTickCount());
+							registerVillageFromChunk(level, chunkPos, SettlementClock.persistentTick(level));
 						}
 					} finally {
 						level.getChunkSource().removeTicketWithRadius(BACKGROUND_SCAN_TICKET_TYPE, chunkPos, 0);
