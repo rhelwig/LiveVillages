@@ -18,8 +18,8 @@ Repository documentation lives under `docs/`, except for the root [README.md](..
 ## Current Focus
 
 - Finish the harbor trade pass: verify that docks, lighthouses, and cartography support affect real trade cadence and route quality the way the design intends.
-- Formalize settlement tiers so wealth and population gates drive visible structure, path, and fortification upgrades.
-- Keep Tier 1 completion focused on the current founding-tier feature set while later tier unlock rules are still being designed; do not block Tier 1 MVP validation on the full Tier 2-4 structure/material unlock matrix.
+- Keep MVP tier work limited to Tier 1 behavior plus visible settlement-screen theme changes; full Tier 2-4 gates, structure unlocks, path upgrades, and fortification upgrade rules are post-MVP.
+- Keep Tier 1 completion focused on the current founding-tier feature set; do not block Tier 1 MVP validation on the full Tier 2-4 structure/material unlock matrix.
 - Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation: loaded settlements should count cod from visible fishing tasks only, while unloaded simulation can use the abstract dock/lighthouse catch-rate model; docked-boat trips should still return before gathering.
 - Keep field-profession range explicit and bounded: `Miner`, `Fisherman`, and `Forester` can work up to `150%` of settlement radius, `Roadwright` can work up to `200%`, and assigned villagers should keep settlement membership while in that range.
 - Keep `Baker` output consistent between loaded behavior and abstract settlement simulation, with settlement stock, tier-gated recipes, visible bakery displays, bakery-side trading, shared case-style bakery UI access, two-shelf `3x2` case rendering, and structure-wide display restocking all drawing from the same goods state.
@@ -327,7 +327,7 @@ Next in line:
 Use this as the current sequencing guide, not a promise of exact release order:
 
 1. Harbor trade validation and recipe-path fix.
-2. Settlement tier state, unlock rules, and UI exposure.
+2. Settlement screen theme changes for MVP; defer full tier state, unlock rules, and upgrade behavior to post-MVP.
 3. Bell/rally defense split.
 4. Generic staged-construction repair, duplicate suppression, and upgrade helpers.
 5. Better visible stock logistics for workers.
@@ -347,7 +347,7 @@ Keep these unless the spec is intentionally changed:
 - `Milepost` is route infrastructure, not a workstation.
 - `Cartographer` gates efficient long-range land route planning and trade beyond about `32` chunks / `512` blocks in first-pass route planning; `Scribe` support can stack extra range and quality after that cartographic gate is met.
 - The `Trade Board` anchors a staged `Trading Post`, with a future `Shopping Mall` upgrade on the same site.
-- Settlement advancement uses four civic tiers. Settlements should rise immediately when they meet a new tier gate, but regression protection should come from `Scribe` support rather than from a universally sticky never-downgrade rule.
+- Settlement advancement uses four civic tiers in the full design, but MVP only needs Tier 1 behavior plus visible settlement-screen theme changes. Full Tier 2-4 gates, unlock rules, upgrades, and regression behavior are post-MVP.
 - `Scribe` is an advanced Librarian-style role: keep baseline book/bookshelf production on ordinary `Librarians`, and put recipe trading, settlement-to-settlement knowledge exchange, route intelligence, and civic-memory support on `Scribes`.
 - First-pass Scribe foundations are implemented: `Scribe Desk` block/item/recipe/assets/POI/profession registration, staged `Scribe Office` anchoring and previews with a role-specific storage-heavy office blueprint, bed-linked Scribe recruitment with Librarians preferred as advanced candidates, Scribe census support for existing trade-route bonuses, persistent settlement-known starter recipe storage, a selectable Scribe Desk recipe-trading UI that teaches unknown settlement-known recipes for tiered paper/book payments, lets players contribute player-known non-special recipes into the settlement ledger for modest support rewards, shows those rewards in contribution tooltips, uses display-derived recipe result icons when available, removes successful recipe rows from the open client and server menu lists, rejects stale recipe-row clicks by recipe fingerprint, revalidates that the desk block and settlement link are still current before server-side learn/contribute actions mutate state, and capped settlement-to-settlement recipe exchange during route trade cycles when Scribe support is present.
 - Remaining Scribe MVP work: tune route-exchange limits, contribution reward values, and pricing further after playtests.
@@ -376,6 +376,8 @@ Keep these unless the spec is intentionally changed:
 - Player-placed vanilla `Smoker` blocks should anchor a staged `Butcher Shop`.
 - The vanilla `Fletching Table` should remain a real player-use arrow workstation with material-arrow variants rather than staying decorative.
 - First-pass loaded `Fletcher` work now produces `Copperhead Arrow` stock from stick, feather, and copper arrowhead material when available, falls back to vanilla arrow batches from flint, and recognizes Copperhead/Ironhead/Diamondhead arrows plus copper/iron nuggets as settlement trade goods; premium-arrow autonomous production and combat selection remain follow-up balance work.
+- Add follow-up design and implementation for `Torch Arrow` and `Explosive Arrow` variants: torch arrows should use coal or charcoal as the base Live Villages fuel-tip ingredient and place a torch or wall torch on valid impact, while explosive arrows should use a `Fire Charge` tip, follow no-stronger-than-Fire-Charge impact behavior, and remain clearly weaker than TNT.
+- When those arrow variants are implemented, wire them into Fletching Table recipes, Fletcher production/trade options, Guard ammunition selection where appropriate, and Trade Board goods/wants/pricing so the village economy understands both the finished arrows and their tip ingredients.
 - Butcher and Shepherd first-pass pen planning should build independent new pens rather than silently attaching extra fence lines to already-detected pastures.
 - Contributor onboarding docs should keep a beginner-friendly Windows path available: VS Code, GitHub, Temurin JDK, and repository clones under the user's home `Projects/` folder by default.
 - Contributor docs should also keep GitHub bug reporting easy for young playtesters, visual contributors, and coders, with a short plain-language path instead of assuming heavy issue-template discipline.
