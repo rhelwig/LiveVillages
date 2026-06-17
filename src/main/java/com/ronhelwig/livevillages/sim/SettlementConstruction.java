@@ -6251,7 +6251,7 @@ public final class SettlementConstruction {
 			updatedBlocks.add(updatedBlock);
 		}
 
-		boolean complete = buildSiteComplete(updatedBlocks);
+		boolean complete = buildSiteComplete(buildSite, updatedBlocks);
 
 		if (!changed && complete == buildSite.complete()) {
 			return buildSite;
@@ -6397,8 +6397,16 @@ public final class SettlementConstruction {
 		);
 	}
 
-	private static boolean buildSiteComplete(List<SettlementBuildBlockState> blocks) {
+	public static boolean isRequiredBuildSiteBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		return currentBlueprintSymbol(buildSite, block) != 'A';
+	}
+
+	private static boolean buildSiteComplete(SettlementBuildSite buildSite, List<SettlementBuildBlockState> blocks) {
 		for (SettlementBuildBlockState block : blocks) {
+			if (!isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
 			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
 				return false;
 			}

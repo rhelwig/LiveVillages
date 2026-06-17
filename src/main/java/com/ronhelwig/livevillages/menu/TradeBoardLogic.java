@@ -19,6 +19,7 @@ import com.ronhelwig.livevillages.sim.SettlementBuildBlockState;
 import com.ronhelwig.livevillages.sim.SettlementBuildBlockStatus;
 import com.ronhelwig.livevillages.sim.SettlementBuildSite;
 import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
+import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementEconomyRules;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementProjectType;
@@ -527,7 +528,7 @@ public final class TradeBoardLogic {
 
 	private static List<TradeBoardProjectView> buildSiteProjectViews(List<SettlementBuildSite> buildSites) {
 		return buildSites.stream()
-			.filter(buildSite -> !buildSite.complete())
+			.filter(buildSite -> !isBuildSiteCompleteForDisplay(buildSite))
 			.sorted(
 				Comparator.comparingInt(TradeBoardLogic::buildSitePriority)
 					.thenComparingLong(SettlementBuildSite::createdTick)
@@ -558,25 +559,30 @@ public final class TradeBoardLogic {
 	}
 
 	private static int buildSiteProgressPercent(SettlementBuildSite buildSite) {
-		if (buildSite.complete()) {
+		if (isBuildSiteCompleteForDisplay(buildSite)) {
 			return 100;
 		}
 
-		int totalBlocks = buildSite.blocks().size();
-
-		if (totalBlocks <= 0) {
-			return 0;
-		}
-
+		int totalBlocks = 0;
 		int placedBlocks = 0;
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
+			totalBlocks++;
+
 			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
 				placedBlocks++;
 			}
 		}
 
-		return Math.max(0, Math.min(100, (int) Math.round((placedBlocks * 100.0D) / totalBlocks)));
+		if (totalBlocks <= 0) {
+			return 0;
+		}
+
+		return Math.max(0, Math.min(99, (int) Math.floor((placedBlocks * 100.0D) / totalBlocks)));
 	}
 
 	private static String buildSiteStatus(SettlementBuildSite buildSite) {
@@ -586,6 +592,10 @@ public final class TradeBoardLogic {
 		int placedBlocks = 0;
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
 			switch (block.status()) {
 				case PENDING -> pendingBlocks++;
 				case MISSING_MATERIAL -> missingMaterialBlocks++;
@@ -611,6 +621,28 @@ public final class TradeBoardLogic {
 		}
 
 		return "";
+	}
+
+	private static boolean isBuildSiteCompleteForDisplay(SettlementBuildSite buildSite) {
+		if (buildSite.complete()) {
+			return true;
+		}
+
+		boolean hasRequiredBlocks = false;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
+			hasRequiredBlocks = true;
+
+			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+				return false;
+			}
+		}
+
+		return hasRequiredBlocks;
 	}
 
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {

@@ -19,6 +19,8 @@ Repository documentation lives under `docs/`, except for the root [README.md](..
 
 - Finish the harbor trade pass: verify that docks, lighthouses, and cartography support affect real trade cadence and route quality the way the design intends.
 - Keep MVP tier work limited to Tier 1 behavior plus visible settlement-screen theme changes; full Tier 2-4 gates, structure unlocks, path upgrades, and fortification upgrade rules are post-MVP.
+- For the beta cut, treat harbor trade, stock logistics, Roadwright/map-quality behavior, and profession tuning as shareable unless playtesting finds a hard blocker; focus remaining MVP work on construction reliability, butcher herd/meat output, and a deliberate player-triggered outpost raid test path.
+- Tier screen themes now use visible palette shifts only: Tier 3 reads as blue/cyan with a gold accent, and Tier 4 reads as indigo/royal blue with gold. Tier 1 to Tier 2 has been playtest-verified; Tier 3 and Tier 4 still need in-game visual confirmation but should not block beta publication.
 - Keep Tier 1 completion focused on the current founding-tier feature set; do not block Tier 1 MVP validation on the full Tier 2-4 structure/material unlock matrix.
 - Keep `Fisherman` output consistent between loaded behavior and abstract settlement simulation: loaded settlements should count cod from visible fishing tasks only, while unloaded simulation can use the abstract dock/lighthouse catch-rate model; docked-boat trips should still return before gathering.
 - Keep field-profession range explicit and bounded: `Miner`, `Fisherman`, and `Forester` can work up to `150%` of settlement radius, `Roadwright` can work up to `200%`, and assigned villagers should keep settlement membership while in that range.
@@ -226,7 +228,7 @@ Focus:
 - keep loaded Miner assignments sticky between resource-maintenance passes so movement toward a chosen shaft/tunnel/ore target continues every tick, work reach uses block-to-block distance consistent with task selection, surfaced miners use scripted overworld steps toward gathering/home when vanilla pathfinding cannot route out of the mine mouth, adjacent exposed ore is mined as a vein before distant targets are chosen, shaft ladder support should be derived from the intended two-ladder/two-open-column shaft layout instead of damaged local terrain, starter shaft repair should restore missing solid shell/support blocks and clear blocked open columns before optional mining or lighting, recently failed or stale mining targets are skipped briefly instead of being reselected into ladder/tunnel loops, hostile shaft or tunnel cavern breaches place warning signs and suspend shaft/cavern work until the player clears the threat and removes the sign, and miner work throughput stays high enough for playtesting through more actions per maintenance pass and faster decide cadence
 - keep forester planting conservative near settlement structures and existing trees: new saplings should stay at least a few blocks clear of structure footprints, nearby saplings, and mature tree bases so forestry reads as managed spacing rather than crowding
 - treat underground worker settlement membership as a horizontal-radius cylinder for census and home-assignment purposes so deep miners still count and keep their village behavior
-- extend loaded Miner work beyond the starter shaft by cutting upper-level-first `2`-wide by `3`-tall primary side tunnels to the settlement radius as eligible shaft levels are reached, not only after the shaft hits bedrock, about every `5` levels with `2` solid levels between them; once a level's primary tunnels are full length, add perpendicular `1`-wide by `2`-tall secondary tunnels to the settlement radius with wall torches every `9` blocks, temporary `dirt` / `cobblestone` floor supports when needed, preferring dirt before cobblestone, exposed-face ore scanning so visible resources are not left untouched, reachable-resource scans from existing mine ladders for exposed copper, redstone, and geode resources, discovery signs for notable features, monster-closure signs that block only the unsafe primary branch, and reachable shaft-wall stone/ore fallback mining when no branch task is available
+- extend loaded Miner work beyond the starter shaft by cutting upper-level-first `2`-wide by `3`-tall primary side tunnels to the settlement radius as eligible shaft levels are reached, not only after the shaft hits bedrock, about every `5` levels with `2` solid levels between them; once a level's primary tunnels are full length, add perpendicular `1`-wide by `2`-tall secondary tunnels to the settlement radius with wall torches every `9` blocks, temporary `dirt` / `cobblestone` floor supports when needed, preferring dirt before cobblestone, exposed-face ore scanning so visible resources are not left untouched, reachable-resource scans from existing mine ladders for exposed copper, redstone, and geode resources, discovery signs for notable features, breach doors and baby-zombie-proof filler when tunnels open into caves or above-ground air with abundant `glass` preferred for visibility before `dirt` / `cobblestone`, monster-closure signs that block only the unsafe primary branch, and reachable shaft-wall stone/ore fallback mining when no branch task is available
 - keep cave-breach mining bounded and reachable: skip cave lighting or ore tasks whose stand position cannot return to a known mine ladder or is below the completed ladder-bottom safety band, so unreachable/deep cave pockets do not monopolize the miner task loop
 - keep evening gathering anchored sensibly for bell-less settlements: prefer the `Trade Board` / `Trading Post`, then another central non-home POI, instead of dropping straight to an arbitrary center point, and prefer a standable nearby access tile over the raw POI block when choosing the loaded gathering target
 - preserve readable overlay and debug output for current worker tasks while this logic evolves
@@ -276,6 +278,7 @@ Focus:
 - keep profession production accounting visible during playtests: daily file reports should attribute real meat, leather, wool, cod from visible fishing, exact harvested logs, exact mined block ids, mined/recovered goods, bakery outputs, route trade batches, villager deaths, and Carpenter/Mason/Fletcher/Farmer conversions or harvests to loaded villagers where the worker loop knows the villager, including consumed work inputs.
 - replace overly magical auto-crafting assumptions over time with clearer workstation-linked supply flow
 - keep biome-aware structure palettes in sync across previews, staged builds, and contributor docs
+- explore optional blueprint material-preference layers alongside orientation layers, so designers can request compatible texture variation such as stone/granite/diorite/andesite/mossy cobblestone in stone walls or mixed wood-family variants without making those decorative choices hard blockers when stock is unavailable
 - keep settlement naming biome-aware too, so local names fit the terrain and hostile sites read as threatening instead of pastoral
 - add a later blueprint-import workflow that can take an exported blueprint file, let the player pick it through a file-selection dialog, package it into a generic named construction-anchor block, and start staged villager-assisted construction from that imported plan
 - add a later `Tier 3+` luxury-upgrade pass where a few profession structures can prefer imported foreign-biome style variants to create prestige-material trade demand
@@ -327,14 +330,14 @@ Next in line:
 Use this as the current sequencing guide, not a promise of exact release order:
 
 1. Harbor trade validation and recipe-path fix.
-2. Settlement screen theme changes for MVP; defer full tier state, unlock rules, and upgrade behavior to post-MVP.
-3. Bell/rally defense split.
-4. Generic staged-construction repair, duplicate suppression, and upgrade helpers.
-5. Better visible stock logistics for workers.
-6. Roadwright and map-quality follow-up.
-7. Butcher loaded-world polish.
-8. Additional profession rollout.
-9. Later civic/designation blocks and outpost behavior.
+2. Settlement screen theme changes for MVP; defer full tier state, unlock rules, and upgrade behavior to post-MVP. Tier 3/4 palettes are defined and only need visual spot-checking.
+3. Bell/rally defense split. Palisade Fletcher firing is working in playtest; remaining civilian panic/rally polish is not a beta blocker.
+4. Generic staged-construction repair, duplicate suppression, and upgrade helpers. Current pass improves idle worker recovery from stranded non-wall build sites and makes completion/progress ignore obsolete clearance cells so finished structures stop reporting as active `100%` sites.
+5. Better visible stock logistics for workers. Good enough for beta testing unless a hard blocker appears.
+6. Roadwright and map-quality follow-up. Good enough for beta testing unless a hard blocker appears.
+7. Butcher loaded-world polish. Current pass prioritizes culling before breeding and accepts raw or cooked meat for settlement meat wants.
+8. Additional profession rollout. Tuning should not stall beta publication.
+9. Later civic/designation blocks and outpost behavior. Current pass adds a Banner Bearer+ goat-horn raid request path for testing and chat loss notices when visible raid partners die; vanilla outpost horn chest loot is random, not guaranteed.
 
 ## Durable Decisions
 

@@ -17,6 +17,8 @@ import com.ronhelwig.livevillages.network.LiveVillagesNetworking;
 import com.ronhelwig.livevillages.sim.BuildSiteAssistedPlacement;
 import com.ronhelwig.livevillages.sim.FletchingTableInteraction;
 import com.ronhelwig.livevillages.sim.LiveVillagesScheduler;
+import com.ronhelwig.livevillages.sim.OutpostHornInteraction;
+import com.ronhelwig.livevillages.sim.OutpostRaids;
 import com.ronhelwig.livevillages.sim.ProfessionWorkstationTrades;
 import com.ronhelwig.livevillages.sim.SettlementDefenseWork;
 import com.ronhelwig.livevillages.sim.SettlementProfessionReports;
@@ -48,6 +50,8 @@ public class LiveVillages implements ModInitializer {
 		BuildSiteAssistedPlacement.register();
 		ProfessionWorkstationTrades.register();
 		FletchingTableInteraction.register();
+		OutpostHornInteraction.register();
+		OutpostRaids.register();
 		SettlementDefenseWork.register();
 		SettlementProfessionReports.register();
 		LiveVillagesDebugCommands.register();

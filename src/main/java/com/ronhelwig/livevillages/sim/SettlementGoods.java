@@ -63,7 +63,7 @@ public final class SettlementGoods {
 			return "golden_apple";
 		}
 
-		if (stack.is(Items.BEEF)) {
+		if (stack.is(Items.BEEF) || stack.is(Items.COOKED_BEEF)) {
 			return "beef";
 		}
 
@@ -71,11 +71,11 @@ public final class SettlementGoods {
 			return "cod";
 		}
 
-		if (stack.is(Items.MUTTON)) {
+		if (stack.is(Items.MUTTON) || stack.is(Items.COOKED_MUTTON)) {
 			return "mutton";
 		}
 
-		if (stack.is(Items.PORKCHOP)) {
+		if (stack.is(Items.PORKCHOP) || stack.is(Items.COOKED_PORKCHOP)) {
 			return "pork";
 		}
 

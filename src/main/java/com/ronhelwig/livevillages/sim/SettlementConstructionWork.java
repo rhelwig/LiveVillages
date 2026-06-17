@@ -54,6 +54,8 @@ public final class SettlementConstructionWork {
 	private static final long CONSTRUCTION_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long UNREACHABLE_TASK_CACHE_TICKS = 200L;
 	private static final long CONSTRUCTION_NAVIGATION_RETRY_TICKS = 40L;
+	private static final int STRANDED_WORKER_MIN_HEIGHT_OVER_ORIGIN = 3;
+	private static final int STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS = 5;
 	private static final double STOCK_ACCESS_ROUTE_DISTANCE_SQUARED = 256.0D;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
@@ -170,6 +172,10 @@ public final class SettlementConstructionWork {
 					deliveries.remove(workerId);
 					deliveriesChanged = true;
 					stockChanged = true;
+				}
+
+				if (recoverStrandedConstructionWorker(level, settlement, worker, workingBuildSites, tick)) {
+					continue;
 				}
 
 				if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, worker, "construction", CONSTRUCTION_DECIDE_INTERVAL_TICKS)) {
@@ -493,7 +499,7 @@ public final class SettlementConstructionWork {
 			changed = true;
 		}
 
-		return changed ? buildSite.withBlocks(updatedBlocks, isComplete(updatedBlocks), tick) : buildSite;
+		return changed ? buildSite.withBlocks(updatedBlocks, isComplete(buildSite, updatedBlocks), tick) : buildSite;
 	}
 
 	private static boolean shouldPreservePlayerImprovements(ServerLevel level, SettlementBuildSite buildSite) {
@@ -505,7 +511,7 @@ public final class SettlementConstructionWork {
 		int matchingBlocks = 0;
 
 		for (SettlementBuildBlockState block : SettlementConstruction.currentBlueprintBlocks(buildSite)) {
-			if (SettlementConstruction.currentBlueprintSymbol(buildSite, block) == 'A') {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
 				continue;
 			}
 
@@ -538,7 +544,7 @@ public final class SettlementConstructionWork {
 
 	private static boolean requiredStructureBlockStatusesComplete(SettlementBuildSite buildSite) {
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
-			if (SettlementConstruction.currentBlueprintSymbol(buildSite, block) == 'A') {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
 				continue;
 			}
 
@@ -610,6 +616,121 @@ public final class SettlementConstructionWork {
 		}
 
 		return claimedBlocks;
+	}
+
+	private static boolean recoverStrandedConstructionWorker(
+		ServerLevel level,
+		SettlementState settlement,
+		Villager worker,
+		List<SettlementBuildSite> buildSites,
+		long tick
+	) {
+		SettlementBuildSite strandedSite = strandedBuildSiteFor(level, worker, buildSites).orElse(null);
+		if (strandedSite == null) {
+			return false;
+		}
+
+		BlockPos recoveryPos = recoveryStandPos(level, strandedSite).orElse(null);
+		if (recoveryPos == null || worker.blockPosition().distSqr(recoveryPos) <= 4.0D) {
+			return false;
+		}
+
+		steerWorkerTowardTask(level, settlement, worker, recoveryPos, null, tick);
+		return true;
+	}
+
+	private static Optional<SettlementBuildSite> strandedBuildSiteFor(ServerLevel level, Villager worker, List<SettlementBuildSite> buildSites) {
+		BlockPos workerPos = worker.blockPosition();
+
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (isWallLikeBuildSite(buildSite) || workerPos.getY() < buildSite.origin().getY() + STRANDED_WORKER_MIN_HEIGHT_OVER_ORIGIN) {
+				continue;
+			}
+
+			BuildFootprint footprint = buildFootprint(level, buildSite).orElse(null);
+			if (footprint == null || !footprint.contains(workerPos)) {
+				continue;
+			}
+
+			if (!worker.getNavigation().isDone()) {
+				continue;
+			}
+
+			return Optional.of(buildSite);
+		}
+
+		return Optional.empty();
+	}
+
+	private static boolean isWallLikeBuildSite(SettlementBuildSite buildSite) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL
+			|| buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_GATEHOUSE
+			|| buildSite.blueprintId() == SettlementBuildSiteType.COPPER_PALISADE_GATEHOUSE;
+	}
+
+	private static Optional<BuildFootprint> buildFootprint(ServerLevel level, SettlementBuildSite buildSite) {
+		BlockPos firstPos = null;
+		int minX = Integer.MAX_VALUE;
+		int maxX = Integer.MIN_VALUE;
+		int minZ = Integer.MAX_VALUE;
+		int maxZ = Integer.MIN_VALUE;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
+			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+			if (blockPos.isEmpty() || !level.hasChunkAt(blockPos.get())) {
+				continue;
+			}
+
+			BlockPos pos = blockPos.get();
+			firstPos = firstPos == null ? pos : firstPos;
+			minX = Math.min(minX, pos.getX());
+			maxX = Math.max(maxX, pos.getX());
+			minZ = Math.min(minZ, pos.getZ());
+			maxZ = Math.max(maxZ, pos.getZ());
+		}
+
+		return firstPos == null
+			? Optional.empty()
+			: Optional.of(new BuildFootprint(minX - 1, maxX + 1, minZ - 1, maxZ + 1));
+	}
+
+	private static Optional<BlockPos> recoveryStandPos(ServerLevel level, SettlementBuildSite buildSite) {
+		return stockAccessStandPos(level, SettlementConstruction.currentPlacedWorkstationPos(level, buildSite))
+			.or(() -> nearestStandableAround(level, buildSite.anchorPos()))
+			.or(() -> nearestStandableAround(level, buildSite.origin()));
+	}
+
+	private static Optional<BlockPos> nearestStandableAround(ServerLevel level, BlockPos center) {
+		BlockPos best = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (int dx = -STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS; dx <= STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS; dx++) {
+			for (int dz = -STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS; dz <= STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS; dz++) {
+				int maxOffset = Math.max(Math.abs(dx), Math.abs(dz));
+				if (maxOffset == 0 || maxOffset > STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS) {
+					continue;
+				}
+
+				for (int dy = -2; dy <= 2; dy++) {
+					BlockPos candidate = center.offset(dx, dy, dz);
+					if (!level.hasChunkAt(candidate) || !isStandable(level, candidate)) {
+						continue;
+					}
+
+					double distanceSquared = candidate.distSqr(center);
+					if (best == null || distanceSquared < bestDistanceSquared) {
+						best = candidate.immutable();
+						bestDistanceSquared = distanceSquared;
+					}
+				}
+			}
+		}
+
+		return Optional.ofNullable(best);
 	}
 
 	private static Optional<BlockPos> findStockAccessPos(ServerLevel level, SettlementState settlement, List<SettlementBuildSite> buildSites) {
@@ -1960,7 +2081,7 @@ public final class SettlementConstructionWork {
 	) {
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks());
 		updatedBlocks.set(blockIndex, updatedBlocks.get(blockIndex).withStatus(status, blocker));
-		return buildSite.withBlocks(updatedBlocks, isComplete(updatedBlocks), tick);
+		return buildSite.withBlocks(updatedBlocks, isComplete(buildSite, updatedBlocks), tick);
 	}
 
 	private static SettlementBuildSite updateTwoBlockStatuses(
@@ -1976,11 +2097,15 @@ public final class SettlementConstructionWork {
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks());
 		updatedBlocks.set(firstBlockIndex, updatedBlocks.get(firstBlockIndex).withStatus(firstStatus, firstBlocker));
 		updatedBlocks.set(secondBlockIndex, updatedBlocks.get(secondBlockIndex).withStatus(secondStatus, secondBlocker));
-		return buildSite.withBlocks(updatedBlocks, isComplete(updatedBlocks), tick);
+		return buildSite.withBlocks(updatedBlocks, isComplete(buildSite, updatedBlocks), tick);
 	}
 
-	private static boolean isComplete(List<SettlementBuildBlockState> blocks) {
+	private static boolean isComplete(SettlementBuildSite buildSite, List<SettlementBuildBlockState> blocks) {
 		for (SettlementBuildBlockState block : blocks) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
 			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
 				return false;
 			}
@@ -2352,6 +2477,12 @@ public final class SettlementConstructionWork {
 	) {
 		private static MaterialConsumption supplied(SettlementBuildSite buildSite) {
 			return new MaterialConsumption(SettlementConstructionMaterials.ConstructionMaterialResult.supplied(0), buildSite, false);
+		}
+	}
+
+	private record BuildFootprint(int minX, int maxX, int minZ, int maxZ) {
+		private boolean contains(BlockPos pos) {
+			return pos.getX() >= minX && pos.getX() <= maxX && pos.getZ() >= minZ && pos.getZ() <= maxZ;
 		}
 	}
 

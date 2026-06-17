@@ -527,13 +527,17 @@ public final class LiveVillagesNetworking {
 		int blockedBlocks = 0;
 
 		for (SettlementBuildSite buildSite : buildSites) {
-			if (buildSite.complete()) {
+			if (isBuildSiteCompleteForDisplay(buildSite)) {
 				continue;
 			}
 
 			activeBuildSites++;
 
 			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+					continue;
+				}
+
 				if (block.status() == SettlementBuildBlockStatus.PENDING) {
 					pendingBlocks++;
 				} else if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL) {
@@ -1026,7 +1030,7 @@ public final class LiveVillagesNetworking {
 		BuildSitePreviewCandidate bestCandidate = null;
 
 		for (SettlementBuildSite buildSite : savedData.getBuildSites()) {
-			if (buildSite.complete()) {
+			if (isBuildSiteCompleteForDisplay(buildSite)) {
 				continue;
 			}
 
@@ -1106,6 +1110,10 @@ public final class LiveVillagesNetworking {
 		int missingMaterialBlocks = 0;
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
 			if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL) {
 				missingMaterialBlocks++;
 			}
@@ -1126,6 +1134,28 @@ public final class LiveVillagesNetworking {
 		return "";
 	}
 
+	private static boolean isBuildSiteCompleteForDisplay(SettlementBuildSite buildSite) {
+		if (buildSite.complete()) {
+			return true;
+		}
+
+		boolean hasRequiredBlocks = false;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
+			hasRequiredBlocks = true;
+
+			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+				return false;
+			}
+		}
+
+		return hasRequiredBlocks;
+	}
+
 	private static List<BlockPos> activeBuildSiteBlockers(ServerLevel level, SettlementBuildSite buildSite) {
 		return buildSite.blocks().stream()
 			.filter(block -> activeBuildSiteBlocker(level, buildSite, block))
@@ -1136,6 +1166,10 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static boolean activeBuildSiteBlocker(ServerLevel level, SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+			return false;
+		}
+
 		if (block.status() != SettlementBuildBlockStatus.BLOCKED) {
 			return false;
 		}

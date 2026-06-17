@@ -1108,10 +1108,10 @@ public final class TradeBoardTradeRules {
 			case "pumpkin_pie" -> stack.is(Items.PUMPKIN_PIE);
 			case "cake" -> stack.is(Items.CAKE);
 			case "golden_apple" -> stack.is(Items.GOLDEN_APPLE);
-			case "beef" -> stack.is(Items.BEEF);
+			case "beef" -> stack.is(Items.BEEF) || stack.is(Items.COOKED_BEEF);
 			case "cod" -> stack.is(Items.COD) || stack.is(Items.SALMON) || stack.is(Items.COOKED_COD) || stack.is(Items.COOKED_SALMON);
-			case "mutton" -> stack.is(Items.MUTTON);
-			case "pork" -> stack.is(Items.PORKCHOP);
+			case "mutton" -> stack.is(Items.MUTTON) || stack.is(Items.COOKED_MUTTON);
+			case "pork" -> stack.is(Items.PORKCHOP) || stack.is(Items.COOKED_PORKCHOP);
 			case "leather" -> stack.is(Items.LEATHER);
 			case "wheat" -> stack.is(Items.WHEAT);
 			case "wheat_seeds" -> stack.is(Items.WHEAT_SEEDS);

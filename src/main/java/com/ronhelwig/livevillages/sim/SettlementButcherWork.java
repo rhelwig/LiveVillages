@@ -504,16 +504,16 @@ public final class SettlementButcherWork {
 			return herdTask;
 		}
 
-		Optional<ButcherTask> breedingTask = chooseBreedingTask(level, settlement, worker, survey, stock, routeCount, livestockTypes);
-
-		if (breedingTask.isPresent()) {
-			return breedingTask;
-		}
-
 		Optional<ButcherTask> cullingTask = chooseCullingTask(level, settlement, worker, survey, routeCount, livestockTypes);
 
 		if (cullingTask.isPresent()) {
 			return cullingTask;
+		}
+
+		Optional<ButcherTask> breedingTask = chooseBreedingTask(level, settlement, worker, survey, stock, routeCount, livestockTypes);
+
+		if (breedingTask.isPresent()) {
+			return breedingTask;
 		}
 
 		return allowShearing && livestockTypes.contains(LivestockType.SHEEP)
@@ -669,17 +669,17 @@ public final class SettlementButcherWork {
 		int pigExcess = Math.max(0, survey.totalPigs() - desiredPigs);
 		List<ScoredTask> candidates = new ArrayList<>();
 
-		if (livestockTypes.contains(LivestockType.SHEEP) && sheepExcess > 1) {
+		if (livestockTypes.contains(LivestockType.SHEEP) && sheepExcess > 0) {
 			findCullTask(level, settlement, butcher, Sheep.class, LivestockType.SHEEP, ButcherAction.CULL_SHEEP)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, sheepExcess / (double) Math.max(1, desiredSheep))));
 		}
 
-		if (livestockTypes.contains(LivestockType.COW) && cowExcess > 1) {
+		if (livestockTypes.contains(LivestockType.COW) && cowExcess > 0) {
 			findCullTask(level, settlement, butcher, Cow.class, LivestockType.COW, ButcherAction.CULL_COW)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, cowExcess / (double) Math.max(1, desiredCows))));
 		}
 
-		if (livestockTypes.contains(LivestockType.PIG) && pigExcess > 1) {
+		if (livestockTypes.contains(LivestockType.PIG) && pigExcess > 0) {
 			findCullTask(level, settlement, butcher, Pig.class, LivestockType.PIG, ButcherAction.CULL_PIG)
 				.ifPresent(task -> candidates.add(new ScoredTask(task, pigExcess / (double) Math.max(1, desiredPigs))));
 		}

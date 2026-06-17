@@ -7,12 +7,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -94,6 +96,13 @@ public final class OutpostRaids {
 	);
 
 	private OutpostRaids() {
+	}
+
+	public record RaidLaunchResult(boolean launched, String message) {
+	}
+
+	public static void register() {
+		ServerLivingEntityEvents.AFTER_DEATH.register(OutpostRaids::onAfterDeath);
 	}
 
 	public static long currentRaidTick(MinecraftServer server) {
@@ -206,6 +215,84 @@ public final class OutpostRaids {
 		steerLoadedRaidersHome(server, outpost, target.get(), returning.partySize());
 		savedData.putOutpostRaidState(returning.withAnnouncementTick(currentTick));
 		return true;
+	}
+
+	public static RaidLaunchResult requestRaidFromPlayer(ServerPlayer player, LiveVillagesSavedData savedData, long currentTick) {
+		if (player == null || !(player.level() instanceof ServerLevel level)) {
+			return new RaidLaunchResult(false, "Only a loaded player can call an outpost raid.");
+		}
+
+		SettlementState outpost = OutpostTrust.findOrCreateOutpostAt(level, savedData, player.blockPosition()).orElse(null);
+		if (outpost == null || outpost.kind() != SettlementKind.OUTPOST) {
+			return new RaidLaunchResult(false, "No outpost answered the horn.");
+		}
+
+		if (!savedData.settlementPlayerStanding(outpost, player).rank().atLeast(OutpostPlayerRank.BANNER_BEARER)) {
+			return new RaidLaunchResult(false, outpost.name() + " does not trust you enough to muster raiders.");
+		}
+
+		OutpostRaidState existingState = savedData.outpostRaidState(outpost.id()).orElse(null);
+		if (existingState != null && existingState.phase() != OutpostRaidPhase.COOLDOWN) {
+			SettlementState target = savedData.getSettlement(existingState.targetSettlementId()).orElse(null);
+			return new RaidLaunchResult(false, OutpostRaids.describeRaidState(existingState, target, currentTick));
+		}
+
+		if (existingState != null && currentTick < existingState.nextEligibleTick()) {
+			return new RaidLaunchResult(
+				false,
+				outpost.name() + " is not ready for another raid for " + formatTicks(existingState.nextEligibleTick() - currentTick) + "."
+			);
+		}
+
+		MinecraftServer server = player.level().getServer();
+		if (server == null) {
+			return new RaidLaunchResult(false, "No outpost answered the horn.");
+		}
+
+		ServerLevel outpostLevel = server.getLevel(outpost.dimension());
+		if (outpostLevel == null || !outpostLevel.isLoaded(outpost.center()) || !outpostLevel.isPositionEntityTicking(outpost.center())) {
+			return new RaidLaunchResult(false, outpost.name() + " must be loaded before it can muster a raid.");
+		}
+
+		int raiders = loadedRaiderCount(outpostLevel, outpost);
+		if (raiders < MIN_RAIDERS_TO_LAUNCH) {
+			return new RaidLaunchResult(false, outpost.name() + " needs at least " + MIN_RAIDERS_TO_LAUNCH + " loaded raiders to launch.");
+		}
+
+		if (chooseTarget(savedData, outpost).isEmpty()) {
+			return new RaidLaunchResult(false, outpost.name() + " has no worthwhile nearby raid target.");
+		}
+
+		boolean launched = tryLaunchRaid(server, savedData, outpost, currentTick);
+		return launched
+			? new RaidLaunchResult(true, outpost.name() + " answers your horn and musters a raid.")
+			: new RaidLaunchResult(false, outpost.name() + " could not muster a raid yet.");
+	}
+
+	private static void onAfterDeath(LivingEntity entity, DamageSource damageSource) {
+		if (!(entity instanceof Raider raider) || !(entity.level() instanceof ServerLevel level)) {
+			return;
+		}
+
+		MinecraftServer server = level.getServer();
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(server);
+		String outpostId = OutpostSettlementWork.activeRaidOutpostId(raider, savedData.getSettlements()).orElse("");
+		if (outpostId.isBlank()) {
+			return;
+		}
+
+		OutpostRaidState raidState = savedData.outpostRaidState(outpostId).orElse(null);
+		if (raidState == null || raidState.phase() == OutpostRaidPhase.COOLDOWN) {
+			return;
+		}
+
+		SettlementState outpost = savedData.getSettlement(outpostId).orElse(null);
+		SettlementState target = savedData.getSettlement(raidState.targetSettlementId()).orElse(null);
+		if (outpost == null || target == null) {
+			return;
+		}
+
+		announceRaidMemberDeath(server, savedData, outpost, target, raider);
 	}
 
 	private static String retreatOutcome(OutpostRaidState raidState, SettlementState target) {
@@ -1506,6 +1593,40 @@ public final class OutpostRaids {
 			}
 
 			player.sendSystemMessage(Component.literal(message), true);
+		}
+	}
+
+	private static void announceRaidMemberDeath(
+		MinecraftServer server,
+		LiveVillagesSavedData savedData,
+		SettlementState outpost,
+		SettlementState target,
+		Raider raider
+	) {
+		String message = raider.getType().getDescription().getString()
+			+ " from clan "
+			+ outpost.name()
+			+ " was killed in a raid on "
+			+ target.name()
+			+ ".";
+
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			if (!player.level().dimension().equals(outpost.dimension())) {
+				continue;
+			}
+
+			boolean nearOutpost = horizontalDistanceSqr(player.blockPosition(), outpost.center()) <= BANNER_NOTICE_RADIUS_BLOCKS * BANNER_NOTICE_RADIUS_BLOCKS;
+			boolean nearTarget = horizontalDistanceSqr(player.blockPosition(), target.center()) <= BANNER_NOTICE_RADIUS_BLOCKS * BANNER_NOTICE_RADIUS_BLOCKS;
+			boolean nearDeath = horizontalDistanceSqr(player.blockPosition(), raider.blockPosition()) <= BANNER_NOTICE_RADIUS_BLOCKS * BANNER_NOTICE_RADIUS_BLOCKS;
+			if (!nearOutpost && !nearTarget && !nearDeath) {
+				continue;
+			}
+
+			if (!savedData.settlementPlayerStanding(outpost, player).rank().atLeast(OutpostPlayerRank.BANNER_BEARER)) {
+				continue;
+			}
+
+			player.sendSystemMessage(Component.literal(message));
 		}
 	}
 

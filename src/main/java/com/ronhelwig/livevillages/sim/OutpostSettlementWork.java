@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -165,6 +166,20 @@ public final class OutpostSettlementWork {
 			&& settlement != null
 			&& raider.entityTags().contains(ACTIVE_RAID_MEMBER_TAG)
 			&& raider.entityTags().contains(outpostMemberTag(settlement.id()));
+	}
+
+	public static Optional<String> activeRaidOutpostId(Raider raider, Iterable<SettlementState> settlements) {
+		if (raider == null || settlements == null || !raider.entityTags().contains(ACTIVE_RAID_MEMBER_TAG)) {
+			return Optional.empty();
+		}
+
+		for (SettlementState settlement : settlements) {
+			if (settlement.kind() == SettlementKind.OUTPOST && raider.entityTags().contains(outpostMemberTag(settlement.id()))) {
+				return Optional.of(settlement.id());
+			}
+		}
+
+		return Optional.empty();
 	}
 
 	static boolean canReachConstructionFromAnyMember(List<BlockPos> memberPositions, BlockPos targetPos) {
