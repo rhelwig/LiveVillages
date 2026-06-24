@@ -846,7 +846,7 @@ public final class SettlementConstruction {
 				"PBABP",
 				"PAAAP",
 				"LPDPL",
-				"HAAAH",
+				"DAAAD",
 				"PAAAP",
 				"LAWAL"
 			},
@@ -856,9 +856,9 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"PAAAP",
-				"PAAAP",
-				"LVVVL"
+				"DAAAD",
+				"VAAAV",
+				"LAAAL"
 			},
 			{
 				"LPPPL",
@@ -866,9 +866,9 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"PAAAP",
 				"LPPPL",
-				"PHAHP",
 				"PAAAP",
-				"LPPPL"
+				"PAAAP",
+				"LVVVL"
 			},
 			{
 				"SPPPS",
@@ -1080,8 +1080,8 @@ public final class SettlementConstruction {
 				"PBABP",
 				"PAAAP",
 				"LPDPL",
-				"FAHAF",
-				"FAAAG",
+				"FAAAF",
+				"GAAAG",
 				"LAWAL"
 			},
 			{
@@ -1090,8 +1090,8 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"FAAAF",
-				"FAAAG",
+				"AAAAA",
+				"AAAAA",
 				"LAAAL"
 			},
 			{
@@ -1101,7 +1101,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"LPPPL",
 				"FAAAF",
-				"FAAAG",
+				"FAAAF",
 				"LFFFL"
 			},
 			{
@@ -1942,7 +1942,8 @@ public final class SettlementConstruction {
 			buildSiteInfrastructure.incompleteHousingCapacity(),
 			buildSiteInfrastructure.completedPalisadeGatehouses(),
 			buildSiteInfrastructure.completedPalisadeWallColumns(),
-			buildSiteInfrastructure.expectedPalisadeWallColumns()
+			buildSiteInfrastructure.expectedPalisadeWallColumns(),
+			buildSiteInfrastructure.anvilSupportedSmithies()
 		);
 	}
 
@@ -1985,6 +1986,24 @@ public final class SettlementConstruction {
 			pos,
 			settlement -> settlement.kind() != SettlementKind.OUTPOST
 		);
+	}
+
+	public static boolean hasSmithyAnvilSupport(ServerLevel level, SettlementState settlement, BlockPos workPos) {
+		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
+			if (!buildSite.complete() || buildSite.blueprintId() != SettlementBuildSiteType.SMITHY) {
+				continue;
+			}
+
+			BuildSiteBounds bounds = buildSiteBounds(buildSite);
+
+			if (bounds == null || !bounds.containsWithMargin(workPos, 2) || !buildSiteHasAnvilNearby(level, buildSite, 2)) {
+				continue;
+			}
+
+			return true;
+		}
+
+		return false;
 	}
 
 	public static TradeBoardPlacementDecision evaluateTradeBoardPlacement(ServerLevel level, BlockPos boardPos) {
@@ -2036,6 +2055,7 @@ public final class SettlementConstruction {
 		int incompleteCarpenterWorkshops = 0;
 		int incompleteHousingCapacity = 0;
 		int completedPalisadeGatehouses = 0;
+		int anvilSupportedSmithies = 0;
 		Set<String> completedPalisadeWallColumns = new HashSet<>();
 
 		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
@@ -2072,6 +2092,10 @@ public final class SettlementConstruction {
 				}
 			} else if (buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
 				addCompletedPalisadeWallColumns(completedPalisadeWallColumns, buildSite);
+			} else if (buildSite.blueprintId() == SettlementBuildSiteType.SMITHY
+				&& buildSite.complete()
+				&& buildSiteHasAnvilNearby(level, buildSite, 2)) {
+				anvilSupportedSmithies++;
 			}
 		}
 
@@ -2087,7 +2111,8 @@ public final class SettlementConstruction {
 			incompleteHousingCapacity,
 			completedPalisadeGatehouses,
 			completedPalisadeWallColumns.size(),
-			expectedPalisadeWallColumns(settlement)
+			expectedPalisadeWallColumns(settlement),
+			anvilSupportedSmithies
 		);
 	}
 
@@ -2121,6 +2146,31 @@ public final class SettlementConstruction {
 				completedColumns.add(columnKey);
 			}
 		}
+	}
+
+	private static BuildSiteBounds buildSiteBounds(SettlementBuildSite buildSite) {
+		BuildSiteBounds bounds = null;
+
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+
+			if (blockPos.isEmpty()) {
+				continue;
+			}
+
+			bounds = bounds == null ? BuildSiteBounds.single(blockPos.get()) : bounds.include(blockPos.get());
+		}
+
+		return bounds;
+	}
+
+	private static boolean isAnvil(BlockState state) {
+		return state.is(Blocks.ANVIL) || state.is(Blocks.CHIPPED_ANVIL) || state.is(Blocks.DAMAGED_ANVIL);
+	}
+
+	private static boolean buildSiteHasAnvilNearby(ServerLevel level, SettlementBuildSite buildSite, int margin) {
+		BuildSiteBounds bounds = buildSiteBounds(buildSite);
+		return bounds != null && bounds.hasAnvilNearby(level, margin);
 	}
 
 	private static boolean isDefensivePalisadeBlockStatus(SettlementBuildBlockStatus status) {
@@ -3405,6 +3455,14 @@ public final class SettlementConstruction {
 		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.LIGHTHOUSE));
 	}
 
+	public static List<BlockPos> findPlacedSimpleHousingShelters(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER));
+	}
+
+	public static List<BlockPos> findPlacedHousingShelters(ServerLevel level, SettlementState settlement) {
+		return findPlacedWorkstations(level, settlement, state -> state.is(LiveVillagesBlocks.HOUSING_SHELTER));
+	}
+
 	public static PlacedWorkstations scanPlacedWorkstations(ServerLevel level, SettlementState settlement) {
 		PlacedWorkstationScan scan = new PlacedWorkstationScan();
 		BlockPos center = settlement.center();
@@ -3531,6 +3589,10 @@ public final class SettlementConstruction {
 			scan.portmasterAnchors.add(pos);
 		} else if (state.is(LiveVillagesBlocks.LIGHTHOUSE)) {
 			scan.lighthouses.add(pos);
+		} else if (state.is(LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER)) {
+			scan.simpleHousingShelters.add(pos);
+		} else if (state.is(LiveVillagesBlocks.HOUSING_SHELTER)) {
+			scan.housingShelters.add(pos);
 		}
 	}
 
@@ -3577,6 +3639,8 @@ public final class SettlementConstruction {
 		private final List<BlockPos> minerWorkstations = new ArrayList<>();
 		private final List<BlockPos> portmasterAnchors = new ArrayList<>();
 		private final List<BlockPos> lighthouses = new ArrayList<>();
+		private final List<BlockPos> simpleHousingShelters = new ArrayList<>();
+		private final List<BlockPos> housingShelters = new ArrayList<>();
 
 		private void sort(BlockPos center) {
 			sortPositionsByDistance(cartographyTables, center);
@@ -3600,6 +3664,8 @@ public final class SettlementConstruction {
 			sortPositionsByDistance(minerWorkstations, center);
 			sortPositionsByDistance(portmasterAnchors, center);
 			sortPositionsByDistance(lighthouses, center);
+			sortPositionsByDistance(simpleHousingShelters, center);
+			sortPositionsByDistance(housingShelters, center);
 		}
 
 		private PlacedWorkstations toPlacedWorkstations() {
@@ -3624,7 +3690,9 @@ public final class SettlementConstruction {
 				copyPositions(bakersCounters),
 				copyPositions(minerWorkstations),
 				copyPositions(portmasterAnchors),
-				copyPositions(lighthouses)
+				copyPositions(lighthouses),
+				copyPositions(simpleHousingShelters),
+				copyPositions(housingShelters)
 			);
 		}
 	}
@@ -3650,7 +3718,9 @@ public final class SettlementConstruction {
 		List<BlockPos> bakersCounters,
 		List<BlockPos> minerWorkstations,
 		List<BlockPos> portmasterAnchors,
-		List<BlockPos> lighthouses
+		List<BlockPos> lighthouses,
+		List<BlockPos> simpleHousingShelters,
+		List<BlockPos> housingShelters
 	) {
 		public List<BlockPos> supportWorkstations() {
 			List<BlockPos> positions = new ArrayList<>(carpenterBenches.size() + foresterTables.size() + minerWorkstations.size());
@@ -9552,10 +9622,11 @@ public final class SettlementConstruction {
 		int incompleteHousingCapacity,
 		int palisadeGatehouses,
 		int palisadeWallColumns,
-		int expectedPalisadeWallColumns
+		int expectedPalisadeWallColumns,
+		int anvilSupportedSmithies
 	) {
 		public static InfrastructureSurvey empty() {
-			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
 		}
 
 		public boolean hasLargeWaterBody() {
@@ -9588,8 +9659,53 @@ public final class SettlementConstruction {
 		int incompleteHousingCapacity,
 		int completedPalisadeGatehouses,
 		int completedPalisadeWallColumns,
-		int expectedPalisadeWallColumns
+		int expectedPalisadeWallColumns,
+		int anvilSupportedSmithies
 	) {
+	}
+
+	private record BuildSiteBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+		private static BuildSiteBounds single(BlockPos pos) {
+			return new BuildSiteBounds(pos.getX(), pos.getY(), pos.getZ(), pos.getX(), pos.getY(), pos.getZ());
+		}
+
+		private BuildSiteBounds include(BlockPos pos) {
+			return new BuildSiteBounds(
+				Math.min(minX, pos.getX()),
+				Math.min(minY, pos.getY()),
+				Math.min(minZ, pos.getZ()),
+				Math.max(maxX, pos.getX()),
+				Math.max(maxY, pos.getY()),
+				Math.max(maxZ, pos.getZ())
+			);
+		}
+
+		private boolean containsWithMargin(BlockPos pos, int margin) {
+			return pos.getX() >= minX - margin
+				&& pos.getX() <= maxX + margin
+				&& pos.getY() >= minY - margin
+				&& pos.getY() <= maxY + margin
+				&& pos.getZ() >= minZ - margin
+				&& pos.getZ() <= maxZ + margin;
+		}
+
+		private boolean hasAnvilNearby(ServerLevel level, int margin) {
+			BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+			for (int x = minX - margin; x <= maxX + margin; x++) {
+				for (int y = minY - margin; y <= maxY + margin; y++) {
+					for (int z = minZ - margin; z <= maxZ + margin; z++) {
+						scanPos.set(x, y, z);
+
+						if (level.hasChunkAt(scanPos) && isAnvil(level.getBlockState(scanPos))) {
+							return true;
+						}
+					}
+				}
+			}
+
+			return false;
+		}
 	}
 
 	private record BlueprintRelativePos(int right, int forward, int up) {

@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
@@ -25,6 +26,7 @@ import net.minecraft.world.phys.AABB;
 
 public final class SettlementBeekeeperWork {
 	private static final int BLOCK_UPDATE_FLAGS = 3;
+	private static final long DAY_TICKS = 24_000L;
 	private static final double SEPARATOR_REACH_DISTANCE_SQUARED = 6.25D;
 	private static final double BEEKEEPER_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 80L;
@@ -32,13 +34,17 @@ public final class SettlementBeekeeperWork {
 	private static final long BEEKEEPER_WORK_INTERVAL_TICKS = 1_600L;
 	private static final int APIARY_SCAN_RADIUS = 8;
 	private static final int BEE_SCAN_RADIUS = 16;
+	private static final int HIVE_RESTORATION_SCAN_RADIUS = BEE_SCAN_RADIUS;
 	private static final int MAX_MANAGED_HIVES_PER_SEPARATOR = 3;
 	private static final int MAX_APIARY_FLOWERS_PER_SEPARATOR = 6;
 	private static final int FULL_HONEY_LEVEL = 5;
 	private static final int BEE_TARGET_PER_HIVE = 3;
 	private static final int MIN_VISIBLE_BEE_TARGET = 2;
+	private static final long STARTER_BEE_RESTORATION_INTERVAL_TICKS = DAY_TICKS * 7L / MIN_VISIBLE_BEE_TARGET;
+	private static final long STARTER_BEE_RESTORATION_OBSERVED_WORLD_AGE_TICKS = DAY_TICKS;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, Long> LAST_WORK_TICKS = new HashMap<>();
+	private static final Map<String, Long> BEE_RESTORATION_START_TICKS = new HashMap<>();
 
 	private SettlementBeekeeperWork() {
 	}
@@ -75,7 +81,7 @@ public final class SettlementBeekeeperWork {
 				continue;
 			}
 
-			BeekeeperWorkPlan workPlan = workPlans.computeIfAbsent(separator, pos -> workPlanFor(level, stock, pos));
+			BeekeeperWorkPlan workPlan = workPlans.computeIfAbsent(separator, pos -> workPlanFor(level, settlement, stock, pos));
 			String taskKey = workPlan.taskKey();
 			BlockPos workPos = workPlan.workPos();
 			ACTIVE_TASKS.put(beekeeper.getUUID().toString(), new TimedTask(taskKey, tick));
@@ -129,6 +135,10 @@ public final class SettlementBeekeeperWork {
 
 		if (taskKey.equals("breeding_bees")) {
 			return breedNearbyBee(level, settlement, stock, beekeeper, separator);
+		}
+
+		if (taskKey.equals("restoring_bee_population")) {
+			return restoreStarterBee(level, settlement, beekeeper, separator);
 		}
 
 		if (taskKey.equals("maintaining_hive_smoke")) {
@@ -190,7 +200,7 @@ public final class SettlementBeekeeperWork {
 		return true;
 	}
 
-	private static BeekeeperWorkPlan workPlanFor(ServerLevel level, Map<String, Integer> stock, BlockPos separator) {
+	private static BeekeeperWorkPlan workPlanFor(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos separator) {
 		Optional<BlockPos> unlitCampfire = managedHiveNeedingRelight(level, separator);
 		Optional<BlockPos> missingSmoke = unlitCampfire.isPresent() ? Optional.empty() : managedHiveNeedingSmoke(level, separator);
 
@@ -230,6 +240,12 @@ public final class SettlementBeekeeperWork {
 					return new BeekeeperWorkPlan("planting_apiary_flowers", apiaryFlowerPlacement.get());
 				}
 			}
+		}
+
+		Optional<BlockPos> starterBeeSpawnPos = starterBeeRestorationTarget(level, settlement, separator);
+
+		if (starterBeeSpawnPos.isPresent()) {
+			return new BeekeeperWorkPlan("restoring_bee_population", separator);
 		}
 
 		if (stock.getOrDefault("flower", 0) > 0 && canSupportMoreBees(level, separator)) {
@@ -328,6 +344,39 @@ public final class SettlementBeekeeperWork {
 		targetBee.get().setInLove(null);
 		SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "flower", 1);
 		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "fed breeding bees");
+		return true;
+	}
+
+	private static boolean restoreStarterBee(ServerLevel level, SettlementState settlement, Villager beekeeper, BlockPos separator) {
+		Optional<BlockPos> spawnPos = starterBeeRestorationTarget(level, settlement, separator);
+
+		if (spawnPos.isEmpty() || separator.distSqr(beekeeper.blockPosition()) > SEPARATOR_REACH_DISTANCE_SQUARED) {
+			return false;
+		}
+
+		Animal bee = EntityType.BEE.create(level, EntitySpawnReason.EVENT);
+
+		if (bee == null) {
+			return false;
+		}
+
+		bee.setPos(spawnPos.get().getX() + 0.5D, spawnPos.get().getY() + 0.1D, spawnPos.get().getZ() + 0.5D);
+		bee.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos.get()), EntitySpawnReason.EVENT, null);
+		bee.setPersistenceRequired();
+
+		if (!level.addFreshEntity(bee)) {
+			return false;
+		}
+
+		String restorationKey = beeRestorationKey(level, separator);
+
+		if (nearbyBeePopulationCount(level, separator) >= MIN_VISIBLE_BEE_TARGET) {
+			BEE_RESTORATION_START_TICKS.remove(restorationKey);
+		} else {
+			BEE_RESTORATION_START_TICKS.put(restorationKey, level.getOverworldClockTime());
+		}
+
+		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "restored starter bee population");
 		return true;
 	}
 
@@ -641,8 +690,8 @@ public final class SettlementBeekeeperWork {
 	private static int nearbyManagedHiveCount(ServerLevel level, BlockPos separator) {
 		int count = 0;
 
-		for (int dx = -APIARY_SCAN_RADIUS; dx <= APIARY_SCAN_RADIUS; dx++) {
-			for (int dz = -APIARY_SCAN_RADIUS; dz <= APIARY_SCAN_RADIUS; dz++) {
+		for (int dx = -HIVE_RESTORATION_SCAN_RADIUS; dx <= HIVE_RESTORATION_SCAN_RADIUS; dx++) {
+			for (int dz = -HIVE_RESTORATION_SCAN_RADIUS; dz <= HIVE_RESTORATION_SCAN_RADIUS; dz++) {
 				for (int dy = -2; dy <= 3; dy++) {
 					BlockPos hivePos = separator.offset(dx, dy, dz);
 
@@ -671,8 +720,8 @@ public final class SettlementBeekeeperWork {
 	private static int nearbyHiveOrNestCount(ServerLevel level, BlockPos separator) {
 		int count = 0;
 
-		for (int dx = -APIARY_SCAN_RADIUS; dx <= APIARY_SCAN_RADIUS; dx++) {
-			for (int dz = -APIARY_SCAN_RADIUS; dz <= APIARY_SCAN_RADIUS; dz++) {
+		for (int dx = -HIVE_RESTORATION_SCAN_RADIUS; dx <= HIVE_RESTORATION_SCAN_RADIUS; dx++) {
+			for (int dz = -HIVE_RESTORATION_SCAN_RADIUS; dz <= HIVE_RESTORATION_SCAN_RADIUS; dz++) {
 				for (int dy = -2; dy <= 4; dy++) {
 					if (isHiveOrNest(level.getBlockState(separator.offset(dx, dy, dz)))) {
 						count++;
@@ -686,6 +735,106 @@ public final class SettlementBeekeeperWork {
 
 	private static int nearbyBeePopulationCount(ServerLevel level, BlockPos separator) {
 		return nearbyVisibleBeeCount(level, separator) + nearbyHiveOccupantCount(level, separator);
+	}
+
+	private static Optional<BlockPos> starterBeeRestorationTarget(ServerLevel level, SettlementState settlement, BlockPos separator) {
+		String restorationKey = beeRestorationKey(level, separator);
+
+		if (nearbyHiveOrNestCount(level, separator) <= 0 || nearbyBeePopulationCount(level, separator) >= MIN_VISIBLE_BEE_TARGET) {
+			BEE_RESTORATION_START_TICKS.remove(restorationKey);
+			return Optional.empty();
+		}
+
+		Optional<BlockPos> spawnPos = starterBeeSpawnPos(level, separator);
+
+		if (spawnPos.isEmpty()) {
+			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.BEEKEEPER, "no_starter_bee_spawn", "separator=" + separator.toShortString());
+			return Optional.empty();
+		}
+
+		long clockTime = level.getOverworldClockTime();
+		Long startTick = BEE_RESTORATION_START_TICKS.get(restorationKey);
+
+		if (startTick == null || clockTime < startTick) {
+			startTick = clockTime >= STARTER_BEE_RESTORATION_OBSERVED_WORLD_AGE_TICKS
+				? clockTime - STARTER_BEE_RESTORATION_INTERVAL_TICKS
+				: clockTime;
+			BEE_RESTORATION_START_TICKS.put(restorationKey, startTick);
+		}
+
+		return clockTime - startTick >= STARTER_BEE_RESTORATION_INTERVAL_TICKS ? spawnPos : Optional.empty();
+	}
+
+	private static Optional<BlockPos> starterBeeSpawnPos(ServerLevel level, BlockPos separator) {
+		for (int dx = -HIVE_RESTORATION_SCAN_RADIUS; dx <= HIVE_RESTORATION_SCAN_RADIUS; dx++) {
+			for (int dz = -HIVE_RESTORATION_SCAN_RADIUS; dz <= HIVE_RESTORATION_SCAN_RADIUS; dz++) {
+				for (int dy = -2; dy <= 4; dy++) {
+					BlockPos hivePos = separator.offset(dx, dy, dz);
+
+					if (!isHiveOrNest(level.getBlockState(hivePos))) {
+						continue;
+					}
+
+					Optional<BlockPos> spawnPos = starterBeeSpawnPosNearHive(level, hivePos);
+
+					if (spawnPos.isPresent()) {
+						return spawnPos;
+					}
+				}
+			}
+		}
+
+		return starterBeeSpawnPosNear(level, separator, HIVE_RESTORATION_SCAN_RADIUS);
+	}
+
+	private static Optional<BlockPos> starterBeeSpawnPosNearHive(ServerLevel level, BlockPos hivePos) {
+		BlockPos above = hivePos.above();
+
+		if (canSpawnStarterBeeAt(level, above)) {
+			return Optional.of(above.immutable());
+		}
+
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos candidate = hivePos.relative(direction);
+
+			if (canSpawnStarterBeeAt(level, candidate)) {
+				return Optional.of(candidate.immutable());
+			}
+		}
+
+		return starterBeeSpawnPosNear(level, hivePos, 3);
+	}
+
+	private static Optional<BlockPos> starterBeeSpawnPosNear(ServerLevel level, BlockPos origin, int maxRadius) {
+		for (int radius = 1; radius <= maxRadius; radius++) {
+			for (int dx = -radius; dx <= radius; dx++) {
+				for (int dz = -radius; dz <= radius; dz++) {
+					if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+						continue;
+					}
+
+					for (int dy = -1; dy <= 3; dy++) {
+						BlockPos candidate = origin.offset(dx, dy, dz);
+
+						if (canSpawnStarterBeeAt(level, candidate)) {
+							return Optional.of(candidate.immutable());
+						}
+					}
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static boolean canSpawnStarterBeeAt(ServerLevel level, BlockPos pos) {
+		return level.hasChunkAt(pos)
+			&& level.getBlockState(pos).isAir()
+			&& level.getBlockState(pos.above()).isAir();
+	}
+
+	private static String beeRestorationKey(ServerLevel level, BlockPos separator) {
+		return level.dimension().identifier() + ":" + separator.getX() + "," + separator.getY() + "," + separator.getZ();
 	}
 
 	private static int nearbyVisibleBeeCount(ServerLevel level, BlockPos origin) {
@@ -710,8 +859,8 @@ public final class SettlementBeekeeperWork {
 	private static int nearbyHiveOccupantCount(ServerLevel level, BlockPos separator) {
 		int count = 0;
 
-		for (int dx = -APIARY_SCAN_RADIUS; dx <= APIARY_SCAN_RADIUS; dx++) {
-			for (int dz = -APIARY_SCAN_RADIUS; dz <= APIARY_SCAN_RADIUS; dz++) {
+		for (int dx = -HIVE_RESTORATION_SCAN_RADIUS; dx <= HIVE_RESTORATION_SCAN_RADIUS; dx++) {
+			for (int dz = -HIVE_RESTORATION_SCAN_RADIUS; dz <= HIVE_RESTORATION_SCAN_RADIUS; dz++) {
 				for (int dy = -2; dy <= 4; dy++) {
 					BlockPos hivePos = separator.offset(dx, dy, dz);
 

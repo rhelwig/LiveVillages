@@ -180,7 +180,7 @@ public final class SettlementRoadwrightWork {
 			rememberVisibleRoadworkPlan(settlement, roadwrightId, plan.get(), tick);
 			PathTask task = plan.get().toPathTask();
 
-			if (!hasSuppliesForRoadwork(stock, task)) {
+			if (!hasSuppliesForRoadwork(stock, settlement, task)) {
 				ROADWORK_TASK_CACHE.remove(roadworkTaskCacheKey(settlement, roadwrightId));
 				SettlementProfessionDiagnostics.log(
 					level,
@@ -797,7 +797,7 @@ public final class SettlementRoadwrightWork {
 		BlockState workState = level.getBlockState(task.workPos());
 
 		return switch (task.action()) {
-			case PLACE_TRAIL -> canConvertToTrail(level, settlement, task.workPos(), workState);
+			case PLACE_TRAIL -> canPlaceTargetRoadSurface(level, settlement, task.workPos(), workState);
 			case COLLECT_LEAF_LITTER -> workState.is(Blocks.LEAF_LITTER);
 			case RAISE_SURFACE -> canRaiseLowerRoadSurface(level, task.workPos());
 			case PLACE_STAIR -> needsSlopeTreatment(level, task.workPos());
@@ -805,8 +805,14 @@ public final class SettlementRoadwrightWork {
 		};
 	}
 
-	private static boolean hasSuppliesForRoadwork(Map<String, Integer> stock, PathTask task) {
+	private static boolean hasSuppliesForRoadwork(Map<String, Integer> stock, SettlementState settlement, PathTask task) {
 		return switch (task.action()) {
+			case PLACE_TRAIL -> targetRoadGoodsKey(settlement)
+				.map(goodsKey -> stock.getOrDefault(goodsKey, 0) > 0)
+				.orElse(true);
+			case PLACE_STAIR -> targetRoadGoodsKey(settlement)
+				.map(goodsKey -> stock.getOrDefault(goodsKey, 0) > 0)
+				.orElse(true);
 			case PLACE_MILEPOST -> stock.getOrDefault("milepost", 0) > 0;
 			default -> true;
 		};
@@ -1329,6 +1335,10 @@ public final class SettlementRoadwrightWork {
 				return Optional.of(trailTask(surfacePos));
 			}
 
+			if (roadSurfaceNeedsTierUpgrade(settlement, surfaceState)) {
+				return Optional.of(trailTask(surfacePos));
+			}
+
 			Optional<PathTask> terrainTask = terrainTransitionTask(level, previousSurfacePos, surfacePos);
 
 			if (terrainTask.isPresent()) {
@@ -1365,6 +1375,11 @@ public final class SettlementRoadwrightWork {
 					tasks.add(trailTask(surfacePos));
 				}
 
+				continue;
+			}
+
+			if (roadSurfaceNeedsTierUpgrade(settlement, surfaceState)) {
+				tasks.add(trailTask(surfacePos));
 				continue;
 			}
 
@@ -1776,6 +1791,20 @@ public final class SettlementRoadwrightWork {
 				|| surfaceState.is(BlockTags.DIRT));
 	}
 
+	private static boolean canPlaceTargetRoadSurface(ServerLevel level, SettlementState settlement, BlockPos surfacePos, BlockState surfaceState) {
+		return canConvertToTrail(level, settlement, surfacePos, surfaceState)
+			|| (isDryPathColumn(level, surfacePos)
+				&& roadSurfaceNeedsTierUpgrade(settlement, surfaceState)
+				&& canClearRoadHeadspace(level, surfacePos));
+	}
+
+	private static boolean canClearRoadHeadspace(ServerLevel level, BlockPos surfacePos) {
+		BlockState aboveState = level.getBlockState(surfacePos.above());
+		return aboveState.isAir()
+			|| aboveState.canBeReplaced()
+			|| aboveState.is(Blocks.LEAF_LITTER);
+	}
+
 	private static Optional<PathTask> milepostPlacementTaskOnPath(ServerLevel level, SettlementState settlement, List<BlockPos> path, BlockPos targetPos) {
 		if (path.size() <= 2) {
 			return Optional.empty();
@@ -2100,7 +2129,7 @@ public final class SettlementRoadwrightWork {
 			case PLACE_TRAIL -> placeTrail(level, settlement, stock, task.workPos());
 			case COLLECT_LEAF_LITTER -> collectLeafLitter(level, stock, task.workPos());
 			case RAISE_SURFACE -> raiseLowerRoadSurface(level, task.workPos());
-			case PLACE_STAIR -> placeSlopeStair(level, task.workPos(), task.uphillDirection());
+			case PLACE_STAIR -> placeSlopeStair(level, settlement, stock, task.workPos(), task.uphillDirection());
 			case PLACE_MILEPOST -> placeMilepost(level, stock, task.workPos(), task.uphillDirection());
 		};
 	}
@@ -2108,12 +2137,17 @@ public final class SettlementRoadwrightWork {
 	private static boolean placeTrail(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos surfacePos) {
 		BlockState surfaceState = level.getBlockState(surfacePos);
 
-		if (!canConvertToTrail(level, settlement, surfacePos, surfaceState)) {
+		if (!canPlaceTargetRoadSurface(level, settlement, surfacePos, surfaceState)) {
 			return false;
 		}
 
 		BlockPos abovePos = surfacePos.above();
 		BlockState aboveState = level.getBlockState(abovePos);
+		Optional<String> targetGoodsKey = targetRoadGoodsKey(settlement);
+
+		if (targetGoodsKey.isPresent() && !SettlementGoods.consumeGoods(stock, targetGoodsKey.get(), 1)) {
+			return false;
+		}
 
 		if (aboveState.is(Blocks.LEAF_LITTER)) {
 			addGoods(stock, "leaf_litter", 1);
@@ -2123,7 +2157,7 @@ public final class SettlementRoadwrightWork {
 			level.setBlock(abovePos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
 		}
 
-		level.setBlock(surfacePos, Blocks.DIRT_PATH.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		level.setBlock(surfacePos, targetRoadSurfaceState(settlement), BLOCK_UPDATE_FLAGS);
 		return true;
 	}
 
@@ -2194,7 +2228,7 @@ public final class SettlementRoadwrightWork {
 		return Blocks.DIRT.defaultBlockState();
 	}
 
-	private static boolean placeSlopeStair(ServerLevel level, BlockPos lowerSurfacePos, Direction uphillDirection) {
+	private static boolean placeSlopeStair(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos lowerSurfacePos, Direction uphillDirection) {
 		if (!needsSlopeTreatment(level, lowerSurfacePos)) {
 			return false;
 		}
@@ -2202,8 +2236,13 @@ public final class SettlementRoadwrightWork {
 		BlockPos stairPos = lowerSurfacePos.above();
 		BlockPos headPos = stairPos.above();
 		BlockState headState = level.getBlockState(headPos);
+		Optional<String> targetGoodsKey = targetRoadGoodsKey(settlement);
 
 		if (!headState.isAir() && !headState.canBeReplaced()) {
+			return false;
+		}
+
+		if (targetGoodsKey.isPresent() && !SettlementGoods.consumeGoods(stock, targetGoodsKey.get(), 1)) {
 			return false;
 		}
 
@@ -2211,7 +2250,7 @@ public final class SettlementRoadwrightWork {
 			level.setBlock(headPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
 		}
 
-		level.setBlock(stairPos, roadStairStateNear(level, lowerSurfacePos).setValue(StairBlock.FACING, uphillDirection), BLOCK_UPDATE_FLAGS);
+		level.setBlock(stairPos, targetRoadStairState(settlement).setValue(StairBlock.FACING, uphillDirection), BLOCK_UPDATE_FLAGS);
 		return true;
 	}
 
@@ -2226,8 +2265,9 @@ public final class SettlementRoadwrightWork {
 		BlockState stairPosState = level.getBlockState(lowerSurfacePos.above());
 
 		return !isRoadSlope(lowerSurfaceState)
-			&& !isRoadSlope(stairPosState)
-			&& (stairPosState.isAir() || stairPosState.canBeReplaced());
+			&& (stairPosState.isAir()
+				|| stairPosState.canBeReplaced()
+				|| isReplaceableRoadStair(stairPosState));
 	}
 
 	private static BlockState roadStairStateNear(ServerLevel level, BlockPos lowerSurfacePos) {
@@ -2301,6 +2341,71 @@ public final class SettlementRoadwrightWork {
 			|| state.is(Blocks.STONE_BRICKS)
 			|| state.is(Blocks.BRICKS)
 			|| isRoadStairOrSlab(state);
+	}
+
+	private static BlockState targetRoadSurfaceState(SettlementState settlement) {
+		return switch (targetRoadTier(settlement)) {
+			case 4 -> Blocks.STONE_BRICKS.defaultBlockState();
+			case 3 -> Blocks.SMOOTH_STONE.defaultBlockState();
+			case 2 -> Blocks.COBBLESTONE.defaultBlockState();
+			default -> Blocks.DIRT_PATH.defaultBlockState();
+		};
+	}
+
+	private static BlockState targetRoadStairState(SettlementState settlement) {
+		return switch (targetRoadTier(settlement)) {
+			case 4 -> Blocks.STONE_BRICK_STAIRS.defaultBlockState();
+			case 3 -> Blocks.STONE_STAIRS.defaultBlockState();
+			case 2 -> Blocks.COBBLESTONE_STAIRS.defaultBlockState();
+			default -> Blocks.OAK_STAIRS.defaultBlockState();
+		};
+	}
+
+	private static Optional<String> targetRoadGoodsKey(SettlementState settlement) {
+		return switch (targetRoadTier(settlement)) {
+			case 4 -> Optional.of("stone_bricks");
+			case 3 -> Optional.of("smooth_stone");
+			case 2 -> Optional.of("cobblestone");
+			default -> Optional.empty();
+		};
+	}
+
+	private static int targetRoadTier(SettlementState settlement) {
+		if (settlement == null) {
+			return 1;
+		}
+
+		return Math.max(1, Math.min(4, SettlementTiers.unlockedTier(settlement)));
+	}
+
+	private static boolean roadSurfaceNeedsTierUpgrade(SettlementState settlement, BlockState state) {
+		int currentRoadTier = upgradeableRoadSurfaceTier(state);
+
+		return currentRoadTier > 0 && currentRoadTier < targetRoadTier(settlement);
+	}
+
+	private static int upgradeableRoadSurfaceTier(BlockState state) {
+		if (state.is(Blocks.DIRT_PATH)) {
+			return 1;
+		}
+
+		if (state.is(Blocks.COBBLESTONE)) {
+			return 2;
+		}
+
+		if (state.is(Blocks.SMOOTH_STONE)) {
+			return 3;
+		}
+
+		if (state.is(Blocks.STONE_BRICKS) || state.is(Blocks.BRICKS)) {
+			return 4;
+		}
+
+		return 0;
+	}
+
+	private static boolean isReplaceableRoadStair(BlockState state) {
+		return state.is(BlockTags.WOODEN_STAIRS);
 	}
 
 	private static boolean isEstablishedPathSurface(BlockState state) {

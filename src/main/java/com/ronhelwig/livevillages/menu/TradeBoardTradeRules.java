@@ -1149,7 +1149,7 @@ public final class TradeBoardTradeRules {
 			case "desecrated_enemy_banner" -> stack.is(Items.WHITE_BANNER) && stack.getHoverName().getString().equals("Desecrated Enemy Banner");
 			case "logs" -> stack.is(ItemTags.LOGS);
 			case "planks" -> stack.is(ItemTags.PLANKS);
-			case "stairs" -> stack.is(Items.OAK_STAIRS) || stack.is(Items.SPRUCE_STAIRS) || stack.is(Items.BIRCH_STAIRS) || stack.is(Items.JUNGLE_STAIRS) || stack.is(Items.ACACIA_STAIRS) || stack.is(Items.CHERRY_STAIRS) || stack.is(Items.DARK_OAK_STAIRS) || stack.is(Items.PALE_OAK_STAIRS) || stack.is(Items.MANGROVE_STAIRS);
+			case "stairs" -> isStairsGoods(stack);
 			case "slab" -> stack.is(Items.OAK_SLAB) || stack.is(Items.SPRUCE_SLAB) || stack.is(Items.BIRCH_SLAB) || stack.is(Items.JUNGLE_SLAB) || stack.is(Items.ACACIA_SLAB) || stack.is(Items.CHERRY_SLAB) || stack.is(Items.DARK_OAK_SLAB) || stack.is(Items.PALE_OAK_SLAB) || stack.is(Items.MANGROVE_SLAB);
 			case "trapdoor" -> isWoodenTrapdoor(stack);
 			case "chest" -> stack.is(Items.CHEST);
@@ -1213,5 +1213,21 @@ public final class TradeBoardTradeRules {
 			case "emerald" -> stack.is(Items.EMERALD);
 			default -> false;
 		};
+	}
+
+	private static boolean isStairsGoods(ItemStack stack) {
+		return stack.is(Items.OAK_STAIRS)
+			|| stack.is(Items.SPRUCE_STAIRS)
+			|| stack.is(Items.BIRCH_STAIRS)
+			|| stack.is(Items.JUNGLE_STAIRS)
+			|| stack.is(Items.ACACIA_STAIRS)
+			|| stack.is(Items.CHERRY_STAIRS)
+			|| stack.is(Items.DARK_OAK_STAIRS)
+			|| stack.is(Items.PALE_OAK_STAIRS)
+			|| stack.is(Items.MANGROVE_STAIRS)
+			|| stack.is(Items.COBBLESTONE_STAIRS)
+			|| stack.is(Items.STONE_STAIRS)
+			|| stack.is(Items.STONE_BRICK_STAIRS)
+			|| stack.is(Items.BRICK_STAIRS);
 	}
 }

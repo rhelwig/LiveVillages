@@ -3259,7 +3259,7 @@ public final class SettlementVillagers {
 		}
 
 		if (villager.getVillagerData().profession().is(VillagerProfession.SHEPHERD)) {
-			Optional<String> shepherdTask = SettlementButcherWork.loadedShepherdTaskKey(level, villager);
+			Optional<String> shepherdTask = SettlementShepherdWork.loadedShepherdTaskKey(level, villager);
 
 			if (shepherdTask.isPresent()) {
 				return shepherdTask.get();
@@ -4664,6 +4664,7 @@ public final class SettlementVillagers {
 			case "raising_child" -> "raising child";
 			case "reinforcing_shaft_support" -> "reinforcing shaft support";
 			case "refreshing_route_intelligence" -> "refreshing route intelligence";
+			case "restoring_bee_population" -> "restoring bee population";
 			case "returning_fishing_boat" -> "returning fishing boat";
 			case "returning_home" -> "returning home";
 			case "rowing_out" -> "rowing out";

@@ -262,14 +262,15 @@ public final class SettlementEconomySimulator {
 				shepherds,
 				armorers,
 				toolsmiths,
-				weaponsmiths
+				weaponsmiths,
+				infrastructure.anvilSupportedSmithies() > 0
 			);
 		}
 
 		if (useLoadedVillagerFoodWork) {
 			SettlementFarmerWork.applyLoadedFarmerWork(level, settlement, stock, elapsedDays);
 			SettlementButcherWork.applyLoadedButcherWork(level, settlement, stock, butchers, previousTick, currentTick);
-			SettlementButcherWork.applyLoadedShepherdWork(level, settlement, stock, shepherds, previousTick, currentTick);
+			SettlementShepherdWork.applyLoadedShepherdWork(level, settlement, stock, shepherds, previousTick, currentTick);
 		}
 
 		SettlementRefining.refineTowardSettlementTargets(settlement, stock);
@@ -285,7 +286,8 @@ public final class SettlementEconomySimulator {
 		int shepherds,
 		int armorers,
 		int toolsmiths,
-		int weaponsmiths
+		int weaponsmiths,
+		boolean anvilSupportedSmithy
 	) {
 		produceFromRecipe(stock, "healing_potion", scaledAmount(clerics, elapsedDays), Map.of("glass_bottle", 1, "nether_wart", 1, "glistering_melon_slice", 1));
 
@@ -305,9 +307,10 @@ public final class SettlementEconomySimulator {
 		int beds = produceFromRecipe(stock, "bed", Math.min(shepherdActions, bedNeed), Map.of("wool", 3, "planks", 3));
 		addGoods(stock, "wool", Math.max(0, shepherdActions - beds));
 
-		produceFromRecipe(stock, "iron_chestplate", scaledAmount(armorers, elapsedDays), Map.of("iron_ingot", 8));
-		produceFromRecipe(stock, "iron_pickaxe", scaledAmount(toolsmiths, elapsedDays), Map.of("iron_ingot", 3, "stick", 2));
-		produceFromRecipe(stock, "iron_sword", scaledAmount(weaponsmiths, elapsedDays), Map.of("iron_ingot", 2, "stick", 1));
+		int smithyMultiplier = anvilSupportedSmithy ? 2 : 1;
+		produceFromRecipe(stock, "iron_chestplate", scaledAmount(armorers * smithyMultiplier, elapsedDays), Map.of("iron_ingot", 8));
+		produceFromRecipe(stock, "iron_pickaxe", scaledAmount(toolsmiths * smithyMultiplier, elapsedDays), Map.of("iron_ingot", 3, "stick", 2));
+		produceFromRecipe(stock, "iron_sword", scaledAmount(weaponsmiths * smithyMultiplier, elapsedDays), Map.of("iron_ingot", 2, "stick", 1));
 	}
 
 	private static int produceFromRecipe(Map<String, Integer> stock, String outputGoodsKey, int requested, Map<String, Integer> inputs) {

@@ -41,7 +41,7 @@ public final class SettlementScribeWork {
 		}
 
 		List<String> previousRecipes = savedData.knownScribeRecipeIds(settlement.id());
-		List<String> knownRecipes = savedData.ensureScribeStarterRecipes(settlement.id(), SettlementRecipeKnowledge.starterRecipeIds());
+		List<String> knownRecipes = savedData.ensureScribeStarterRecipes(settlement.id(), SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(settlement)));
 		boolean dataChanged = !knownRecipes.equals(previousRecipes);
 		long tick = level.getServer().getTickCount();
 

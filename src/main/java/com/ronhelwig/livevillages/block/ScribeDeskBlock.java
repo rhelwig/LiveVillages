@@ -41,6 +41,7 @@ import com.ronhelwig.livevillages.sim.SettlementBuildSiteType;
 import com.ronhelwig.livevillages.sim.SettlementConstruction;
 import com.ronhelwig.livevillages.sim.SettlementRecipeKnowledge;
 import com.ronhelwig.livevillages.sim.SettlementState;
+import com.ronhelwig.livevillages.sim.SettlementTiers;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 import com.ronhelwig.livevillages.menu.ScribeDeskMenu;
 import com.ronhelwig.livevillages.menu.ScribeDeskOpenData;
@@ -149,7 +150,7 @@ public class ScribeDeskBlock extends HorizontalDirectionalBlock {
 				serverLevel,
 				serverPlayer,
 				settlement.id(),
-				savedData.ensureScribeStarterRecipes(settlement.id(), SettlementRecipeKnowledge.starterRecipeIds()),
+				savedData.ensureScribeStarterRecipes(settlement.id(), SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(settlement))),
 				settlement.name(),
 				settlement.tier(),
 				pos
@@ -231,6 +232,7 @@ public class ScribeDeskBlock extends HorizontalDirectionalBlock {
 			case "cartography_table" -> "cartography_table";
 			case "fletching_table" -> "fletching_table";
 			case "loom" -> "loom";
+			case "cobblestone_stairs" -> "cobblestone_stairs";
 			default -> "book";
 		};
 	}

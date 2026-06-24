@@ -327,6 +327,10 @@ public final class SettlementGoods {
 			return "planks";
 		}
 
+		if (isStairsGoods(stack)) {
+			return "stairs";
+		}
+
 		if (isWoodenTrapdoor(stack)) {
 			return "trapdoor";
 		}
@@ -506,6 +510,22 @@ public final class SettlementGoods {
 			|| stack.is(Items.PALE_OAK_TRAPDOOR)
 			|| stack.is(Items.MANGROVE_TRAPDOOR)
 			|| stack.is(Items.BAMBOO_TRAPDOOR);
+	}
+
+	private static boolean isStairsGoods(ItemStack stack) {
+		return stack.is(Items.OAK_STAIRS)
+			|| stack.is(Items.SPRUCE_STAIRS)
+			|| stack.is(Items.BIRCH_STAIRS)
+			|| stack.is(Items.JUNGLE_STAIRS)
+			|| stack.is(Items.ACACIA_STAIRS)
+			|| stack.is(Items.CHERRY_STAIRS)
+			|| stack.is(Items.DARK_OAK_STAIRS)
+			|| stack.is(Items.PALE_OAK_STAIRS)
+			|| stack.is(Items.MANGROVE_STAIRS)
+			|| stack.is(Items.COBBLESTONE_STAIRS)
+			|| stack.is(Items.STONE_STAIRS)
+			|| stack.is(Items.STONE_BRICK_STAIRS)
+			|| stack.is(Items.BRICK_STAIRS);
 	}
 
 	public static boolean isSeedlingGoods(String goodsKey) {

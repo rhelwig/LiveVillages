@@ -51,7 +51,6 @@ public final class SettlementMinerWork {
 	private static final int ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS = 3;
 	private static final int MAX_MINER_COMPLETED_TASKS_PER_DAY = SettlementEconomyRules.scaledWorkerDailyUnits(48);
 	private static final int MAX_SHAFT_DEPTH_BLOCKS = 96;
-	private static final int SHAFT_LIGHT_SPACING_LEVELS = 8;
 	private static final int MAX_CAVE_SCAN_RADIUS_BLOCKS = 10;
 	private static final int MAX_CAVE_SCAN_AIR_CELLS = 96;
 	private static final int MAX_CAVE_STAND_POSITIONS = 24;
@@ -521,7 +520,7 @@ public final class SettlementMinerWork {
 			return reachableResourceTask;
 		}
 
-		Optional<BlockPos> lightPos = desiredLightPos(level, mineSite, bottomUp);
+		Optional<ShaftLightTarget> lightTarget = desiredLightTarget(level, mineSite, bottomUp);
 		Optional<BlockPos> standPos = standPosFor(miner, mineSite, bottomUp);
 
 		if (standPos.isEmpty()) {
@@ -548,14 +547,15 @@ public final class SettlementMinerWork {
 			return chooseReachableShaftWallMiningTask(level, mineSite, bottomUp);
 		}
 
-		if (lightPos.isPresent()) {
-			BlockState lightState = preferredShaftLightState(level, stock, mineSite, lightPos.get());
+		if (lightTarget.isPresent()) {
+			BlockState lightState = preferredShaftLightState(level, stock, mineSite, lightTarget.get().pos());
+			Optional<BlockPos> lightStandPos = standPosFor(miner, mineSite, lightTarget.get().levelUp());
 
-			if (lightState != null) {
+			if (lightState != null && lightStandPos.isPresent()) {
 				Optional<MinerTask> lightTask = availableMinerTask(
 					level,
 					miner,
-					new MinerTask(MinerAction.PLACE_LIGHT, lightPos.get(), lightState, standPos.get(), "lighting_mine_shaft")
+					new MinerTask(MinerAction.PLACE_LIGHT, lightTarget.get().pos(), lightState, lightStandPos.get(), "lighting_mine_shaft")
 				);
 				if (lightTask.isPresent()) {
 					return lightTask;
@@ -1589,11 +1589,7 @@ public final class SettlementMinerWork {
 		Direction leftDirection = mineSite.buildSite().facing().getCounterClockWise();
 		Direction rightDirection = mineSite.buildSite().facing().getClockWise();
 
-		for (int up = -1; up >= bottomUp; up--) {
-			if (!shouldCreatePrimaryTunnelLevel(up)) {
-				continue;
-			}
-
+		for (int up = highestPrimaryTunnelFloorUp(mineSite); up >= bottomUp; up -= PRIMARY_TUNNEL_INTERVAL_LEVELS) {
 			branches.add(new PrimaryTunnelBranch(up, leftAnchor, leftDirection));
 			branches.add(new PrimaryTunnelBranch(up, rightAnchor, rightDirection));
 		}
@@ -1601,8 +1597,14 @@ public final class SettlementMinerWork {
 		return branches;
 	}
 
-	private static boolean shouldCreatePrimaryTunnelLevel(int up) {
-		return up < 0 && Math.floorMod(Math.abs(up), PRIMARY_TUNNEL_INTERVAL_LEVELS) == 0;
+	private static int highestPrimaryTunnelFloorUp(MineSite mineSite) {
+		return mineSite.layout().starterMinUp() - PRIMARY_TUNNEL_HEIGHT_BLOCKS;
+	}
+
+	private static boolean isPrimaryTunnelFloorLevel(MineSite mineSite, int up) {
+		int highestFloorUp = highestPrimaryTunnelFloorUp(mineSite);
+		return up <= highestFloorUp
+			&& Math.floorMod(highestFloorUp - up, PRIMARY_TUNNEL_INTERVAL_LEVELS) == 0;
 	}
 
 	private static BlockPos branchTunnelFloorPos(MineSite mineSite, PrimaryTunnelBranch branch, int step, int widthOffset) {
@@ -2234,21 +2236,34 @@ public final class SettlementMinerWork {
 			.findFirst();
 	}
 
-	private static Optional<BlockPos> desiredLightPos(ServerLevel level, MineSite mineSite, int bottomUp) {
-		if (!shouldLightLevel(bottomUp)) {
-			return Optional.empty();
-		}
-
+	private static Optional<ShaftLightTarget> desiredLightTarget(ServerLevel level, MineSite mineSite, int bottomUp) {
 		List<ShaftColumn> openColumns = mineSite.layout().openColumns();
 
 		if (openColumns.isEmpty()) {
 			return Optional.empty();
 		}
 
-		int index = Math.floorMod(Math.abs(bottomUp) / SHAFT_LIGHT_SPACING_LEVELS, openColumns.size());
-		BlockPos torchPos = worldPos(mineSite.buildSite(), openColumns.get(index), bottomUp);
-		BlockState currentState = level.getBlockState(torchPos);
-		return isShaftLight(currentState) ? Optional.empty() : Optional.of(torchPos);
+		for (int up = highestPrimaryTunnelFloorUp(mineSite); up >= bottomUp; up -= PRIMARY_TUNNEL_INTERVAL_LEVELS) {
+			if (!isPrimaryTunnelFloorLevel(mineSite, up) || hasShaftLightAtLevel(level, mineSite, up)) {
+				continue;
+			}
+
+			for (ShaftColumn column : openColumns) {
+				BlockPos torchPos = worldPos(mineSite.buildSite(), column, up);
+
+				if (level.getBlockState(torchPos).isAir() && shaftLightSupportDirection(level, mineSite, torchPos).isPresent()) {
+					return Optional.of(new ShaftLightTarget(torchPos, up));
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static boolean hasShaftLightAtLevel(ServerLevel level, MineSite mineSite, int up) {
+		return mineSite.layout().openColumns().stream()
+			.map(column -> worldPos(mineSite.buildSite(), column, up))
+			.anyMatch(pos -> isShaftLight(level.getBlockState(pos)));
 	}
 
 	private static Optional<CavePocket> scanNearbyCave(ServerLevel level, MineSite mineSite, List<BlockPos> frontierCells) {
@@ -2433,10 +2448,6 @@ public final class SettlementMinerWork {
 		return consumeLadder(new HashMap<>(stock));
 	}
 
-	private static boolean shouldLightLevel(int up) {
-		return up < 0 && Math.floorMod(Math.abs(up), SHAFT_LIGHT_SPACING_LEVELS) == 0;
-	}
-
 	private static boolean consumeLadder(Map<String, Integer> stock) {
 		return SettlementConstructionMaterials.consumeMaterial(stock, new HashMap<>(), "ladder").supplied();
 	}
@@ -2570,6 +2581,14 @@ public final class SettlementMinerWork {
 	}
 
 	private static Optional<Direction> shaftLightSupportDirection(ServerLevel level, MineSite mineSite, BlockPos targetPos) {
+		Direction oppositeLadderWall = mineSite.supportDirection().getOpposite();
+		BlockPos preferredSupportPos = targetPos.relative(oppositeLadderWall);
+
+		if (!isShaftColumnAt(mineSite, preferredSupportPos, targetPos.getY())
+			&& isStableLadderSupport(level.getBlockState(preferredSupportPos))) {
+			return Optional.of(oppositeLadderWall);
+		}
+
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			BlockPos supportPos = targetPos.relative(direction);
 			if (!isShaftColumnAt(mineSite, supportPos, targetPos.getY())
@@ -4255,6 +4274,12 @@ public final class SettlementMinerWork {
 	}
 
 	private record OreWorkTarget(BlockPos targetPos, BlockPos standPos) {
+	}
+
+	private record ShaftLightTarget(BlockPos pos, int levelUp) {
+		private ShaftLightTarget {
+			pos = pos.immutable();
+		}
 	}
 
 	private record InterestingDiscovery(List<String> signLines) {

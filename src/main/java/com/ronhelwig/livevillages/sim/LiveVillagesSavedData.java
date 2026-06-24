@@ -40,6 +40,7 @@ import net.minecraft.tags.BlockTags;
 
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.LiveVillagesGameRules;
+import com.ronhelwig.livevillages.block.ShelterAnchorBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
@@ -67,6 +68,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final int[] VIRTUAL_TRADING_POST_BELL_SEARCH_RADII = { 3, 4, 5, 6, 8, 10, 12, 16, 20, 24 };
 	private static final int[] VIRTUAL_TRADING_POST_SEARCH_RADII = { 6, 8, 10, 12, 14, 16, 18, 22, 26, 30 };
 	private static final int VIRTUAL_TRADING_POST_SIDE_SEARCH_BLOCKS = 5;
+	private static final String SHELTER_MARKER_MATERIAL_CREDIT_KEY = "__shelter_marker_material_credit__";
 	private static final int[] AUTONOMOUS_WORKSTATION_BELL_SEARCH_RADII = { 5, 6, 8, 10, 12, 16, 20, 24, 28 };
 	private static final int[] AUTONOMOUS_WORKSTATION_SEARCH_RADII = { 8, 10, 12, 14, 16, 20, 24, 28, 32 };
 	private static final int AUTONOMOUS_WORKSTATION_SIDE_SEARCH_BLOCKS = 7;
@@ -1306,7 +1308,7 @@ public class LiveVillagesSavedData extends SavedData {
 				stock,
 				getRoutesForSettlement(workingSettlement.id()).size()
 			);
-			stockChanged |= SettlementButcherWork.maintainLoadedShepherding(
+			stockChanged |= SettlementShepherdWork.maintainLoadedShepherding(
 				level,
 				workingSettlement,
 				stock,
@@ -1700,6 +1702,8 @@ public class LiveVillagesSavedData extends SavedData {
 		changed |= tryStartPlacedTradeBoardBuildSites(level, settlement, stock, workstations.tradeBoards());
 		changed |= tryStartPlacedPortmasterDockBuildSites(level, settlement, stock, workstations.portmasterAnchors());
 		changed |= tryStartPlacedLighthouseBuildSites(level, settlement, stock, workstations.lighthouses());
+		changed |= tryStartPlacedSimpleHousingShelterBuildSites(level, settlement, stock, workstations.simpleHousingShelters());
+		changed |= tryStartPlacedHousingShelterBuildSites(level, settlement, stock, workstations.housingShelters());
 		return changed;
 	}
 
@@ -2780,6 +2784,106 @@ public class LiveVillagesSavedData extends SavedData {
 		return changed;
 	}
 
+	private boolean tryStartPlacedSimpleHousingShelterBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> shelterMarkers) {
+		boolean changed = false;
+
+		for (BlockPos markerPos : shelterMarkers) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER, markerPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartSimpleHousingShelterAtDoor(
+				level,
+				markerPos,
+				shelterMarkerFacing(level, settlement, markerPos, existingBuildSite),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			buildResult = creditShelterMarkerRecipeMaterials(level, stock, existingBuildSite, buildResult, Map.of("bed", 1, "planks", 8));
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private boolean tryStartPlacedHousingShelterBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> shelterMarkers) {
+		boolean changed = false;
+
+		for (BlockPos markerPos : shelterMarkers) {
+			Optional<SettlementBuildSite> existingBuildSite = findBuildSite(settlement.id(), SettlementBuildSiteType.HOUSING_SHELTER, markerPos);
+
+			SettlementConstruction.WorkstationBuildResult buildResult = SettlementConstruction.tryStartHousingShelterAtDoor(
+				level,
+				markerPos,
+				shelterMarkerFacing(level, settlement, markerPos, existingBuildSite),
+				settlement.id(),
+				stock,
+				existingBuildSite
+			);
+
+			buildResult = creditShelterMarkerRecipeMaterials(
+				level,
+				stock,
+				existingBuildSite,
+				buildResult,
+				Map.of("bed", 2, "logs", 4, "planks", 1, "glass", 1, "lantern", 1)
+			);
+
+			if (buildResult.isStarted() || buildResult.isResumed()) {
+				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
+				changed |= !buildResult.buildSite().equals(previousBuildSite);
+				changed |= ensureWorkforceIfNeeded(level, settlement);
+			}
+		}
+
+		return changed;
+	}
+
+	private static Direction shelterMarkerFacing(ServerLevel level, SettlementState settlement, BlockPos markerPos, Optional<SettlementBuildSite> existingBuildSite) {
+		if (existingBuildSite.isPresent()) {
+			return existingBuildSite.get().facing();
+		}
+
+		BlockState state = level.getBlockState(markerPos);
+		return state.hasProperty(ShelterAnchorBlock.FACING)
+			? state.getValue(ShelterAnchorBlock.FACING)
+			: SettlementConstruction.fletcherHutFacingFor(settlement, markerPos);
+	}
+
+	private static SettlementConstruction.WorkstationBuildResult creditShelterMarkerRecipeMaterials(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		Optional<SettlementBuildSite> existingBuildSite,
+		SettlementConstruction.WorkstationBuildResult buildResult,
+		Map<String, Integer> recipeGoods
+	) {
+		if ((!buildResult.isStarted() && !buildResult.isResumed()) || buildResult.buildSite() == null) {
+			return buildResult;
+		}
+
+		if (buildResult.buildSite().siteMaterials().containsKey(SHELTER_MARKER_MATERIAL_CREDIT_KEY)) {
+			return buildResult;
+		}
+
+		long tick = level.getServer().getTickCount();
+		Map<String, Integer> creditedGoods = new LinkedHashMap<>(recipeGoods);
+		creditedGoods.put(SHELTER_MARKER_MATERIAL_CREDIT_KEY, 1);
+		SettlementBuildSite creditedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(
+			buildResult.buildSite().withAddedSiteMaterials(creditedGoods, tick),
+			stock,
+			tick
+		);
+
+		return buildResult.isStarted()
+			? SettlementConstruction.WorkstationBuildResult.started(creditedBuildSite)
+			: SettlementConstruction.WorkstationBuildResult.resumed(creditedBuildSite);
+	}
+
 	private boolean tryStartPlacedBakeryBuildSites(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, List<BlockPos> bakersCounters) {
 		boolean changed = false;
 
@@ -3052,11 +3156,11 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		if (fromHasScribe) {
-			ensureScribeStarterRecipes(fromSettlement.id(), SettlementRecipeKnowledge.starterRecipeIds());
+			ensureScribeStarterRecipes(fromSettlement.id(), SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(fromSettlement)));
 		}
 
 		if (toHasScribe) {
-			ensureScribeStarterRecipes(toSettlement.id(), SettlementRecipeKnowledge.starterRecipeIds());
+			ensureScribeStarterRecipes(toSettlement.id(), SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(toSettlement)));
 		}
 
 		List<String> fromRecipes = knownScribeRecipeIds(fromSettlement.id());

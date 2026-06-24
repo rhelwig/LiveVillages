@@ -39,6 +39,7 @@ public final class SettlementVanillaProfessionWork {
 	private static final long VANILLA_WORK_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long CLERIC_HEAL_COOLDOWN_TICKS = 180L;
 	private static final long DAY_TICKS = 24_000L;
+	private static final int SHEPHERD_BED_BATCH_SIZE = SettlementEconomyRules.scaledWorkerDailyUnits(4);
 	private static final Map<String, Long> LAST_PRODUCTION_DAY = new HashMap<>();
 	private static final Map<String, Long> LAST_EQUIPMENT_DAY = new HashMap<>();
 	private static final Map<String, Long> LAST_CLERIC_HEAL_TICKS = new HashMap<>();
@@ -87,9 +88,12 @@ public final class SettlementVanillaProfessionWork {
 					continue;
 				}
 
+				BlockPos workPos = workPosFor(level, settlement, villager, config)
+					.orElse(settlement.center());
+				boolean anvilSupportedSmithy = isSmithRole(config.roleKey()) && SettlementConstruction.hasSmithyAnvilSupport(level, settlement, workPos);
 				Optional<ProductionPlan> productionPlan = productionDone
 					? Optional.empty()
-					: chooseProductionPlan(settlement, stock, config.roleKey(), currentDay);
+					: chooseProductionPlan(settlement, stock, config.roleKey(), currentDay, anvilSupportedSmithy);
 				Optional<EquipmentPlan> equipmentPlan = productionPlan.isPresent() || equipmentDone
 					? Optional.empty()
 					: chooseEquipmentPlan(stock, config.roleKey(), villager, villagers);
@@ -108,8 +112,6 @@ public final class SettlementVanillaProfessionWork {
 					continue;
 				}
 
-				BlockPos workPos = workPosFor(level, settlement, villager, config)
-					.orElse(settlement.center());
 				String taskKey = equipmentPlan.map(EquipmentPlan::taskKey)
 					.orElseGet(() -> productionPlan.get().taskKey());
 				ACTIVE_TASKS.put(villager.getUUID().toString(), new TimedTask(taskKey, currentTick));
@@ -262,7 +264,7 @@ public final class SettlementVanillaProfessionWork {
 		return Optional.of(task.taskKey());
 	}
 
-	private static Optional<ProductionPlan> chooseProductionPlan(SettlementState settlement, Map<String, Integer> stock, String roleKey, long currentDay) {
+	private static Optional<ProductionPlan> chooseProductionPlan(SettlementState settlement, Map<String, Integer> stock, String roleKey, long currentDay, boolean anvilSupportedSmithy) {
 		return switch (roleKey) {
 			case SettlementRoleKeys.CARTOGRAPHER -> Optional.of(new ProductionPlan("refreshing_route_intelligence", "", 0, Map.of()));
 			case SettlementRoleKeys.CLERIC -> planIfAvailable(
@@ -275,9 +277,9 @@ public final class SettlementVanillaProfessionWork {
 			case SettlementRoleKeys.LIBRARIAN -> librarianPlan(settlement, stock);
 			case SettlementRoleKeys.LEATHERWORKER -> leatherworkerPlan(stock, currentDay);
 			case SettlementRoleKeys.SHEPHERD -> shepherdPlan(settlement, stock);
-			case SettlementRoleKeys.ARMORER -> armorerPlan(stock, currentDay);
-			case SettlementRoleKeys.TOOLSMITH -> planIfAvailable("smithing_iron_pickaxe", "iron_pickaxe", 1, Map.of("iron_ingot", 3, "stick", 2), stock);
-			case SettlementRoleKeys.WEAPONSMITH -> planIfAvailable("sharpening_iron_sword", "iron_sword", 1, Map.of("iron_ingot", 2, "stick", 1), stock);
+			case SettlementRoleKeys.ARMORER -> armorerPlan(stock, currentDay, anvilSupportedSmithy);
+			case SettlementRoleKeys.TOOLSMITH -> smithPlanIfAvailable("smithing_iron_pickaxe", "iron_pickaxe", Map.of("iron_ingot", 3, "stick", 2), stock, anvilSupportedSmithy);
+			case SettlementRoleKeys.WEAPONSMITH -> smithPlanIfAvailable("sharpening_iron_sword", "iron_sword", Map.of("iron_ingot", 2, "stick", 1), stock, anvilSupportedSmithy);
 			default -> Optional.empty();
 		};
 	}
@@ -308,21 +310,23 @@ public final class SettlementVanillaProfessionWork {
 		return planIfAvailable("crafting_" + output, output, 1, Map.of("leather", leatherCost), stock);
 	}
 
-	private static Optional<ProductionPlan> armorerPlan(Map<String, Integer> stock, long currentDay) {
+	private static Optional<ProductionPlan> armorerPlan(Map<String, Integer> stock, long currentDay, boolean anvilSupportedSmithy) {
 		return switch ((int) Math.floorMod(currentDay, 5L)) {
-			case 0 -> planIfAvailable("forging_iron_chestplate", "iron_chestplate", 1, Map.of("iron_ingot", 8), stock);
-			case 1 -> planIfAvailable("forging_iron_leggings", "iron_leggings", 1, Map.of("iron_ingot", 7), stock);
-			case 2 -> planIfAvailable("forging_iron_helmet", "iron_helmet", 1, Map.of("iron_ingot", 5), stock);
-			case 3 -> planIfAvailable("forging_iron_boots", "iron_boots", 1, Map.of("iron_ingot", 4), stock);
-			default -> planIfAvailable("crafting_shield", "shield", 1, Map.of("iron_ingot", 1, "planks", 6), stock);
+			case 0 -> smithPlanIfAvailable("forging_iron_chestplate", "iron_chestplate", Map.of("iron_ingot", 8), stock, anvilSupportedSmithy);
+			case 1 -> smithPlanIfAvailable("forging_iron_leggings", "iron_leggings", Map.of("iron_ingot", 7), stock, anvilSupportedSmithy);
+			case 2 -> smithPlanIfAvailable("forging_iron_helmet", "iron_helmet", Map.of("iron_ingot", 5), stock, anvilSupportedSmithy);
+			case 3 -> smithPlanIfAvailable("forging_iron_boots", "iron_boots", Map.of("iron_ingot", 4), stock, anvilSupportedSmithy);
+			default -> smithPlanIfAvailable("crafting_shield", "shield", Map.of("iron_ingot", 1, "planks", 6), stock, anvilSupportedSmithy);
 		};
 	}
 
 	private static Optional<ProductionPlan> shepherdPlan(SettlementState settlement, Map<String, Integer> stock) {
-		if (stock.getOrDefault("wool", 0) >= 3
-			&& stock.getOrDefault("planks", 0) >= 3
-			&& stock.getOrDefault("bed", 0) < SettlementEconomyRules.targetForGoods(settlement, "bed")) {
-			return Optional.of(new ProductionPlan("weaving_bed", "bed", 1, Map.of("wool", 3, "planks", 3)));
+		int bedNeed = SettlementEconomyRules.targetForGoods(settlement, "bed") - stock.getOrDefault("bed", 0);
+		int craftableBeds = Math.min(stock.getOrDefault("wool", 0) / 3, stock.getOrDefault("planks", 0) / 3);
+		int bedBatch = Math.min(Math.min(bedNeed, craftableBeds), SHEPHERD_BED_BATCH_SIZE);
+
+		if (bedBatch > 0) {
+			return Optional.of(new ProductionPlan("weaving_beds", "bed", bedBatch, Map.of("wool", bedBatch * 3, "planks", bedBatch * 3)));
 		}
 
 		return Optional.of(new ProductionPlan("collecting_wool", "wool", 1, Map.of()));
@@ -576,6 +580,39 @@ public final class SettlementVanillaProfessionWork {
 		return hasInputs(stock, inputs)
 			? Optional.of(new ProductionPlan(taskKey, outputGoodsKey, outputAmount, inputs))
 			: Optional.empty();
+	}
+
+	private static Optional<ProductionPlan> smithPlanIfAvailable(
+		String taskKey,
+		String outputGoodsKey,
+		Map<String, Integer> baseInputs,
+		Map<String, Integer> stock,
+		boolean anvilSupportedSmithy
+	) {
+		int outputAmount = anvilSupportedSmithy ? 2 : 1;
+		Map<String, Integer> inputs = multiplyInputs(baseInputs, outputAmount);
+		String boostedTaskKey = anvilSupportedSmithy ? taskKey + "_with_anvil" : taskKey;
+		return planIfAvailable(boostedTaskKey, outputGoodsKey, outputAmount, inputs, stock);
+	}
+
+	private static Map<String, Integer> multiplyInputs(Map<String, Integer> inputs, int multiplier) {
+		if (multiplier <= 1) {
+			return inputs;
+		}
+
+		Map<String, Integer> multiplied = new LinkedHashMap<>();
+
+		for (Map.Entry<String, Integer> input : inputs.entrySet()) {
+			multiplied.put(input.getKey(), input.getValue() * multiplier);
+		}
+
+		return Map.copyOf(multiplied);
+	}
+
+	private static boolean isSmithRole(String roleKey) {
+		return roleKey.equals(SettlementRoleKeys.ARMORER)
+			|| roleKey.equals(SettlementRoleKeys.TOOLSMITH)
+			|| roleKey.equals(SettlementRoleKeys.WEAPONSMITH);
 	}
 
 	private static boolean hasInputs(Map<String, Integer> stock, Map<String, Integer> inputs) {

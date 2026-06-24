@@ -181,6 +181,7 @@ public final class SettlementEconomyRules {
 			: 0;
 		return baseTarget
 			+ professionalReserveForGoods(settlement, goodsKey)
+			+ housingReserveForGoods(settlement, goodsKey)
 			+ plannedDemandForGoods(settlement, goodsKey)
 			+ activeBuildSiteDemandForGoods(buildSites, goodsKey);
 	}
@@ -533,6 +534,14 @@ public final class SettlementEconomyRules {
 
 	private static boolean needsHousingProject(SettlementState settlement) {
 		return settlement.totalPopulation() > 0 && settlement.housingCapacity() < settlement.totalPopulation() + 1;
+	}
+
+	private static int housingReserveForGoods(SettlementState settlement, String goodsKey) {
+		if (!goodsKey.equals("bed") || settlement.kind() == SettlementKind.OUTPOST || settlement.totalPopulation() <= 0) {
+			return 0;
+		}
+
+		return Math.max(0, settlement.totalPopulation() + 1 - settlement.housingCapacity());
 	}
 
 	private static boolean needsComposterProject(SettlementState settlement) {

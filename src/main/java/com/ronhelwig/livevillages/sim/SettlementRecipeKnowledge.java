@@ -1,5 +1,6 @@
 package com.ronhelwig.livevillages.sim;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +32,9 @@ public final class SettlementRecipeKnowledge {
 		"fletching_table",
 		"loom"
 	);
+	private static final List<String> TIER_TWO_RECIPE_PATHS = List.of(
+		"cobblestone_stairs"
+	);
 
 	private SettlementRecipeKnowledge() {
 	}
@@ -39,6 +43,18 @@ public final class SettlementRecipeKnowledge {
 		return STARTER_RECIPE_PATHS.stream()
 			.map(path -> Identifier.withDefaultNamespace(path).toString())
 			.toList();
+	}
+
+	public static List<String> recipeIdsForTier(int tier) {
+		List<String> recipes = new ArrayList<>(starterRecipeIds());
+
+		if (SettlementTiers.normalize(tier) >= 2) {
+			TIER_TWO_RECIPE_PATHS.stream()
+				.map(path -> Identifier.withDefaultNamespace(path).toString())
+				.forEach(recipes::add);
+		}
+
+		return List.copyOf(recipes);
 	}
 
 	public static Optional<ResourceKey<Recipe<?>>> recipeKey(String recipeId) {

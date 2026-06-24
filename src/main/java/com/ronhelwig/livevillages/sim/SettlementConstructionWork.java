@@ -1151,7 +1151,7 @@ public final class SettlementConstructionWork {
 			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
 				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
 
-				if ((block.status() != SettlementBuildBlockStatus.PENDING && block.status() != SettlementBuildBlockStatus.MISSING_MATERIAL)
+				if (!isSelectableConstructionStatus(block.status())
 					|| isPairedContinuation(buildSite, block)) {
 					continue;
 				}
@@ -1180,21 +1180,13 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
-				if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
-					continue;
-				}
-
 				Optional<PairedBlock> pairedBlock = pairedRootBlock(buildSite, block);
 				if (pairedBlock.isPresent()) {
-					Optional<BlockPos> pairedPos = SettlementConstruction.buildSiteBlockPos(buildSite, pairedBlock.get().block());
-					BlockState pairedPlannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, pairedBlock.get().block());
-					if (pairedPos.isEmpty()
-						|| pairedPlannedState == null
-						|| !level.hasChunkAt(pairedPos.get())
-						|| (requiresIndependentConstructionSupport(pairedPlannedState)
-							&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState))) {
+					if (!hasPairedConstructionPlacementSupport(level, buildSite, block, targetPos.get(), plannedState, pairedBlock.get())) {
 						continue;
 					}
+				} else if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
+					continue;
 				}
 
 				candidateBlocksChecked++;
@@ -1268,7 +1260,7 @@ public final class SettlementConstructionWork {
 			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
 				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
 
-				if ((block.status() != SettlementBuildBlockStatus.PENDING && block.status() != SettlementBuildBlockStatus.MISSING_MATERIAL)
+				if (!isSelectableConstructionStatus(block.status())
 					|| isPairedContinuation(buildSite, block)) {
 					continue;
 				}
@@ -1293,10 +1285,6 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
-				if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
-					continue;
-				}
-
 				Optional<PairedBlock> pairedBlock = pairedRootBlock(buildSite, block);
 				if (pairedBlock.isPresent()) {
 					Optional<BlockPos> pairedPos = SettlementConstruction.buildSiteBlockPos(buildSite, pairedBlock.get().block());
@@ -1307,10 +1295,11 @@ public final class SettlementConstructionWork {
 						|| !level.hasChunkAt(pairedPos.get())
 						|| !OutpostSettlementWork.canReachConstructionFromAnyMember(memberPositions, pairedPos.get())
 						|| !canOutpostWorkCurrentBlock(level, buildSite, pairedBlock.get().block(), pairedPos.get(), pairedPlannedState)
-						|| (requiresIndependentConstructionSupport(pairedPlannedState)
-							&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState))) {
+						|| !hasPairedConstructionPlacementSupport(level, buildSite, block, targetPos.get(), plannedState, pairedBlock.get())) {
 						continue;
 					}
+				} else if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
+					continue;
 				}
 
 				candidateBlocksChecked++;
@@ -1459,6 +1448,81 @@ public final class SettlementConstructionWork {
 		return false;
 	}
 
+	private static boolean hasPairedConstructionPlacementSupport(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos targetPos,
+		BlockState plannedState,
+		PairedBlock pairedBlock
+	) {
+		Optional<BlockPos> pairedPos = SettlementConstruction.buildSiteBlockPos(buildSite, pairedBlock.block());
+		BlockState pairedPlannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, pairedBlock.block());
+
+		if (pairedPos.isEmpty() || pairedPlannedState == null || !level.hasChunkAt(pairedPos.get())) {
+			return false;
+		}
+
+		if (plannedState.getBlock() instanceof DoorBlock && pairedPlannedState.getBlock() instanceof DoorBlock) {
+			return hasDoorPairConstructionSupport(level, targetPos, plannedState)
+				&& hasConstructionSpaceForPairedPlacement(level, buildSite, block, targetPos, plannedState)
+				&& hasConstructionSpaceForPairedPlacement(level, buildSite, pairedBlock.block(), pairedPos.get(), pairedPlannedState);
+		}
+
+		if (plannedState.getBlock() instanceof BedBlock && pairedPlannedState.getBlock() instanceof BedBlock) {
+			return hasBedPairConstructionSupport(level, targetPos, plannedState, pairedPos.get(), pairedPlannedState)
+				&& hasConstructionSpaceForPairedPlacement(level, buildSite, block, targetPos, plannedState)
+				&& hasConstructionSpaceForPairedPlacement(level, buildSite, pairedBlock.block(), pairedPos.get(), pairedPlannedState);
+		}
+
+		return hasConstructionPlacementSupport(level, targetPos, plannedState)
+			&& (!requiresIndependentConstructionSupport(pairedPlannedState)
+				|| hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState));
+	}
+
+	private static boolean hasConstructionSpaceForPairedPlacement(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos targetPos,
+		BlockState plannedState
+	) {
+		BlockState currentState = level.getBlockState(targetPos);
+		return statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)
+			|| SettlementConstruction.isBuildSiteReplaceable(currentState);
+	}
+
+	private static boolean hasDoorPairConstructionSupport(ServerLevel level, BlockPos targetPos, BlockState plannedState) {
+		if (plannedState.canSurvive(level, targetPos)) {
+			return true;
+		}
+
+		BlockPos lowerPos = plannedState.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER
+			? targetPos.below()
+			: targetPos;
+		BlockPos supportPos = lowerPos.below();
+		return level.hasChunkAt(supportPos) && isConstructionSupportBlock(level, supportPos, level.getBlockState(supportPos));
+	}
+
+	private static boolean hasBedPairConstructionSupport(
+		ServerLevel level,
+		BlockPos targetPos,
+		BlockState plannedState,
+		BlockPos pairedPos,
+		BlockState pairedPlannedState
+	) {
+		if (plannedState.canSurvive(level, targetPos) && pairedPlannedState.canSurvive(level, pairedPos)) {
+			return true;
+		}
+
+		BlockPos supportPos = targetPos.below();
+		BlockPos pairedSupportPos = pairedPos.below();
+		return level.hasChunkAt(supportPos)
+			&& level.hasChunkAt(pairedSupportPos)
+			&& isConstructionSupportBlock(level, supportPos, level.getBlockState(supportPos))
+			&& isConstructionSupportBlock(level, pairedSupportPos, level.getBlockState(pairedSupportPos));
+	}
+
 	private static boolean isConstructionSupportBlock(ServerLevel level, BlockPos supportPos, BlockState supportState) {
 		return !SettlementConstruction.isBuildSiteReplaceable(supportState)
 			&& !supportState.getCollisionShape(level, supportPos).isEmpty();
@@ -1475,6 +1539,12 @@ public final class SettlementConstructionWork {
 	private static boolean requiresIndependentConstructionSupport(BlockState plannedState) {
 		return !(plannedState.getBlock() instanceof DoorBlock)
 			|| plannedState.getValue(DoorBlock.HALF) != DoubleBlockHalf.UPPER;
+	}
+
+	private static boolean isSelectableConstructionStatus(SettlementBuildBlockStatus status) {
+		return status == SettlementBuildBlockStatus.PENDING
+			|| status == SettlementBuildBlockStatus.MISSING_MATERIAL
+			|| status == SettlementBuildBlockStatus.BLOCKED;
 	}
 
 	private static ConstructionActionResult performConstructionTask(
@@ -1716,17 +1786,9 @@ public final class SettlementConstructionWork {
 			);
 		}
 
-		if (!hasConstructionPlacementSupport(level, task.targetPos(), plannedState)) {
+		if (!hasPairedConstructionPlacementSupport(level, task.buildSite(), block, task.targetPos(), plannedState, pairedBlock)) {
 			return ConstructionActionResult.blockStatusChanged(
 				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, BLOCKED_REASON_UNSUPPORTED, tick),
-				false
-			);
-		}
-
-		if (requiresIndependentConstructionSupport(pairedPlannedState)
-			&& !hasConstructionPlacementSupport(level, pairedPos.get(), pairedPlannedState)) {
-			return ConstructionActionResult.blockStatusChanged(
-				updateBlockStatus(task.buildSite(), pairedBlock.index(), SettlementBuildBlockStatus.BLOCKED, BLOCKED_REASON_UNSUPPORTED, tick),
 				false
 			);
 		}
@@ -1856,7 +1918,7 @@ public final class SettlementConstructionWork {
 	private static boolean canWorkBlockStatus(SettlementBuildBlockStatus status, boolean hasDelivery) {
 		return status == SettlementBuildBlockStatus.PENDING
 			|| status == SettlementBuildBlockStatus.MISSING_MATERIAL
-			|| (hasDelivery && status == SettlementBuildBlockStatus.BLOCKED);
+			|| status == SettlementBuildBlockStatus.BLOCKED;
 	}
 
 	private static Optional<PairedBlock> pairedRootBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {

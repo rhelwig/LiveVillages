@@ -22,6 +22,7 @@ import com.ronhelwig.livevillages.sim.OutpostRaids;
 import com.ronhelwig.livevillages.sim.ProfessionWorkstationTrades;
 import com.ronhelwig.livevillages.sim.SettlementDefenseWork;
 import com.ronhelwig.livevillages.sim.SettlementProfessionReports;
+import com.ronhelwig.livevillages.sim.VanillaWorkstationPlacement;
 import com.ronhelwig.livevillages.sim.VillageAutodetector;
 
 public class LiveVillages implements ModInitializer {
@@ -48,6 +49,7 @@ public class LiveVillages implements ModInitializer {
 		LiveVillagesMenus.register();
 		LiveVillagesNetworking.register();
 		BuildSiteAssistedPlacement.register();
+		VanillaWorkstationPlacement.register();
 		ProfessionWorkstationTrades.register();
 		FletchingTableInteraction.register();
 		OutpostHornInteraction.register();
