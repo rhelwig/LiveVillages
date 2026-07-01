@@ -26,7 +26,6 @@ public class TradeBoardBlockEntityRenderer implements BlockEntityRenderer<TradeB
 	private static final String FALLBACK_LABEL = "Trade Board";
 	private static final int MAX_TEXT_WIDTH = 48;
 	private static final int MAX_LINES = 2;
-	private static final int TEXT_COLOR = 0xFF2A1C12;
 	private static final float TEXT_SCALE = 0.014F;
 	private static final float TEXT_CENTER_Y = 0.5625F;
 	private static final float TEXT_FACE_OFFSET = 0.065F;
@@ -53,6 +52,7 @@ public class TradeBoardBlockEntityRenderer implements BlockEntityRenderer<TradeB
 		BlockEntityRenderState.extractBase(blockEntity, renderState, breakingOverlay);
 		renderState.facing = blockEntity.getBlockState().getValue(TradeBoardBlock.FACING);
 		renderState.lines = layoutLines(blockEntity.displaySettlementName());
+		renderState.textColor = textColorForTier(blockEntity.displaySettlementTier());
 	}
 
 	@Override
@@ -92,7 +92,7 @@ public class TradeBoardBlockEntityRenderer implements BlockEntityRenderer<TradeB
 				false,
 				Font.DisplayMode.POLYGON_OFFSET,
 				renderState.lightCoords,
-				TEXT_COLOR,
+				renderState.textColor,
 				0,
 				0
 			);
@@ -108,6 +108,15 @@ public class TradeBoardBlockEntityRenderer implements BlockEntityRenderer<TradeB
 			case SOUTH -> 180.0F;
 			case WEST -> 270.0F;
 			default -> 0.0F;
+		};
+	}
+
+	private int textColorForTier(int tier) {
+		return switch (tier) {
+			case 2 -> 0xFF1F5F3B;
+			case 3 -> 0xFF1D4F92;
+			case 4 -> 0xFF5D3D8C;
+			default -> 0xFF2A1C12;
 		};
 	}
 
@@ -190,5 +199,6 @@ public class TradeBoardBlockEntityRenderer implements BlockEntityRenderer<TradeB
 	public static final class RenderState extends BlockEntityRenderState {
 		private Direction facing = Direction.NORTH;
 		private FormattedCharSequence[] lines = new FormattedCharSequence[0];
+		private int textColor = 0xFF2A1C12;
 	}
 }

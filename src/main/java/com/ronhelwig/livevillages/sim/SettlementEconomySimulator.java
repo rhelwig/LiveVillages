@@ -442,6 +442,12 @@ public final class SettlementEconomySimulator {
 		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity()) + infrastructure.incompleteHousingCapacity();
 		boolean needsHousing = population > 0 && effectiveHousing < population + 1;
 
+		if (infrastructure.available()) {
+			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
+			int neededComposterProjects = Math.max(0, desiredFarmSites - infrastructure.coveredFarmAreas());
+			projects = limitProjectType(projects, SettlementProjectType.COMPOSTER, neededComposterProjects);
+		}
+
 		if (population > 0
 			&& infrastructure.tradingPosts() + infrastructure.incompleteTradingPosts() + countProjectType(projects, SettlementProjectType.TRADING_POST) < 1) {
 			projects.add(new SettlementProject(nextProjectId(projects, "trading-post"), SettlementProjectType.TRADING_POST, "", 0.0D, 0.35D));
@@ -460,10 +466,10 @@ public final class SettlementEconomySimulator {
 		}
 
 		if (infrastructure.available() && !needsHousing) {
-			int farmers = roleCount(settlement, SettlementRoleKeys.FARMER);
-			int desiredComposters = Math.max(0, Math.min(2, farmers));
+			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
 
-			if (desiredComposters > 0 && infrastructure.composters() + countProjectType(projects, SettlementProjectType.COMPOSTER) < desiredComposters) {
+			if (desiredFarmSites > 0
+				&& infrastructure.coveredFarmAreas() + countProjectType(projects, SettlementProjectType.COMPOSTER) < desiredFarmSites) {
 				projects.add(new SettlementProject(nextProjectId(projects, "composter"), SettlementProjectType.COMPOSTER, "", 0.0D, 0.55D));
 			}
 
@@ -980,6 +986,25 @@ public final class SettlementEconomySimulator {
 		return (int) projects.stream()
 			.filter(project -> project.type() == type)
 			.count();
+	}
+
+	private static List<SettlementProject> limitProjectType(List<SettlementProject> projects, SettlementProjectType type, int maxCount) {
+		List<SettlementProject> limited = new ArrayList<>(projects.size());
+		int kept = 0;
+
+		for (SettlementProject project : projects) {
+			if (project.type() != type) {
+				limited.add(project);
+				continue;
+			}
+
+			if (kept < maxCount) {
+				limited.add(project);
+				kept++;
+			}
+		}
+
+		return limited;
 	}
 
 	private static String nextProjectId(List<SettlementProject> projects, String prefix) {

@@ -36,6 +36,7 @@ import com.ronhelwig.livevillages.sim.SettlementNamer;
 import com.ronhelwig.livevillages.sim.SettlementPlayerStandings;
 import com.ronhelwig.livevillages.sim.SettlementProject;
 import com.ronhelwig.livevillages.sim.SettlementState;
+import com.ronhelwig.livevillages.sim.SettlementTiers;
 import com.ronhelwig.livevillages.sim.SettlementVillagers;
 
 public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuProvider<TradeBoardOpenData> {
@@ -45,6 +46,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 
 	private String linkedSettlementId;
 	private String displaySettlementName;
+	private int displaySettlementTier = SettlementTiers.MIN_TIER;
 
 	public TradeBoardBlockEntity(BlockPos pos, BlockState blockState) {
 		super(LiveVillagesBlockEntities.TRADE_BOARD, pos, blockState);
@@ -55,6 +57,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		super.loadAdditional(input);
 		linkedSettlementId = input.getString("linked_settlement_id").orElse(null);
 		displaySettlementName = input.getString("display_settlement_name").orElse(null);
+		displaySettlementTier = SettlementTiers.normalize(input.getInt("display_settlement_tier").orElse(SettlementTiers.MIN_TIER));
 	}
 
 	@Override
@@ -68,6 +71,8 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		if (displaySettlementName != null && !displaySettlementName.isBlank()) {
 			output.putString("display_settlement_name", displaySettlementName);
 		}
+
+		output.putInt("display_settlement_tier", displaySettlementTier);
 	}
 
 	@Override
@@ -93,7 +98,7 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 
 		if (level instanceof ServerLevel serverLevel && linkedSettlementId != null && (displaySettlementName == null || displaySettlementName.isBlank())) {
 			LiveVillagesSavedData.get(serverLevel.getServer()).getSettlement(linkedSettlementId)
-				.ifPresent(settlement -> syncLinkedSettlement(settlement.id(), settlement.name()));
+				.ifPresent(settlement -> syncLinkedSettlement(settlement));
 		}
 	}
 
@@ -118,12 +123,12 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 					var outpost = OutpostTrust.findOrCreateOutpostAt(serverLevel, savedData, worldPosition);
 
 					if (outpost.isPresent()) {
-						syncLinkedSettlement(outpost.get().id(), outpost.get().name());
+						syncLinkedSettlement(outpost.get());
 						return outpost.get();
 					}
 				}
 
-				syncLinkedSettlement(linkedSettlement.get().id(), linkedSettlement.get().name());
+				syncLinkedSettlement(linkedSettlement.get());
 				return linkedSettlement.get();
 			}
 		}
@@ -138,22 +143,26 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 			))
 			.orElseGet(() -> createCustomSettlement(serverLevel, savedData));
 
-		syncLinkedSettlement(settlement.id(), settlement.name());
+		syncLinkedSettlement(settlement);
 		return settlement;
 	}
 
 	public void linkSettlement(SettlementState settlement) {
-		syncLinkedSettlement(settlement.id(), settlement.name());
+		syncLinkedSettlement(settlement);
 	}
 
 	public SettlementState createAndLinkCustomSettlement(ServerLevel serverLevel) {
 		SettlementState settlement = createCustomSettlement(serverLevel, LiveVillagesSavedData.get(serverLevel.getServer()));
-		syncLinkedSettlement(settlement.id(), settlement.name());
+		syncLinkedSettlement(settlement);
 		return settlement;
 	}
 
 	public String displaySettlementName() {
 		return displaySettlementName;
+	}
+
+	public int displaySettlementTier() {
+		return displaySettlementTier;
 	}
 
 	public static void serverTick(Level level, BlockPos pos, BlockState state, TradeBoardBlockEntity blockEntity) {
@@ -176,8 +185,11 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		LiveVillagesSavedData.get(serverLevel.getServer()).getSettlement(blockEntity.linkedSettlementId)
 			.ifPresentOrElse(
 				settlement -> {
-					if (!Objects.equals(blockEntity.displaySettlementName, settlement.name())) {
-						blockEntity.syncLinkedSettlement(settlement.id(), settlement.name());
+					int settlementTier = SettlementTiers.unlockedTier(settlement);
+
+					if (!Objects.equals(blockEntity.displaySettlementName, settlement.name())
+						|| blockEntity.displaySettlementTier != settlementTier) {
+						blockEntity.syncLinkedSettlement(settlement, settlementTier);
 					}
 				},
 				() -> blockEntity.resolveSettlement(serverLevel)
@@ -256,15 +268,27 @@ public class TradeBoardBlockEntity extends BlockEntity implements ExtendedMenuPr
 		return updatedSettlement;
 	}
 
-	private void syncLinkedSettlement(String settlementId, String settlementName) {
-		String normalizedName = settlementName == null || settlementName.isBlank() ? null : settlementName;
+	private void syncLinkedSettlement(SettlementState settlement) {
+		syncLinkedSettlement(settlement, SettlementTiers.unlockedTier(settlement));
+	}
 
-		if (Objects.equals(linkedSettlementId, settlementId) && Objects.equals(displaySettlementName, normalizedName)) {
+	private void syncLinkedSettlement(SettlementState settlement, int settlementTier) {
+		syncLinkedSettlement(settlement.id(), settlement.name(), settlementTier);
+	}
+
+	private void syncLinkedSettlement(String settlementId, String settlementName, int settlementTier) {
+		String normalizedName = settlementName == null || settlementName.isBlank() ? null : settlementName;
+		int normalizedTier = SettlementTiers.normalize(settlementTier);
+
+		if (Objects.equals(linkedSettlementId, settlementId)
+			&& Objects.equals(displaySettlementName, normalizedName)
+			&& displaySettlementTier == normalizedTier) {
 			return;
 		}
 
 		linkedSettlementId = settlementId;
 		displaySettlementName = normalizedName;
+		displaySettlementTier = normalizedTier;
 		setChanged();
 
 		if (level != null && !level.isClientSide()) {

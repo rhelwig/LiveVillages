@@ -67,6 +67,9 @@ public final class SettlementConstructionMaterials {
 			case "fence_gate" -> craftWoodPart(goods, "fence_gate", 4, 1);
 			case "bed" -> craftBed(goods);
 			case "glass" -> craftGlass(goods);
+			case "stone" -> craftStone(goods);
+			case "smooth_stone" -> craftSmoothStone(goods);
+			case "stone_bricks" -> craftStoneBricks(goods);
 			case "iron_ingot" -> craftRefinedMaterial(goods, "iron_ingot");
 			case "copper_ingot" -> craftRefinedMaterial(goods, "copper_ingot");
 			case "ladder" -> craftLadder(goods);
@@ -129,6 +132,38 @@ public final class SettlementConstructionMaterials {
 	private static ConstructionMaterialResult craftGlass(Map<String, Integer> goods) {
 		if (!SettlementRefining.consumeRefinedMaterial(goods, "glass")) {
 			return ConstructionMaterialResult.missing("glass");
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftStone(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "cobblestone", 1)) {
+			return ConstructionMaterialResult.missing("cobblestone");
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftSmoothStone(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "stone", 1)) {
+			ConstructionMaterialResult stoneResult = craftStone(goods);
+
+			if (!stoneResult.supplied()) {
+				return stoneResult;
+			}
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftStoneBricks(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "stone", 1)) {
+			ConstructionMaterialResult stoneResult = craftStone(goods);
+
+			if (!stoneResult.supplied()) {
+				return stoneResult;
+			}
 		}
 
 		return ConstructionMaterialResult.supplied(1);

@@ -12,6 +12,8 @@ import java.util.Set;
 import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
 import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
+import com.ronhelwig.livevillages.block.TradeBoardBlock;
+import com.ronhelwig.livevillages.block.entity.TradeBoardBlockEntity;
 import com.ronhelwig.livevillages.content.LiveVillagesVillagerProfessions;
 
 import net.minecraft.core.BlockPos;
@@ -82,10 +84,12 @@ public final class SettlementConstructionWork {
 		long tick = level.getServer().getTickCount();
 		List<SettlementBuildSite> workingBuildSites = new ArrayList<>(buildSites.size());
 		boolean buildSitesChanged = false;
+		boolean worldChanged = false;
 		Map<String, Integer> stockBeforeReconcile = new LinkedHashMap<>(stock);
 
 		for (SettlementBuildSite buildSite : buildSites) {
 			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, settlement, buildSite, tick);
+			worldChanged |= restoreMissingTradeBoard(level, settlement, paletteAdjustedBuildSite);
 			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
 			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
 
@@ -112,7 +116,6 @@ public final class SettlementConstructionWork {
 			);
 		}
 		boolean stockChanged = !stock.equals(stockBeforeReconcile);
-		boolean worldChanged = false;
 		boolean cleanupChanged = cleanupDeliveries(settlement, stock, workingBuildSites, deliveries, nearbyWorkers, excludedIds, tick);
 		boolean deliveriesChanged = cleanupChanged;
 		stockChanged |= cleanupChanged;
@@ -316,6 +319,7 @@ public final class SettlementConstructionWork {
 
 		for (SettlementBuildSite buildSite : buildSites) {
 			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, settlement, buildSite, tick);
+			worldChanged |= restoreMissingTradeBoard(level, settlement, paletteAdjustedBuildSite);
 			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
 			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
 
@@ -351,6 +355,69 @@ public final class SettlementConstructionWork {
 		}
 
 		return new ConstructionWorkResult(List.copyOf(workingBuildSites), stockChanged, buildSitesChanged, worldChanged, false);
+	}
+
+	private static boolean restoreMissingTradeBoard(ServerLevel level, SettlementState settlement, SettlementBuildSite buildSite) {
+		if (buildSite.blueprintId() != SettlementBuildSiteType.TRADING_POST) {
+			return false;
+		}
+
+		Optional<BlockPos> plannedBoardPos = plannedTradeBoardPos(buildSite);
+
+		if (plannedBoardPos.isEmpty()) {
+			return false;
+		}
+
+		BlockPos boardPos = plannedBoardPos.get();
+
+		if (!level.hasChunkAt(boardPos)) {
+			return false;
+		}
+
+		BlockState currentState = level.getBlockState(boardPos);
+		boolean changed = false;
+
+		if (currentState.isAir()) {
+			BlockState boardState = LiveVillagesBlocks.TRADE_BOARD.defaultBlockState()
+				.setValue(TradeBoardBlock.FACING, buildSite.facing());
+
+			if (!boardState.canSurvive(level, boardPos)) {
+				return false;
+			}
+
+			level.setBlock(boardPos, boardState, BLOCK_UPDATE_FLAGS);
+			changed = true;
+		} else if (!currentState.is(LiveVillagesBlocks.TRADE_BOARD)) {
+			return false;
+		}
+
+		if (level.getBlockEntity(boardPos) instanceof TradeBoardBlockEntity tradeBoard) {
+			tradeBoard.linkSettlement(settlement);
+		}
+
+		changed |= removeStaleTradeBoardAnchor(level, buildSite, boardPos, buildSite.anchorPos());
+		changed |= removeStaleTradeBoardAnchor(level, buildSite, boardPos, buildSite.workstationPos());
+		return changed;
+	}
+
+	private static Optional<BlockPos> plannedTradeBoardPos(SettlementBuildSite buildSite) {
+		return buildSite.blocks().stream()
+			.filter(block -> SettlementConstruction.isAnchoredWorkstationBlock(buildSite, block))
+			.findFirst()
+			.flatMap(block -> SettlementConstruction.buildSiteBlockPos(buildSite, block));
+	}
+
+	private static boolean removeStaleTradeBoardAnchor(ServerLevel level, SettlementBuildSite buildSite, BlockPos plannedBoardPos, BlockPos stalePos) {
+		if (stalePos.equals(plannedBoardPos) || !level.hasChunkAt(stalePos) || !level.getBlockState(stalePos).is(LiveVillagesBlocks.TRADE_BOARD)) {
+			return false;
+		}
+
+		if (buildSite.blueprintId() != SettlementBuildSiteType.TRADING_POST) {
+			return false;
+		}
+
+		level.removeBlock(stalePos, false);
+		return true;
 	}
 
 	private static SettlementBuildSite reconcileBuildSiteWithWorld(ServerLevel level, SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
@@ -1381,7 +1448,11 @@ public final class SettlementConstructionWork {
 	}
 
 	private static boolean isMasonMaterial(String materialKey) {
-		return "cobblestone".equals(materialKey) || "stonecutter".equals(materialKey);
+		return "cobblestone".equals(materialKey)
+			|| "stone".equals(materialKey)
+			|| "smooth_stone".equals(materialKey)
+			|| "stone_bricks".equals(materialKey)
+			|| "stonecutter".equals(materialKey);
 	}
 
 	private static boolean isCarpenterMaterial(String materialKey) {
@@ -1622,7 +1693,7 @@ public final class SettlementConstructionWork {
 		}
 
 		if (!SettlementConstruction.isBuildSiteReplaceable(currentState)) {
-			if (shouldReplaceDirectlyToPreserveWorkstationSupport(task)
+			if (shouldReplaceDirectlyToPreserveWorkstationSupport(level, task, task.targetPos())
 				&& SettlementConstruction.tryReplaceBuildSiteBlock(level, task.targetPos(), plannedState, stock)) {
 				return ConstructionActionResult.placed(
 					updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
@@ -1757,7 +1828,7 @@ public final class SettlementConstructionWork {
 		}
 
 		if (!currentMatches && !SettlementConstruction.isBuildSiteReplaceable(currentState)) {
-			if (shouldReplaceDirectlyToPreserveWorkstationSupport(task)
+			if (shouldReplaceDirectlyToPreserveWorkstationSupport(level, task, task.targetPos())
 				&& SettlementConstruction.tryReplaceBuildSiteBlock(level, task.targetPos(), plannedState, stock)) {
 				currentMatches = true;
 				currentState = plannedState;
@@ -1773,6 +1844,14 @@ public final class SettlementConstructionWork {
 				updateBlockStatus(task.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.BLOCKED, "blocked", tick),
 				false
 			);
+		}
+
+		if (!pairedMatches && !SettlementConstruction.isBuildSiteReplaceable(pairedCurrentState)) {
+			if (shouldReplaceDirectlyToPreserveWorkstationSupport(level, task, pairedPos.get())
+				&& SettlementConstruction.tryReplaceBuildSiteBlock(level, pairedPos.get(), pairedPlannedState, stock)) {
+				pairedMatches = true;
+				pairedCurrentState = pairedPlannedState;
+			}
 		}
 
 		if (!pairedMatches && !SettlementConstruction.isBuildSiteReplaceable(pairedCurrentState)) {
@@ -2230,6 +2309,10 @@ public final class SettlementConstructionWork {
 		}
 
 		if (isCompatiblePlacedBlock(currentState, plannedState)) {
+			if (SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())) {
+				return false;
+			}
+
 			return true;
 		}
 
@@ -2238,6 +2321,10 @@ public final class SettlementConstructionWork {
 		}
 
 		if (SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())) {
+			if (SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())) {
+				return false;
+			}
+
 			return true;
 		}
 
@@ -2270,6 +2357,7 @@ public final class SettlementConstructionWork {
 
 		return !currentState.equals(plannedState)
 			&& !SettlementConstruction.isPalisadePointWallControlBlock(buildSite, block, currentState)
+			&& !SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
 	}
@@ -2328,8 +2416,14 @@ public final class SettlementConstructionWork {
 				|| currentState.is(Blocks.CARTOGRAPHY_TABLE));
 	}
 
-	private static boolean shouldReplaceDirectlyToPreserveWorkstationSupport(ConstructionTask task) {
-		return task.targetPos().above().equals(task.buildSite().workstationPos());
+	private static boolean shouldReplaceDirectlyToPreserveWorkstationSupport(ServerLevel level, ConstructionTask task, BlockPos targetPos) {
+		BlockPos above = targetPos.above();
+
+		if (above.equals(task.buildSite().workstationPos())) {
+			return true;
+		}
+
+		return level.hasChunkAt(above) && level.getBlockState(above).is(LiveVillagesBlocks.TRADE_BOARD);
 	}
 
 	private static void steerWorkerTowardTask(ServerLevel level, SettlementState settlement, Villager worker, BlockPos standPos, Path path, long tick) {

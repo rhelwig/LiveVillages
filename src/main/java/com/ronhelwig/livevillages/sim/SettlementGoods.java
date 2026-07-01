@@ -343,6 +343,18 @@ public final class SettlementGoods {
 			return "cobblestone";
 		}
 
+		if (stack.is(Items.STONE)) {
+			return "stone";
+		}
+
+		if (stack.is(Items.SMOOTH_STONE)) {
+			return "smooth_stone";
+		}
+
+		if (stack.is(Items.STONE_BRICKS)) {
+			return "stone_bricks";
+		}
+
 		if (stack.is(Items.IRON_BARS)) {
 			return "iron_bars";
 		}

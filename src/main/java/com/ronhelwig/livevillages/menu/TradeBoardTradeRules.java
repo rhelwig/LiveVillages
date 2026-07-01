@@ -122,6 +122,9 @@ public final class TradeBoardTradeRules {
 		"pale_oak_sapling",
 		"mangrove_propagule",
 		"cobblestone",
+		"stone",
+		"smooth_stone",
+		"stone_bricks",
 		"dirt",
 		"bone_meal",
 		"iron_bars",
@@ -279,7 +282,7 @@ public final class TradeBoardTradeRules {
 			case "pumpkin" -> 4;
 			case "flower" -> 8;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 4;
-			case "cobblestone" -> 16;
+			case "cobblestone", "stone", "smooth_stone", "stone_bricks" -> 16;
 			case "dirt" -> 16;
 			case "bone_meal" -> 8;
 			case "iron_bars" -> 8;
@@ -699,6 +702,9 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> Items.PALE_OAK_SAPLING;
 			case "mangrove_propagule" -> Items.MANGROVE_PROPAGULE;
 			case "cobblestone" -> Items.COBBLESTONE;
+			case "stone" -> Items.STONE;
+			case "smooth_stone" -> Items.SMOOTH_STONE;
+			case "stone_bricks" -> Items.STONE_BRICKS;
 			case "dirt" -> Items.DIRT;
 			case "bone_meal" -> Items.BONE_MEAL;
 			case "iron_bars" -> Items.IRON_BARS;
@@ -763,6 +769,8 @@ public final class TradeBoardTradeRules {
 
 		return switch (goodsKey) {
 			case "cobblestone" -> "Cobble";
+			case "smooth_stone" -> "Smooth Stone";
+			case "stone_bricks" -> "Stone Bricks";
 			case "iron_ingot" -> "Iron";
 			case "copper_ingot" -> "Copper";
 			case "raw_iron" -> "Raw Iron";
@@ -964,6 +972,9 @@ public final class TradeBoardTradeRules {
 			case "candle" -> new ProductionRecipe("candle", 1, Map.of("honeycomb", 1));
 			case "bee_hive" -> new ProductionRecipe("bee_hive", 1, Map.of("planks", 6, "honeycomb", 3));
 			case "glass" -> new ProductionRecipe("glass", 1, Map.of("sand", 1));
+			case "stone" -> new ProductionRecipe("stone", 1, Map.of("cobblestone", 1));
+			case "smooth_stone" -> new ProductionRecipe("smooth_stone", 1, Map.of("stone", 1));
+			case "stone_bricks" -> new ProductionRecipe("stone_bricks", 1, Map.of("stone", 1));
 			case "coal" -> new ProductionRecipe("coal", 1, Map.of("logs", 1));
 			case "iron_ingot" -> new ProductionRecipe("iron_ingot", 1, Map.of("raw_iron", 1));
 			case "iron_bars" -> new ProductionRecipe("iron_bars", 16, Map.of("iron_ingot", 6));
@@ -991,7 +1002,7 @@ public final class TradeBoardTradeRules {
 		}
 
 		return switch (goodsKey) {
-			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "string", "crooked_staff", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "flower", "cobblestone", "dirt", "bone_meal", "sand", "torch" -> 1;
+			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "string", "crooked_staff", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "flower", "cobblestone", "stone", "smooth_stone", "stone_bricks", "dirt", "bone_meal", "sand", "torch" -> 1;
 			case "diamondhead_arrow" -> 4;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
 			case "chest", "ladder", "campfire", "redstone" -> 1;
@@ -1177,6 +1188,9 @@ public final class TradeBoardTradeRules {
 			case "pale_oak_sapling" -> stack.is(Items.PALE_OAK_SAPLING);
 			case "mangrove_propagule" -> stack.is(Items.MANGROVE_PROPAGULE);
 			case "cobblestone" -> stack.is(Items.COBBLESTONE);
+			case "stone" -> stack.is(Items.STONE);
+			case "smooth_stone" -> stack.is(Items.SMOOTH_STONE);
+			case "stone_bricks" -> stack.is(Items.STONE_BRICKS);
 			case "dirt" -> stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT);
 			case "bone_meal" -> stack.is(Items.BONE_MEAL);
 			case "iron_bars" -> stack.is(Items.IRON_BARS);

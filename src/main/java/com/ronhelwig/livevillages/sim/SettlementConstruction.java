@@ -80,6 +80,12 @@ public final class SettlementConstruction {
 	private static final double TRADE_BOARD_FOUNDING_MIN_SPACING_BLOCKS = 100.0D;
 	private static final int VANILLA_WORKSTATION_SCAN_RADIUS_BLOCKS = 64;
 	private static final int VANILLA_WORKSTATION_SCAN_DEPTH_BELOW_SURFACE_BLOCKS = 64;
+	private static final int FARM_AREA_CLUSTER_DISTANCE_BLOCKS = 10;
+	private static final int FARM_AREA_COMPOSTER_COVERAGE_BLOCKS = 12;
+	private static final int FARM_STARTER_SIZE_BLOCKS = 8;
+	private static final int FARM_STARTER_MIN_SPACING_BLOCKS = 12;
+	private static final int FARMERS_PER_FARM_SITE = 3;
+	private static final Map<String, Integer> FARM_STARTER_EXTRA_COST = Map.of("logs", 28);
 	private static final int DOCK_LENGTH_BLOCKS = 8;
 	private static final int DOCK_HALF_WIDTH_BLOCKS = 1;
 	private static final int DOCK_SUPPORT_SPACING_BLOCKS = 4;
@@ -1867,7 +1873,9 @@ public final class SettlementConstruction {
 		int waterSurfaceColumns = 0;
 		int deepWaterColumns = 0;
 		Set<BlockPos> countedLighthouseTops = new HashSet<>();
-		Set<BlockPos> countedDockOrigins = new HashSet<>();
+		Set<BlockPos> countedDockOrigins = new HashSet<>(buildSiteInfrastructure.completedDockOrigins());
+		Set<BlockPos> farmPlots = new HashSet<>();
+		Set<BlockPos> composterPositions = new HashSet<>();
 
 		for (int x = center.getX() - radiusBlocks; x <= center.getX() + radiusBlocks; x++) {
 			for (int z = center.getZ() - radiusBlocks; z <= center.getZ() + radiusBlocks; z++) {
@@ -1886,15 +1894,10 @@ public final class SettlementConstruction {
 						deepWaterColumns++;
 					}
 
-					if (docks <= buildSiteInfrastructure.completedDocks()) {
-						BlockPos candidateOrigin = new BlockPos(x, waterColumn.surfaceY(), z);
+					BlockPos candidateOrigin = new BlockPos(x, waterColumn.surfaceY(), z);
 
-						for (Direction facing : Direction.Plane.HORIZONTAL) {
-							if (isMinimalDock(level, candidateOrigin, facing) && countedDockOrigins.add(candidateOrigin.immutable())) {
-								docks++;
-								break;
-							}
-						}
+					if (isUncountedDockOrigin(level, candidateOrigin, countedDockOrigins)) {
+						docks++;
 					}
 				}
 
@@ -1911,6 +1914,7 @@ public final class SettlementConstruction {
 						housingCapacity++;
 					} else if (state.is(Blocks.COMPOSTER)) {
 						composters++;
+						composterPositions.add(scanPos.immutable());
 					} else if (state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST) || state.is(Blocks.BARREL)) {
 						storageBlocks++;
 					} else if (state.is(LiveVillagesBlocks.CARPENTER_BENCH)) {
@@ -1919,15 +1923,27 @@ public final class SettlementConstruction {
 						}
 					} else if (state.is(Blocks.CAMPFIRE) && countedLighthouseTops.add(scanPos.immutable()) && isMinimalLighthouse(level, scanPos)) {
 						lighthouses++;
+					} else if (isDockDeck(state) && isUncountedDockOrigin(level, scanPos, countedDockOrigins)) {
+						docks++;
+					}
+
+					if (isFarmPlotBlock(state)) {
+						farmPlots.add(scanPos.immutable());
+					} else if (isFarmCropBlock(state) && level.getBlockState(scanPos.below()).is(Blocks.FARMLAND)) {
+						farmPlots.add(scanPos.below().immutable());
 					}
 				}
 			}
 		}
 
+		FarmAreaCoverage farmAreaCoverage = farmAreaCoverage(farmPlots, composterPositions);
+
 		return new InfrastructureSurvey(
 			true,
 			housingCapacity,
 			composters,
+			farmAreaCoverage.areaCount(),
+			farmAreaCoverage.coveredAreaCount(),
 			storageBlocks,
 			carpenterBenches,
 			docks,
@@ -2046,6 +2062,7 @@ public final class SettlementConstruction {
 
 	private static BuildSiteInfrastructure buildSiteInfrastructure(ServerLevel level, SettlementState settlement) {
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations = new HashSet<>();
+		Set<BlockPos> completedDockOrigins = new HashSet<>();
 		int completedDocks = 0;
 		int completedLighthouses = 0;
 		int completedTradingPosts = 0;
@@ -2062,6 +2079,7 @@ public final class SettlementConstruction {
 			if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
 				if (buildSite.complete()) {
 					completedDocks++;
+					completedDockOrigins.add(buildSite.origin());
 				} else {
 					incompleteDocks++;
 				}
@@ -2101,6 +2119,7 @@ public final class SettlementConstruction {
 
 		return new BuildSiteInfrastructure(
 			Set.copyOf(incompleteCarpenterWorkshopWorkstations),
+			Set.copyOf(completedDockOrigins),
 			completedDocks,
 			completedLighthouses,
 			completedTradingPosts,
@@ -3829,6 +3848,16 @@ public final class SettlementConstruction {
 		return Optional.empty();
 	}
 
+	private static boolean isUncountedDockOrigin(ServerLevel level, BlockPos candidateOrigin, Set<BlockPos> countedDockOrigins) {
+		for (Direction facing : Direction.Plane.HORIZONTAL) {
+			if (isMinimalDock(level, candidateOrigin, facing) && countedDockOrigins.add(candidateOrigin.immutable())) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public static List<BlockPos> findLighthouseTops(ServerLevel level, SettlementState settlement) {
 		List<BlockPos> lighthouseTops = new ArrayList<>();
 		Set<BlockPos> countedLighthouseTops = new HashSet<>();
@@ -4364,6 +4393,10 @@ public final class SettlementConstruction {
 	}
 
 	public static BlockState localCompatibleMaterialPlacementState(ServerLevel level, BlockPos pos, BlockState plannedState, String materialKey) {
+		if (isTierSpecificPlannedMaterial(plannedState, materialKey)) {
+			return plannedState;
+		}
+
 		BlockState localMaterialState = localMaterialStateFor(level, pos, materialKey);
 		if (localMaterialState == null) {
 			return plannedState;
@@ -4418,6 +4451,9 @@ public final class SettlementConstruction {
 			case "fence" -> woodFenceBlock(palette.woodFamily()).defaultBlockState();
 			case "fence_gate" -> woodFenceGateBlock(palette.woodFamily()).defaultBlockState();
 			case "cobblestone" -> stoneBlock(palette.stoneMaterial()).defaultBlockState();
+			case "stone" -> Blocks.STONE.defaultBlockState();
+			case "smooth_stone" -> Blocks.SMOOTH_STONE.defaultBlockState();
+			case "stone_bricks" -> Blocks.STONE_BRICKS.defaultBlockState();
 			default -> null;
 		};
 	}
@@ -4425,7 +4461,7 @@ public final class SettlementConstruction {
 	private static boolean matchesMaterialFamily(BlockState currentState, BlockState plannedState, String materialKey) {
 		return switch (materialKey) {
 			case "bed" -> currentState.getBlock() instanceof BedBlock && plannedState.getBlock() instanceof BedBlock;
-			case "cobblestone" -> isFlexibleStoneMaterial(currentState) && isFlexibleStoneMaterial(plannedState);
+			case "cobblestone", "stone", "smooth_stone", "stone_bricks" -> isFlexibleStoneMaterial(currentState) && isFlexibleStoneMaterial(plannedState);
 			case "door" -> currentState.getBlock() instanceof DoorBlock && currentState.is(BlockTags.WOODEN_DOORS) && plannedState.getBlock() instanceof DoorBlock;
 			case "fence" -> currentState.is(BlockTags.WOODEN_FENCES) && plannedState.is(BlockTags.WOODEN_FENCES);
 			case "fence_gate" -> currentState.is(BlockTags.FENCE_GATES) && plannedState.getBlock() instanceof FenceGateBlock;
@@ -4441,6 +4477,32 @@ public final class SettlementConstruction {
 			case "stairs" -> currentState.is(BlockTags.WOODEN_STAIRS) && plannedState.getBlock() instanceof StairBlock;
 			default -> false;
 		};
+	}
+
+	public static boolean isTierUpgradeMaterialMismatch(BlockState currentState, BlockState plannedState, String materialKey) {
+		return isTierSpecificPlannedMaterial(plannedState, materialKey) && !currentState.equals(plannedState);
+	}
+
+	private static boolean isTierSpecificPlannedMaterial(BlockState plannedState, String materialKey) {
+		return switch (materialKey) {
+			case "logs" -> isStrippedLog(plannedState);
+			case "stone" -> plannedState.is(Blocks.STONE);
+			case "smooth_stone" -> plannedState.is(Blocks.SMOOTH_STONE);
+			case "stone_bricks" -> plannedState.is(Blocks.STONE_BRICKS);
+			default -> false;
+		};
+	}
+
+	private static boolean isStrippedLog(BlockState state) {
+		return state.is(Blocks.STRIPPED_OAK_LOG)
+			|| state.is(Blocks.STRIPPED_SPRUCE_LOG)
+			|| state.is(Blocks.STRIPPED_BIRCH_LOG)
+			|| state.is(Blocks.STRIPPED_JUNGLE_LOG)
+			|| state.is(Blocks.STRIPPED_ACACIA_LOG)
+			|| state.is(Blocks.STRIPPED_CHERRY_LOG)
+			|| state.is(Blocks.STRIPPED_DARK_OAK_LOG)
+			|| state.is(Blocks.STRIPPED_PALE_OAK_LOG)
+			|| state.is(Blocks.STRIPPED_MANGROVE_LOG);
 	}
 
 	private static boolean isSmithingStation(BlockState state) {
@@ -5052,21 +5114,97 @@ public final class SettlementConstruction {
 	}
 
 	private static CompletionResult tryPlaceComposter(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		if (!needsComposterProject(level, settlement)) {
+			return CompletionResult.completed(0);
+		}
+
 		Map<String, Integer> cost = SettlementProjectType.COMPOSTER.stockCost();
 
 		if (!canAfford(stock, cost)) {
 			return CompletionResult.notCompleted();
 		}
 
-		BlockPos placementPos = findComposterSite(level, settlement);
+		ComposterSite site = findComposterSite(level, settlement);
 
-		if (placementPos == null) {
+		if (site == null) {
+			return CompletionResult.notCompleted();
+		}
+
+		if (site.farmStarterSite() != null && !canAfford(stock, FARM_STARTER_EXTRA_COST)) {
 			return CompletionResult.notCompleted();
 		}
 
 		consumeCost(stock, cost);
-		level.setBlock(placementPos, Blocks.COMPOSTER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		if (site.farmStarterSite() != null) {
+			consumeCost(stock, FARM_STARTER_EXTRA_COST);
+			placeFarmStarter(level, site.farmStarterSite(), stock);
+		} else {
+			placeStandaloneComposter(level, site, stock);
+		}
+		LiveVillagesSavedData.get(level.getServer()).surveyCache.remove(settlement.id());
 		return CompletionResult.completed(0);
+	}
+
+	private static boolean needsComposterProject(ServerLevel level, SettlementState settlement) {
+		FarmAreaCoverage coverage = surveyFarmAreaCoverage(level, settlement);
+		int desiredFarmSites = desiredFarmSites(settlement, coverage.areaCount());
+
+		if (desiredFarmSites <= 0) {
+			return false;
+		}
+
+		int pendingPlayerAnchors = pendingLoneComposterAnchors(level, settlement, coverage);
+		return coverage.coveredAreaCount() + pendingPlayerAnchors < desiredFarmSites;
+	}
+
+	public static int desiredFarmSites(SettlementState settlement, int farmAreas) {
+		int farmers = Math.max(0, settlement.population().getOrDefault(SettlementRoleKeys.FARMER, 0));
+
+		if (farmers <= 0) {
+			return 0;
+		}
+
+		int farmerDrivenSites = Math.max(1, (farmers + FARMERS_PER_FARM_SITE - 1) / FARMERS_PER_FARM_SITE);
+		return Math.min(6, Math.max(farmAreas, farmerDrivenSites));
+	}
+
+	public static boolean maintainPlacedComposterFarmAnchors(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		if (!canAfford(stock, FARM_STARTER_EXTRA_COST)) {
+			return false;
+		}
+
+		FarmAreaCoverage coverage = surveyFarmAreaCoverage(level, settlement);
+
+		for (BlockPos composterPos : scanComposterPositions(level, settlement)) {
+			if (hasNearbyFarmArea(coverage, composterPos.below(), FARM_STARTER_MIN_SPACING_BLOCKS)) {
+				continue;
+			}
+
+			FarmStarterSite site = farmStarterSiteAtPlacedComposter(level, composterPos, coverage);
+
+			if (site == null) {
+				continue;
+			}
+
+			consumeCost(stock, FARM_STARTER_EXTRA_COST);
+			placeFarmStarter(level, site, stock);
+			LiveVillagesSavedData.get(level.getServer()).surveyCache.remove(settlement.id());
+			return true;
+		}
+
+		return false;
+	}
+
+	private static int pendingLoneComposterAnchors(ServerLevel level, SettlementState settlement, FarmAreaCoverage coverage) {
+		int anchors = 0;
+
+		for (BlockPos composterPos : scanComposterPositions(level, settlement)) {
+			if (farmStarterSiteAtPlacedComposter(level, composterPos, coverage) != null) {
+				anchors++;
+			}
+		}
+
+		return anchors;
 	}
 
 	private static CompletionResult tryPlaceStorage(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -5307,7 +5445,7 @@ public final class SettlementConstruction {
 		return switch (symbol) {
 			case 'E' -> Blocks.AIR.defaultBlockState();
 			case 'C' -> structureKind == StructureKind.FORESTER_WORKSHOP
-				? woodLogBlock(woodFamily).defaultBlockState()
+				? structureLogBlock(woodFamily, stoneMaterial).defaultBlockState()
 				: (structureKind == StructureKind.LIGHTHOUSE
 					|| structureKind == StructureKind.MINE_ENTRANCE
 					|| structureKind == StructureKind.MASON_WORKSHOP
@@ -5330,7 +5468,7 @@ public final class SettlementConstruction {
 			case 'I' -> structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE
 				? Blocks.COPPER_BARS.unaffected().defaultBlockState()
 				: Blocks.IRON_BARS.defaultBlockState();
-			case 'L' -> logStateFor(blueprint, facing, woodFamily, right, forward, up);
+			case 'L' -> logStateFor(blueprint, facing, woodFamily, stoneMaterial, right, forward, up);
 			case 'M' -> stoneBlock(stoneMaterial).defaultBlockState();
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
 			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
@@ -5409,8 +5547,8 @@ public final class SettlementConstruction {
 		return symbol == 'H';
 	}
 
-	private static BlockState logStateFor(StructureBlueprint blueprint, Direction facing, String woodFamily, int right, int forward, int up) {
-		BlockState state = woodLogBlock(woodFamily).defaultBlockState();
+	private static BlockState logStateFor(StructureBlueprint blueprint, Direction facing, String woodFamily, String stoneMaterial, int right, int forward, int up) {
+		BlockState state = structureLogBlock(woodFamily, stoneMaterial).defaultBlockState();
 		Direction explicitFacing = explicitBlueprintFacing(blueprint, facing, right, forward, up);
 
 		if (explicitFacing == null) {
@@ -6333,12 +6471,26 @@ public final class SettlementConstruction {
 	public static SettlementBuildSite applyBiomeMaterialPalette(ServerLevel level, SettlementState settlement, SettlementBuildSite buildSite, long tick) {
 		SettlementBuildSite normalizedBuildSite = normalizeBuildSiteForLoadedWorld(level, buildSite, tick);
 		StructureMaterialPalette palette = materialPaletteFor(level, normalizedBuildSite.anchorPos());
-		String tierLimitedStoneMaterial = SettlementTiers.clampStoneMaterialForTier(SettlementTiers.unlockedTier(settlement), palette.stoneMaterial());
+		String tierLimitedStoneMaterial = structureStoneMaterialForTier(SettlementTiers.unlockedTier(settlement), palette.stoneMaterial());
 		if (palette.woodFamily().equals(normalizedBuildSite.woodFamily()) && tierLimitedStoneMaterial.equals(normalizedBuildSite.stoneMaterial())) {
 			return normalizedBuildSite;
 		}
 
 		return normalizedBuildSite.withMaterials(palette.woodFamily(), tierLimitedStoneMaterial, tick);
+	}
+
+	private static String structureStoneMaterialForTier(int tier, String biomeStoneMaterial) {
+		int normalizedTier = SettlementTiers.normalize(tier);
+
+		if (normalizedTier >= 3) {
+			return "stone_bricks";
+		}
+
+		if (normalizedTier >= 2) {
+			return "stone";
+		}
+
+		return SettlementTiers.clampStoneMaterialForTier(normalizedTier, biomeStoneMaterial);
 	}
 
 	private static SettlementBuildSite normalizeBuildSiteForLoadedWorld(ServerLevel level, SettlementBuildSite buildSite, long tick) {
@@ -6509,6 +6661,9 @@ public final class SettlementConstruction {
 			relativePos.forward(),
 			relativePos.up()
 		);
+		if ("cobblestone".equals(materialKey)) {
+			materialKey = structureStoneGoodsKey(buildSite.stoneMaterial());
+		}
 		return materialKey.equals(block.expectedMaterialKey()) ? block : block.withExpectedMaterialKey(materialKey);
 	}
 
@@ -6594,6 +6749,13 @@ public final class SettlementConstruction {
 				case DOCK -> "";
 			};
 			default -> "";
+		};
+	}
+
+	private static String structureStoneGoodsKey(String stoneMaterial) {
+		return switch (stoneMaterial) {
+			case "stone", "smooth_stone", "stone_bricks" -> stoneMaterial;
+			default -> "cobblestone";
 		};
 	}
 
@@ -6703,6 +6865,28 @@ public final class SettlementConstruction {
 		};
 	}
 
+	private static Block structureLogBlock(String woodFamily, String stoneMaterial) {
+		return usesStrippedStructureLogs(stoneMaterial) ? strippedWoodLogBlock(woodFamily) : woodLogBlock(woodFamily);
+	}
+
+	private static boolean usesStrippedStructureLogs(String stoneMaterial) {
+		return "stone".equals(stoneMaterial) || "smooth_stone".equals(stoneMaterial) || "stone_bricks".equals(stoneMaterial);
+	}
+
+	private static Block strippedWoodLogBlock(String woodFamily) {
+		return switch (woodFamily) {
+			case "spruce" -> Blocks.STRIPPED_SPRUCE_LOG;
+			case "birch" -> Blocks.STRIPPED_BIRCH_LOG;
+			case "jungle" -> Blocks.STRIPPED_JUNGLE_LOG;
+			case "acacia" -> Blocks.STRIPPED_ACACIA_LOG;
+			case "cherry" -> Blocks.STRIPPED_CHERRY_LOG;
+			case "dark_oak" -> Blocks.STRIPPED_DARK_OAK_LOG;
+			case "pale_oak" -> Blocks.STRIPPED_PALE_OAK_LOG;
+			case "mangrove" -> Blocks.STRIPPED_MANGROVE_LOG;
+			default -> Blocks.STRIPPED_OAK_LOG;
+		};
+	}
+
 	private static Block woodPlankBlock(String woodFamily) {
 		return switch (woodFamily) {
 			case "spruce" -> Blocks.SPRUCE_PLANKS;
@@ -6789,6 +6973,7 @@ public final class SettlementConstruction {
 
 	private static Block stoneBlock(String stoneMaterial) {
 		return switch (stoneMaterial) {
+			case "stone" -> Blocks.STONE;
 			case "sandstone" -> Blocks.SANDSTONE;
 			case "red_sandstone" -> Blocks.RED_SANDSTONE;
 			case "smooth_stone" -> Blocks.SMOOTH_STONE;
@@ -7543,8 +7728,13 @@ public final class SettlementConstruction {
 			return CompletionResult.notCompleted();
 		}
 
+		long tick = level.getServer().getTickCount();
+		SettlementBuildSite completedBuildSite = completedDockBuildSite(level, settlement.id(), site, tick);
 		consumeCost(stock, cost);
 		placeDock(level, site, stock);
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		savedData.putBuildSite(completedBuildSite);
+		savedData.surveyCache.remove(settlement.id());
 		return CompletionResult.completed(0);
 	}
 
@@ -7946,7 +8136,20 @@ public final class SettlementConstruction {
 		level.setBlock(campfirePos, Blocks.CAMPFIRE.defaultBlockState(), BLOCK_UPDATE_FLAGS);
 	}
 
-	private static BlockPos findComposterSite(ServerLevel level, SettlementState settlement) {
+	private static ComposterSite findComposterSite(ServerLevel level, SettlementState settlement) {
+		FarmAreaCoverage coverage = surveyFarmAreaCoverage(level, settlement);
+		ComposterSite uncoveredFarmSite = findUncoveredFarmComposterSite(level, coverage);
+
+		if (uncoveredFarmSite != null) {
+			return uncoveredFarmSite;
+		}
+
+		FarmStarterSite farmStarterSite = findFarmStarterSite(level, settlement, coverage);
+
+		if (farmStarterSite != null) {
+			return new ComposterSite(farmStarterSite.composterPos(), null, farmStarterSite);
+		}
+
 		for (int radius = 2; radius <= buildRadius(settlement); radius++) {
 			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
 				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
@@ -7960,12 +8163,429 @@ public final class SettlementConstruction {
 						continue;
 					}
 
-					return surfacePos;
+					return new ComposterSite(surfacePos, null, null);
 				}
 			}
 		}
 
 		return null;
+	}
+
+	private static FarmAreaCoverage surveyFarmAreaCoverage(ServerLevel level, SettlementState settlement) {
+		Set<BlockPos> composterPositions = new HashSet<>(scanComposterPositions(level, settlement));
+		BlockPos center = settlement.center();
+		int radiusBlocks = buildRadius(settlement);
+		int minY = Math.max(level.getMinY(), center.getY() - SCAN_DEPTH_BLOCKS);
+		int maxY = Math.min(level.getMaxY() - 1, center.getY() + SCAN_HEIGHT_BLOCKS);
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+		Set<BlockPos> farmPlots = new HashSet<>();
+
+		for (int x = center.getX() - radiusBlocks; x <= center.getX() + radiusBlocks; x++) {
+			for (int z = center.getZ() - radiusBlocks; z <= center.getZ() + radiusBlocks; z++) {
+				for (int y = minY; y <= maxY; y++) {
+					scanPos.set(x, y, z);
+
+					if (!level.isLoaded(scanPos)) {
+						continue;
+					}
+
+					BlockState state = level.getBlockState(scanPos);
+
+					if (isFarmPlotBlock(state)) {
+						farmPlots.add(scanPos.immutable());
+					} else if (isFarmCropBlock(state) && level.getBlockState(scanPos.below()).is(Blocks.FARMLAND)) {
+						farmPlots.add(scanPos.below().immutable());
+					}
+				}
+			}
+		}
+
+		return farmAreaCoverage(farmPlots, composterPositions);
+	}
+
+	private static List<BlockPos> scanComposterPositions(ServerLevel level, SettlementState settlement) {
+		BlockPos center = settlement.center();
+		int radiusBlocks = buildRadius(settlement);
+		int minY = Math.max(level.getMinY(), center.getY() - SCAN_DEPTH_BLOCKS);
+		int maxY = Math.min(level.getMaxY() - 1, center.getY() + SCAN_HEIGHT_BLOCKS);
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+		List<BlockPos> composters = new ArrayList<>();
+
+		for (int x = center.getX() - radiusBlocks; x <= center.getX() + radiusBlocks; x++) {
+			for (int z = center.getZ() - radiusBlocks; z <= center.getZ() + radiusBlocks; z++) {
+				for (int y = minY; y <= maxY; y++) {
+					scanPos.set(x, y, z);
+
+					if (level.isLoaded(scanPos) && level.getBlockState(scanPos).is(Blocks.COMPOSTER)) {
+						composters.add(scanPos.immutable());
+					}
+				}
+			}
+		}
+
+		composters.sort((left, right) -> {
+			int comparedX = Integer.compare(left.getX(), right.getX());
+			if (comparedX != 0) {
+				return comparedX;
+			}
+			int comparedY = Integer.compare(left.getY(), right.getY());
+			return comparedY != 0 ? comparedY : Integer.compare(left.getZ(), right.getZ());
+		});
+		return List.copyOf(composters);
+	}
+
+	private static FarmAreaCoverage farmAreaCoverage(Set<BlockPos> farmPlots, Set<BlockPos> composterPositions) {
+		Set<BlockPos> remainingPlots = new HashSet<>(farmPlots);
+		List<FarmArea> areas = new ArrayList<>();
+
+		while (!remainingPlots.isEmpty()) {
+			BlockPos startPlot = remainingPlots.iterator().next();
+			List<BlockPos> areaPlots = new ArrayList<>();
+			ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+			queue.add(startPlot);
+			remainingPlots.remove(startPlot);
+			int sumX = 0;
+			int sumY = 0;
+			int sumZ = 0;
+			boolean covered = false;
+
+			while (!queue.isEmpty()) {
+				BlockPos plot = queue.removeFirst();
+				areaPlots.add(plot);
+				sumX += plot.getX();
+				sumY += plot.getY();
+				sumZ += plot.getZ();
+
+				if (!covered && isCoveredFarmPlot(plot, composterPositions)) {
+					covered = true;
+				}
+
+				List<BlockPos> connectedPlots = new ArrayList<>();
+
+				for (BlockPos candidate : remainingPlots) {
+					if (areSameFarmArea(plot, candidate)) {
+						connectedPlots.add(candidate);
+					}
+				}
+
+				for (BlockPos connectedPlot : connectedPlots) {
+					remainingPlots.remove(connectedPlot);
+					queue.addLast(connectedPlot);
+				}
+			}
+
+			int plotCount = areaPlots.size();
+			BlockPos center = new BlockPos(Math.round(sumX / (float) plotCount), Math.round(sumY / (float) plotCount), Math.round(sumZ / (float) plotCount));
+			areas.add(new FarmArea(center, List.copyOf(areaPlots), covered));
+		}
+
+		return new FarmAreaCoverage(List.copyOf(areas));
+	}
+
+	private static boolean areSameFarmArea(BlockPos left, BlockPos right) {
+		return Math.abs(left.getX() - right.getX()) <= FARM_AREA_CLUSTER_DISTANCE_BLOCKS
+			&& Math.abs(left.getY() - right.getY()) <= 1
+			&& Math.abs(left.getZ() - right.getZ()) <= FARM_AREA_CLUSTER_DISTANCE_BLOCKS;
+	}
+
+	private static boolean isCoveredFarmPlot(BlockPos plot, Set<BlockPos> composterPositions) {
+		for (BlockPos composterPos : composterPositions) {
+			if (Math.abs(composterPos.getX() - plot.getX()) <= FARM_AREA_COMPOSTER_COVERAGE_BLOCKS
+				&& Math.abs(composterPos.getY() - plot.getY()) <= 2
+				&& Math.abs(composterPos.getZ() - plot.getZ()) <= FARM_AREA_COMPOSTER_COVERAGE_BLOCKS) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static ComposterSite findUncoveredFarmComposterSite(ServerLevel level, FarmAreaCoverage coverage) {
+		FarmArea bestArea = null;
+
+		for (FarmArea area : coverage.areas()) {
+			if (area.covered()) {
+				continue;
+			}
+
+			if (bestArea == null || area.plotCount() > bestArea.plotCount()) {
+				bestArea = area;
+			}
+		}
+
+		if (bestArea == null) {
+			return null;
+		}
+
+		ComposterSite adjacentSite = findAdjacentFarmComposterSite(level, bestArea);
+
+		if (adjacentSite != null) {
+			return adjacentSite;
+		}
+
+		BlockPos replacementPlot = nearestReplaceableFarmPlot(level, bestArea);
+		return replacementPlot == null || hasNearbyComposter(level, replacementPlot.above(), FARM_AREA_COMPOSTER_COVERAGE_BLOCKS)
+			? null
+			: new ComposterSite(replacementPlot.above(), replacementPlot, null);
+	}
+
+	private static ComposterSite findAdjacentFarmComposterSite(ServerLevel level, FarmArea area) {
+		BlockPos center = area.center();
+
+		for (int radius = 0; radius <= FARM_AREA_COMPOSTER_COVERAGE_BLOCKS; radius++) {
+			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
+					if (Math.max(Math.abs(offsetX), Math.abs(offsetZ)) != radius) {
+						continue;
+					}
+
+					BlockPos surfacePos = topPlacementPos(level, center.offset(offsetX, 0, offsetZ));
+
+					if (surfacePos == null || !hasNearbyFarmBlock(level, surfacePos) || hasNearbyComposter(level, surfacePos, FARM_AREA_COMPOSTER_COVERAGE_BLOCKS)) {
+						continue;
+					}
+
+					return new ComposterSite(surfacePos, null, null);
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private static BlockPos nearestReplaceableFarmPlot(ServerLevel level, FarmArea area) {
+		BlockPos bestPlot = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+
+		for (BlockPos plot : area.plots()) {
+			BlockState aboveState = level.getBlockState(plot.above());
+
+			if (!aboveState.isAir() && !isFarmCropBlock(aboveState) && !isReplaceable(aboveState)) {
+				continue;
+			}
+
+			double distanceSquared = plot.distSqr(area.center());
+
+			if (bestPlot == null || distanceSquared < bestDistanceSquared) {
+				bestPlot = plot;
+				bestDistanceSquared = distanceSquared;
+			}
+		}
+
+		return bestPlot;
+	}
+
+	private static FarmStarterSite findFarmStarterSite(ServerLevel level, SettlementState settlement, FarmAreaCoverage coverage) {
+		BlockPos center = settlement.center();
+
+		for (int radius = 4; radius <= buildRadius(settlement); radius++) {
+			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
+					if (Math.max(Math.abs(offsetX), Math.abs(offsetZ)) != radius) {
+						continue;
+					}
+
+					FarmStarterSite site = farmStarterSiteAt(level, center.offset(offsetX, 0, offsetZ), coverage);
+
+					if (site != null) {
+						return site;
+					}
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private static FarmStarterSite farmStarterSiteAt(ServerLevel level, BlockPos centerColumn, FarmAreaCoverage coverage) {
+		return farmStarterSiteAt(level, centerColumn, coverage, null);
+	}
+
+	private static FarmStarterSite farmStarterSiteAtPlacedComposter(ServerLevel level, BlockPos composterPos, FarmAreaCoverage coverage) {
+		if (!level.hasChunkAt(composterPos) || !level.getBlockState(composterPos).is(Blocks.COMPOSTER)) {
+			return null;
+		}
+
+		int halfSize = FARM_STARTER_SIZE_BLOCKS / 2;
+		BlockPos waterPos = composterPos.offset(-1, -1, 0);
+		BlockPos centerColumn = waterPos.offset(0, 0, 0);
+		BlockPos origin = waterPos.offset(-halfSize, 0, -halfSize);
+		BlockPos centerGroundPos = new BlockPos(centerColumn.getX(), waterPos.getY(), centerColumn.getZ());
+
+		if (hasNearbyFarmArea(coverage, centerGroundPos, FARM_STARTER_MIN_SPACING_BLOCKS)
+			|| hasNearbyComposter(level, composterPos, FARM_STARTER_MIN_SPACING_BLOCKS, composterPos)) {
+			return null;
+		}
+
+		if (farmStarterSiteAt(level, centerColumn, coverage, composterPos) == null) {
+			return null;
+		}
+
+		return new FarmStarterSite(origin, FARM_STARTER_SIZE_BLOCKS, FARM_STARTER_SIZE_BLOCKS, waterPos, composterPos);
+	}
+
+	private static FarmStarterSite farmStarterSiteAt(ServerLevel level, BlockPos centerColumn, FarmAreaCoverage coverage, BlockPos allowedComposterPos) {
+		if (!level.hasChunkAt(centerColumn)) {
+			return null;
+		}
+
+		int baseY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerColumn.getX(), centerColumn.getZ()) - 1;
+
+		if (baseY < level.getMinY()) {
+			return null;
+		}
+
+		int halfSize = FARM_STARTER_SIZE_BLOCKS / 2;
+		BlockPos centerGroundPos = new BlockPos(centerColumn.getX(), baseY, centerColumn.getZ());
+		BlockPos origin = new BlockPos(centerColumn.getX() - halfSize, baseY, centerColumn.getZ() - halfSize);
+		BlockPos waterPos = origin.offset(halfSize, 0, halfSize);
+		BlockPos composterPos = waterPos.offset(1, 1, 0);
+
+		if (hasNearbyComposter(level, composterPos, FARM_STARTER_MIN_SPACING_BLOCKS, allowedComposterPos)
+			|| hasNearbyFarmArea(coverage, centerGroundPos, FARM_STARTER_MIN_SPACING_BLOCKS)) {
+			return null;
+		}
+
+		for (int offsetX = 0; offsetX < FARM_STARTER_SIZE_BLOCKS; offsetX++) {
+			for (int offsetZ = 0; offsetZ < FARM_STARTER_SIZE_BLOCKS; offsetZ++) {
+				BlockPos groundPos = origin.offset(offsetX, 0, offsetZ);
+
+				if (!isValidFarmStarterGround(level, groundPos, baseY, allowedComposterPos)) {
+					return null;
+				}
+			}
+		}
+
+		return new FarmStarterSite(origin, FARM_STARTER_SIZE_BLOCKS, FARM_STARTER_SIZE_BLOCKS, waterPos, composterPos);
+	}
+
+	private static boolean isValidFarmStarterGround(ServerLevel level, BlockPos groundPos, int baseY, BlockPos allowedComposterPos) {
+		if (!level.hasChunkAt(groundPos)) {
+			return false;
+		}
+
+		int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, groundPos.getX(), groundPos.getZ()) - 1;
+
+		if (groundY != baseY) {
+			return false;
+		}
+
+		BlockState groundState = level.getBlockState(groundPos);
+		BlockState aboveState = level.getBlockState(groundPos.above());
+		BlockState overheadState = level.getBlockState(groundPos.above(2));
+
+		boolean keepsPlacedComposter = allowedComposterPos != null && groundPos.above().equals(allowedComposterPos);
+
+		if (groundState.liquid()
+			|| groundState.is(Blocks.FARMLAND)
+			|| (!keepsPlacedComposter && isFarmCropBlock(aboveState))
+			|| isShovelPathSurface(groundState)
+			|| isImprovedRouteSurface(groundState)
+			|| !hasStableBuildGround(level, groundPos)) {
+			return false;
+		}
+
+		if (keepsPlacedComposter) {
+			return aboveState.is(Blocks.COMPOSTER)
+				&& canClearFarmStarterAir(level, groundPos.above(2), overheadState);
+		}
+
+		return canClearFarmStarterAir(level, groundPos.above(), aboveState)
+			&& canClearFarmStarterAir(level, groundPos.above(2), overheadState);
+	}
+
+	private static boolean canClearFarmStarterAir(ServerLevel level, BlockPos pos, BlockState state) {
+		return isReplaceable(state) || canLandscapeRemove(level, pos, state);
+	}
+
+	private static boolean hasNearbyFarmArea(FarmAreaCoverage coverage, BlockPos pos, int radiusBlocks) {
+		double maxDistanceSquared = (double) radiusBlocks * radiusBlocks;
+
+		for (FarmArea area : coverage.areas()) {
+			if (area.center().distSqr(pos) <= maxDistanceSquared) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean hasNearbyComposter(ServerLevel level, BlockPos pos, int radiusBlocks) {
+		return hasNearbyComposter(level, pos, radiusBlocks, null);
+	}
+
+	private static boolean hasNearbyComposter(ServerLevel level, BlockPos pos, int radiusBlocks, BlockPos ignoredComposterPos) {
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int offsetX = -radiusBlocks; offsetX <= radiusBlocks; offsetX++) {
+			for (int offsetZ = -radiusBlocks; offsetZ <= radiusBlocks; offsetZ++) {
+				for (int offsetY = -2; offsetY <= 2; offsetY++) {
+					scanPos.set(pos.getX() + offsetX, pos.getY() + offsetY, pos.getZ() + offsetZ);
+
+					if (ignoredComposterPos != null && scanPos.equals(ignoredComposterPos)) {
+						continue;
+					}
+
+					if (level.isLoaded(scanPos) && level.getBlockState(scanPos).is(Blocks.COMPOSTER)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static void placeStandaloneComposter(ServerLevel level, ComposterSite site, Map<String, Integer> stock) {
+		if (site.supportPos() != null) {
+			clearBlockToWarehouse(level, site.composterPos(), stock);
+			level.setBlock(site.supportPos(), Blocks.DIRT.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		}
+
+		level.setBlock(site.composterPos(), Blocks.COMPOSTER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+	}
+
+	private static void placeFarmStarter(ServerLevel level, FarmStarterSite site, Map<String, Integer> stock) {
+		BlockState borderState = woodLogBlock(materialPaletteFor(level, site.origin()).woodFamily()).defaultBlockState();
+
+		for (int offsetX = 0; offsetX < site.width(); offsetX++) {
+			for (int offsetZ = 0; offsetZ < site.length(); offsetZ++) {
+				BlockPos groundPos = site.origin().offset(offsetX, 0, offsetZ);
+				BlockPos abovePos = groundPos.above();
+				if (!abovePos.equals(site.composterPos())) {
+					clearBlockToWarehouse(level, abovePos, stock);
+				}
+				clearBlockToWarehouse(level, abovePos.above(), stock);
+
+				boolean border = offsetX == 0 || offsetZ == 0 || offsetX == site.width() - 1 || offsetZ == site.length() - 1;
+
+				if (border) {
+					clearBlockToWarehouse(level, groundPos, stock);
+					level.setBlock(groundPos, borderState, BLOCK_UPDATE_FLAGS);
+				} else if (groundPos.equals(site.waterPos())) {
+					clearBlockToWarehouse(level, groundPos, stock);
+					level.setBlock(groundPos, Blocks.WATER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				} else if (abovePos.equals(site.composterPos())) {
+					clearBlockToWarehouse(level, groundPos, stock);
+					level.setBlock(groundPos, Blocks.DIRT.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+					level.setBlock(abovePos, Blocks.COMPOSTER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				} else {
+					clearBlockToWarehouse(level, groundPos, stock);
+					level.setBlock(groundPos, Blocks.FARMLAND.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				}
+			}
+		}
+	}
+
+	private static boolean isFarmPlotBlock(BlockState state) {
+		return state.is(Blocks.FARMLAND);
+	}
+
+	private static boolean isFarmCropBlock(BlockState state) {
+		return state.is(Blocks.WHEAT)
+			|| state.is(Blocks.CARROTS)
+			|| state.is(Blocks.POTATOES)
+			|| state.is(Blocks.BEETROOTS);
 	}
 
 	private static StorageSite findStorageSite(ServerLevel level, SettlementState settlement) {
@@ -8237,6 +8857,14 @@ public final class SettlementConstruction {
 		);
 	}
 
+	private static SettlementBuildSite completedDockBuildSite(ServerLevel level, String settlementId, DockSite site, long tick) {
+		SettlementBuildSite pendingBuildSite = createPendingDockBuildSite(level, settlementId, site.origin(), site, tick);
+		List<SettlementBuildBlockState> placedBlocks = pendingBuildSite.blocks().stream()
+			.map(block -> block.withStatus(SettlementBuildBlockStatus.PLACED, ""))
+			.toList();
+		return pendingBuildSite.withBlocks(placedBlocks, true, tick);
+	}
+
 	private static BlockState dockBuildState(char symbol, String woodFamily) {
 		return switch (symbol) {
 			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
@@ -8373,6 +9001,12 @@ public final class SettlementConstruction {
 			return false;
 		}
 
+		if (!hasDockShoreAccess(level, origin.relative(facing.getOpposite()), origin.getY())) {
+			return false;
+		}
+
+		boolean foundDeepWaterAtEnd = false;
+
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
 			for (int right = -DOCK_HALF_WIDTH_BLOCKS; right <= DOCK_HALF_WIDTH_BLOCKS; right++) {
 				BlockPos deckPos = offset(origin, facing, right, forward, 0);
@@ -8381,19 +9015,23 @@ public final class SettlementConstruction {
 					return false;
 				}
 
-				BlockState belowState = level.getBlockState(deckPos.below());
+				if (right == 0
+					&& forward >= DOCK_LENGTH_BLOCKS - DOCK_DEEP_WATER_END_ROWS
+					&& existingDockDeckWaterDepth(level, deckPos) >= 2) {
+					foundDeepWaterAtEnd = true;
+				}
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
 					if (!hasDockLogSupport(level, deckPos)) {
 						return false;
 					}
-				} else if (!belowState.liquid() && !isDockSupportLog(belowState)) {
+				} else if (!existingDockDeckFitsPreview(level, deckPos, forward)) {
 					return false;
 				}
 			}
 		}
 
-		return true;
+		return foundDeepWaterAtEnd;
 	}
 
 	private static boolean hasDockLogSupport(ServerLevel level, BlockPos deckPos) {
@@ -9526,6 +10164,54 @@ public final class SettlementConstruction {
 		}
 	}
 
+	private record ComposterSite(BlockPos composterPos, BlockPos supportPos, FarmStarterSite farmStarterSite) {
+		private ComposterSite {
+			composterPos = composterPos.immutable();
+			supportPos = supportPos == null ? null : supportPos.immutable();
+		}
+	}
+
+	private record FarmStarterSite(BlockPos origin, int width, int length, BlockPos waterPos, BlockPos composterPos) {
+		private FarmStarterSite {
+			origin = origin.immutable();
+			waterPos = waterPos.immutable();
+			composterPos = composterPos.immutable();
+		}
+	}
+
+	private record FarmAreaCoverage(List<FarmArea> areas) {
+		private FarmAreaCoverage {
+			areas = List.copyOf(areas);
+		}
+
+		private int areaCount() {
+			return areas.size();
+		}
+
+		private int coveredAreaCount() {
+			int count = 0;
+
+			for (FarmArea area : areas) {
+				if (area.covered()) {
+					count++;
+				}
+			}
+
+			return count;
+		}
+	}
+
+	private record FarmArea(BlockPos center, List<BlockPos> plots, boolean covered) {
+		private FarmArea {
+			center = center.immutable();
+			plots = plots.stream().map(BlockPos::immutable).toList();
+		}
+
+		private int plotCount() {
+			return plots.size();
+		}
+	}
+
 	public record WorkstationBuildResult(boolean isStarted, boolean isBlocked, boolean isResumed, boolean isCompleted, SettlementBuildSite buildSite) {
 		public static WorkstationBuildResult started(SettlementBuildSite buildSite) {
 			return new WorkstationBuildResult(true, false, false, false, buildSite);
@@ -9608,6 +10294,8 @@ public final class SettlementConstruction {
 		boolean available,
 		int housingCapacity,
 		int composters,
+		int farmAreas,
+		int coveredFarmAreas,
 		int storageBlocks,
 		int carpenterBenches,
 		int docks,
@@ -9626,7 +10314,7 @@ public final class SettlementConstruction {
 		int anvilSupportedSmithies
 	) {
 		public static InfrastructureSurvey empty() {
-			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+			return new InfrastructureSurvey(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
 		}
 
 		public boolean hasLargeWaterBody() {
@@ -9649,6 +10337,7 @@ public final class SettlementConstruction {
 
 	private record BuildSiteInfrastructure(
 		Set<BlockPos> incompleteCarpenterWorkshopWorkstations,
+		Set<BlockPos> completedDockOrigins,
 		int completedDocks,
 		int completedLighthouses,
 		int completedTradingPosts,

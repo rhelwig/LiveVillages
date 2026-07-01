@@ -99,6 +99,9 @@ public final class SettlementEconomyRules {
 		new TargetRule("pale_oak_sapling", population -> 0),
 		new TargetRule("mangrove_propagule", population -> 0),
 		new TargetRule("cobblestone", population -> 24 + population * 8),
+		new TargetRule("stone", population -> population * 4),
+		new TargetRule("smooth_stone", population -> population * 3),
+		new TargetRule("stone_bricks", population -> population * 3),
 		new TargetRule("dirt", population -> 0),
 		new TargetRule("ladder", population -> 0),
 		new TargetRule("milepost", population -> 0),
@@ -226,8 +229,8 @@ public final class SettlementEconomyRules {
 
 	public static int requiredTierForGoods(String goodsKey) {
 		return switch (goodsKey) {
-			case "diamond", "redstone", "cookie", "pumpkin_pie" -> 2;
-			case "cake" -> 3;
+			case "diamond", "redstone", "cookie", "pumpkin_pie", "stone" -> 2;
+			case "cake", "smooth_stone", "stone_bricks" -> 3;
 			case "golden_apple" -> 4;
 			default -> 1;
 		};
@@ -508,7 +511,7 @@ public final class SettlementEconomyRules {
 			case "leather", "flint", "feather" -> 16;
 			case "bread", "beef", "mutton", "pork", "cod" -> 18;
 			case "wheat", "carrot", "potato", "beetroot" -> 24;
-			case "logs", "planks", "cobblestone" -> 36;
+			case "logs", "planks", "cobblestone", "stone", "smooth_stone", "stone_bricks" -> 36;
 			case "stick" -> 24;
 			case "torch" -> 16;
 			case "lantern" -> 8;

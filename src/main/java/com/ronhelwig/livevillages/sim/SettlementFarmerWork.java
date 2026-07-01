@@ -58,14 +58,15 @@ public final class SettlementFarmerWork {
 			return false;
 		}
 
+		boolean worldChanged = SettlementConstruction.maintainPlacedComposterFarmAnchors(level, settlement, stock);
 		List<Garden> gardens = collectGardens(level, managedComposterPositions(level, settlement));
 
 		if (gardens.isEmpty()) {
-			return false;
+			return worldChanged;
 		}
 
 		boolean farmerTaskChanged = taskFarmers(level, settlement, stock, gardens);
-		boolean worldChanged = repairGardenPlots(level, gardens);
+		worldChanged |= repairGardenPlots(level, gardens);
 		return farmerTaskChanged || worldChanged;
 	}
 
@@ -124,7 +125,7 @@ public final class SettlementFarmerWork {
 
 					BlockState state = level.getBlockState(scanPos);
 
-					if (composterPositions.isEmpty() && state.is(Blocks.COMPOSTER)) {
+					if (state.is(Blocks.COMPOSTER)) {
 						composterPositions.add(scanPos.immutable());
 					} else if (state.is(Blocks.HAY_BLOCK)) {
 						hayBales++;
@@ -162,13 +163,10 @@ public final class SettlementFarmerWork {
 	}
 
 	private static List<BlockPos> managedComposterPositions(ServerLevel level, SettlementState settlement) {
-		List<BlockPos> farmerJobSites = SettlementVillagers.farmerJobSites(level, settlement);
+		Set<BlockPos> composters = new LinkedHashSet<>(SettlementVillagers.farmerJobSites(level, settlement));
+		composters.addAll(scanNearbyComposters(level, settlement));
 
-		if (!farmerJobSites.isEmpty()) {
-			return farmerJobSites;
-		}
-
-		return scanNearbyComposters(level, settlement);
+		return List.copyOf(composters);
 	}
 
 	private static List<BlockPos> scanNearbyComposters(ServerLevel level, SettlementState settlement) {

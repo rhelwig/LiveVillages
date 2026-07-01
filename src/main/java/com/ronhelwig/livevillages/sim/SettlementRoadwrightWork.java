@@ -146,6 +146,7 @@ public final class SettlementRoadwrightWork {
 					plan = chooseRoadworkPlan(
 						level,
 						settlement,
+						stock,
 						roadwrightId,
 						workStart,
 						coreInternalTargets,
@@ -629,6 +630,7 @@ public final class SettlementRoadwrightWork {
 	private static Optional<RoadworkDebugPlan> chooseRoadworkPlan(
 		ServerLevel level,
 		SettlementState settlement,
+		Map<String, Integer> stock,
 		String roadwrightId,
 		BlockPos workStart,
 		List<PathTarget> coreInternalTargets,
@@ -644,7 +646,7 @@ public final class SettlementRoadwrightWork {
 		}
 
 		String cacheKey = roadworkTaskCacheKey(settlement, roadwrightId);
-		Optional<RoadworkDebugPlan> plan = existingPathRepairPlan(level, settlement, workStart)
+		Optional<RoadworkDebugPlan> plan = existingPathRepairPlan(level, settlement, stock, workStart)
 			.or(() -> choosePathPlan(level, settlement, workStart, centerTargets(level, settlement, workStart), true, "center"))
 			.or(() -> choosePathPlan(level, settlement, workStart, coreInternalTargets, true, "internal"))
 			.or(() -> choosePathPlan(level, settlement, workStart, milepostTargets, false, "milepost"))
@@ -1396,7 +1398,11 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static Optional<RoadworkDebugPlan> existingPathRepairPlan(ServerLevel level, SettlementState settlement, BlockPos center) {
-		Optional<PathTask> repairTask = existingPathRepairTask(level, settlement, center);
+		return existingPathRepairPlan(level, settlement, null, center);
+	}
+
+	private static Optional<RoadworkDebugPlan> existingPathRepairPlan(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos center) {
+		Optional<PathTask> repairTask = existingPathRepairTask(level, settlement, stock, center);
 
 		if (repairTask.isEmpty()) {
 			return Optional.empty();
@@ -1417,6 +1423,10 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static Optional<PathTask> existingPathRepairTask(ServerLevel level, SettlementState settlement, BlockPos center) {
+		return existingPathRepairTask(level, settlement, null, center);
+	}
+
+	private static Optional<PathTask> existingPathRepairTask(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos center) {
 		Optional<BlockPos> centerSurface = nearestSurfacePathPos(level, center, ROUTE_ENDPOINT_SEARCH_RADIUS_BLOCKS);
 
 		if (centerSurface.isEmpty()) {
@@ -1443,6 +1453,16 @@ public final class SettlementRoadwrightWork {
 		}
 
 		establishedPathSurfaces.sort(Comparator.comparingDouble(pos -> pos.distSqr(centerSurface.get())));
+
+		if (hasTargetRoadSupplies(stock, settlement)) {
+			for (BlockPos pathSurface : establishedPathSurfaces) {
+				BlockState pathState = level.getBlockState(pathSurface);
+
+				if (canPlaceTargetRoadSurface(level, settlement, pathSurface, pathState)) {
+					return Optional.of(trailTask(pathSurface));
+				}
+			}
+		}
 
 		for (BlockPos pathSurface : establishedPathSurfaces) {
 			for (Direction direction : Direction.Plane.HORIZONTAL) {
@@ -1471,6 +1491,16 @@ public final class SettlementRoadwrightWork {
 		}
 
 		return Optional.empty();
+	}
+
+	private static boolean hasTargetRoadSupplies(Map<String, Integer> stock, SettlementState settlement) {
+		if (stock == null) {
+			return true;
+		}
+
+		return targetRoadGoodsKey(settlement)
+			.map(goodsKey -> stock.getOrDefault(goodsKey, 0) > 0)
+			.orElse(true);
 	}
 
 	private static Optional<PathTask> terrainTransitionTask(ServerLevel level, BlockPos firstSurfacePos, BlockPos secondSurfacePos) {
