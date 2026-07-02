@@ -65,6 +65,9 @@ public record BuildSitePreviewBlockView(
 		return switch (materialKey) {
 			case "logs" -> stack.is(ItemTags.LOGS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "planks" -> stack.is(ItemTags.PLANKS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "dirt", "farmland" -> isDirtFamilyItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "water" -> stack.is(Items.WATER_BUCKET) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "composter" -> stack.is(Items.COMPOSTER) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "cobblestone" -> isStoneFamilyItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "glass" -> stack.is(Items.GLASS) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "glass_display_case" -> blockItem != null && LiveVillagesBlocks.isGlassDisplayCase(blockItem.getBlock().defaultBlockState()) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
@@ -81,6 +84,18 @@ public record BuildSitePreviewBlockView(
 			case "lantern" -> stack.is(Items.LANTERN) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			default -> ItemMatch.NONE;
 		};
+	}
+
+	private static boolean isDirtFamilyItem(BlockItem blockItem) {
+		if (blockItem == null) {
+			return false;
+		}
+
+		return blockItem.getBlock().defaultBlockState().is(BlockTags.DIRT)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.GRASS_BLOCK)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.DIRT)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.COARSE_DIRT)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.ROOTED_DIRT);
 	}
 
 	private static boolean isStoneFamilyItem(BlockItem blockItem) {

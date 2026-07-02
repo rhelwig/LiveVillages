@@ -444,7 +444,8 @@ public final class SettlementEconomySimulator {
 
 		if (infrastructure.available()) {
 			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
-			int neededComposterProjects = Math.max(0, desiredFarmSites - infrastructure.coveredFarmAreas());
+			int pendingFarmStarterAnchors = level == null ? 0 : SettlementConstruction.pendingFarmStarterAnchors(level, settlement);
+			int neededComposterProjects = Math.max(0, desiredFarmSites - infrastructure.coveredFarmAreas() - pendingFarmStarterAnchors);
 			projects = limitProjectType(projects, SettlementProjectType.COMPOSTER, neededComposterProjects);
 		}
 
@@ -467,9 +468,10 @@ public final class SettlementEconomySimulator {
 
 		if (infrastructure.available() && !needsHousing) {
 			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
+			int pendingFarmStarterAnchors = level == null ? 0 : SettlementConstruction.pendingFarmStarterAnchors(level, settlement);
 
 			if (desiredFarmSites > 0
-				&& infrastructure.coveredFarmAreas() + countProjectType(projects, SettlementProjectType.COMPOSTER) < desiredFarmSites) {
+				&& infrastructure.coveredFarmAreas() + pendingFarmStarterAnchors + countProjectType(projects, SettlementProjectType.COMPOSTER) < desiredFarmSites) {
 				projects.add(new SettlementProject(nextProjectId(projects, "composter"), SettlementProjectType.COMPOSTER, "", 0.0D, 0.55D));
 			}
 

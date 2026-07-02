@@ -529,6 +529,9 @@ public final class SettlementConstructionWork {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PLAYER_PLACED, "");
 			} else if (block.status() == SettlementBuildBlockStatus.BLOCKED && SettlementConstruction.isBuildSiteReplaceable(currentState)) {
 				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
+			} else if (block.status() == SettlementBuildBlockStatus.BLOCKED
+				&& SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())) {
+				updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
 			}
 
 			if (!updatedBlock.equals(block)) {
@@ -1692,6 +1695,27 @@ public final class SettlementConstructionWork {
 			);
 		}
 
+		if (SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())) {
+			MaterialConsumption materialResult = hasDelivery
+				? MaterialConsumption.supplied(task.buildSite())
+				: consumeTierUpgradeConstructionMaterial(level, stock, task.buildSite(), block, tick, task.targetPos());
+
+			if (!materialResult.result().supplied()) {
+				return ConstructionActionResult.blockStatusChanged(
+					updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.MISSING_MATERIAL, materialResult.result().missingMaterialKey(), tick),
+					false
+				);
+			}
+
+			boolean recoveredChanged = hasDelivery && SettlementConstruction.recoverBuildSiteBlockGoods(level, task.targetPos(), stock);
+
+			SettlementConstruction.replaceTierUpgradeBuildSiteBlock(level, task.targetPos(), plannedState);
+			return ConstructionActionResult.placed(
+				updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
+				materialResult.stockChanged() || recoveredChanged
+			);
+		}
+
 		if (!SettlementConstruction.isBuildSiteReplaceable(currentState)) {
 			if (shouldReplaceDirectlyToPreserveWorkstationSupport(level, task, task.targetPos())
 				&& SettlementConstruction.tryReplaceBuildSiteBlock(level, task.targetPos(), plannedState, stock)) {
@@ -1987,6 +2011,32 @@ public final class SettlementConstructionWork {
 		Map<String, Integer> siteMaterials = new LinkedHashMap<>(buildSite.siteMaterials());
 		SettlementConstructionMaterials.ConstructionMaterialResult result =
 			SettlementConstructionMaterials.consumeForBlock(stock, siteMaterials, block);
+
+		SettlementBuildSite updatedBuildSite = siteMaterials.equals(buildSite.siteMaterials())
+			? buildSite
+			: buildSite.withSiteMaterials(siteMaterials, tick);
+		return new MaterialConsumption(result, updatedBuildSite, !stock.equals(stockBefore));
+	}
+
+	private static MaterialConsumption consumeTierUpgradeConstructionMaterial(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		long tick,
+		BlockPos replacedPos
+	) {
+		Map<String, Integer> stockBefore = new LinkedHashMap<>(stock);
+		Map<String, Integer> workingStock = new LinkedHashMap<>(stock);
+		Map<String, Integer> siteMaterials = new LinkedHashMap<>(buildSite.siteMaterials());
+		SettlementConstruction.recoverBuildSiteBlockGoods(level, replacedPos, workingStock);
+		SettlementConstructionMaterials.ConstructionMaterialResult result =
+			SettlementConstructionMaterials.consumeForBlock(workingStock, siteMaterials, block);
+
+		if (result.supplied()) {
+			stock.clear();
+			stock.putAll(workingStock);
+		}
 
 		SettlementBuildSite updatedBuildSite = siteMaterials.equals(buildSite.siteMaterials())
 			? buildSite

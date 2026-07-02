@@ -182,6 +182,7 @@ public final class BuildSiteWireframePreview {
 			|| state.is(LiveVillagesBlocks.LIGHTHOUSE)
 			|| state.is(LiveVillagesBlocks.PALISADE_GATEHOUSE)
 			|| state.is(LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE)
+			|| state.is(Blocks.COMPOSTER)
 			|| state.is(Blocks.CARTOGRAPHY_TABLE)
 			|| state.is(Blocks.SMOKER)
 			|| state.is(Blocks.STONECUTTER)
@@ -211,7 +212,7 @@ public final class BuildSiteWireframePreview {
 				: highlightedBlocker
 				? BLOCKER_WIREFRAME_COLOR
 				: latestSnapshot.prospective()
-				? (latestSnapshot.placementValid() ? PLACEMENT_WIREFRAME_COLOR : RED_WIREFRAME_COLOR)
+				? (latestSnapshot.placementValid() ? previewColorForHeldItems(block, client) : RED_WIREFRAME_COLOR)
 				: previewColorForHeldItems(block, client);
 			renderThickShape(
 				context.poseStack(),

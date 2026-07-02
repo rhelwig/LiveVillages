@@ -580,6 +580,14 @@ public final class LiveVillagesNetworking {
 			return workstationPreview.get();
 		}
 
+		if (targetPos.isPresent()) {
+			Optional<BuildSitePreviewSnapshot> targetedInfrastructurePreview = buildPlacedInfrastructurePreviewSnapshot(player, targetPos);
+
+			if (targetedInfrastructurePreview.isPresent()) {
+				return targetedInfrastructurePreview.get();
+			}
+		}
+
 		Optional<BuildSitePreviewSnapshot> buildSitePreview = buildNearestBuildSitePreviewSnapshot(player, targetPos);
 
 		if (buildSitePreview.isPresent()) {
@@ -648,6 +656,9 @@ public final class LiveVillagesNetworking {
 			}
 		} else if (item == LiveVillagesBlocks.PALISADE_POINT_ITEM) {
 			return Optional.of(palisadePointPreviewSnapshot(player, settlement.get(), placementPos));
+		} else if (item == Items.COMPOSTER) {
+			preview = SettlementConstruction.previewFarmStarterForComposterPlacement(level, settlement.get(), placementPos);
+			settlementName = settlement.get().name();
 		} else {
 			preview = structurePreviewForHeldWorkstation(level, settlement.get(), placementPos, player.getDirection(), previewStack);
 			settlementName = settlement.get().name();
@@ -710,6 +721,12 @@ public final class LiveVillagesNetworking {
 
 	private static Optional<BuildSitePreviewSnapshot> buildPlacedInfrastructurePreviewSnapshot(ServerPlayer player, Optional<BlockPos> targetPos) {
 		ServerLevel level = (ServerLevel) player.level();
+		Optional<BuildSitePreviewSnapshot> targetedFarmPreview = targetPos.flatMap(pos -> targetedFarmStarterComposterPreview(player, level, pos));
+
+		if (targetedFarmPreview.isPresent()) {
+			return targetedFarmPreview;
+		}
+
 		Optional<BuildSitePreviewSnapshot> targetedAnchorPreview = targetPos.flatMap(pos -> targetedPortmasterAnchorPreview(player, level, pos));
 
 		if (targetedAnchorPreview.isPresent()) {
@@ -788,7 +805,51 @@ public final class LiveVillagesNetworking {
 			bestCandidate.preview().blocks().stream()
 				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
 					.toList()
-			));
+		));
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> targetedFarmStarterComposterPreview(ServerPlayer player, ServerLevel level, BlockPos targetPos) {
+		if (level.getBlockState(targetPos).is(Blocks.COMPOSTER)) {
+			return farmStarterComposterPreviewAt(player, level, targetPos);
+		}
+
+		for (Direction direction : Direction.values()) {
+			BlockPos neighborPos = targetPos.relative(direction);
+			if (level.getBlockState(neighborPos).is(Blocks.COMPOSTER)) {
+				Optional<BuildSitePreviewSnapshot> preview = farmStarterComposterPreviewAt(player, level, neighborPos);
+				if (preview.isPresent()) {
+					return preview;
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BuildSitePreviewSnapshot> farmStarterComposterPreviewAt(ServerPlayer player, ServerLevel level, BlockPos composterPos) {
+		Optional<SettlementState> settlement = SettlementConstruction.findWorkstationSettlement(level, composterPos);
+		if (settlement.isEmpty()) {
+			return Optional.empty();
+		}
+
+		SettlementConstruction.StructurePreview preview = SettlementConstruction.previewFarmStarterAtComposter(level, settlement.get(), composterPos);
+		if (preview == null || preview.blocks().isEmpty()) {
+			return Optional.empty();
+		}
+
+		int distanceBlocks = (int) Math.round(Math.sqrt(composterPos.distSqr(player.blockPosition())));
+		return Optional.of(BuildSitePreviewSnapshot.prospective(
+			preview.statusMessage(),
+			settlement.get().name(),
+			preview.previewId(),
+			preview.previewType(),
+			distanceBlocks,
+			preview.placementValid(),
+			preview.blockerPositions(),
+			preview.blocks().stream()
+				.map(block -> new BuildSitePreviewBlockView(block.pos(), block.materialKey(), block.blockId()))
+					.toList()
+		));
 	}
 
 	private static Optional<BuildSitePreviewSnapshot> targetedPortmasterAnchorPreview(ServerPlayer player, ServerLevel level, BlockPos targetPos) {
@@ -874,6 +935,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.PALISADE_POINT_ITEM
 			|| item == LiveVillagesBlocks.SIMPLE_HOUSING_SHELTER_ITEM
 			|| item == LiveVillagesBlocks.HOUSING_SHELTER_ITEM
+			|| item == Items.COMPOSTER
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
 			|| item == Items.STONECUTTER
@@ -898,6 +960,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.GUARD_POST_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
+			|| item == Items.COMPOSTER
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
 			|| item == Items.STONECUTTER
