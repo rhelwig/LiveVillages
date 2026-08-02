@@ -74,6 +74,16 @@ public final class TradeBoardTradeRules {
 		"honey_bottle",
 		"honeycomb",
 		"candle",
+		"glow_berries",
+		"glowstone_dust",
+		"glowstone",
+		"soul_sand",
+		"soul_soil",
+		"blaze_rod",
+		"chorus_fruit",
+		"popped_chorus_fruit",
+		"prismarine_shard",
+		"prismarine_crystals",
 		"shears",
 		"string",
 		"sling",
@@ -111,6 +121,7 @@ public final class TradeBoardTradeRules {
 		"sugar",
 		"cocoa_beans",
 		"pumpkin",
+		"carved_pumpkin",
 		"flower",
 		"oak_sapling",
 		"spruce_sapling",
@@ -146,14 +157,25 @@ public final class TradeBoardTradeRules {
 		"glass",
 		"coal",
 		"torch",
+		"soul_torch",
+		"copper_torch",
 		"campfire",
 		"bee_hive",
+		"jack_o_lantern",
 		"lantern",
+		"soul_lantern",
+		"sea_lantern",
+		"shroomlight",
+		"froglight",
+		"copper_bulb",
+		"redstone_lamp",
+		"end_rod",
 		"copper_nugget",
 		"iron_nugget",
 		"iron_ingot",
 		"gold_ingot",
 		"copper_ingot",
+		"copper_block",
 		"raw_iron",
 		"raw_copper",
 		"redstone",
@@ -257,6 +279,13 @@ public final class TradeBoardTradeRules {
 			case "honey_bottle" -> 4;
 			case "honeycomb" -> 4;
 			case "candle" -> 8;
+			case "glow_berries" -> 8;
+			case "glowstone_dust" -> 8;
+			case "glowstone" -> 2;
+			case "soul_sand", "soul_soil" -> 8;
+			case "blaze_rod" -> 2;
+			case "chorus_fruit", "popped_chorus_fruit" -> 4;
+			case "prismarine_shard", "prismarine_crystals" -> 8;
 			case "shears" -> 1;
 			case "string" -> 8;
 			case "sling", "crooked_staff", "scythe" -> 1;
@@ -279,7 +308,7 @@ public final class TradeBoardTradeRules {
 			case "egg" -> 8;
 			case "milk_bucket" -> 1;
 			case "sugar", "cocoa_beans" -> 8;
-			case "pumpkin" -> 4;
+			case "pumpkin", "carved_pumpkin" -> 4;
 			case "flower" -> 8;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 4;
 			case "cobblestone", "stone", "smooth_stone", "stone_bricks" -> 16;
@@ -293,12 +322,18 @@ public final class TradeBoardTradeRules {
 			case "glass" -> 8;
 			case "coal" -> 8;
 			case "torch" -> 8;
+			case "soul_torch", "copper_torch" -> 8;
 			case "campfire" -> 1;
 			case "bee_hive" -> 1;
+			case "jack_o_lantern" -> 2;
 			case "lantern" -> 4;
+			case "soul_lantern" -> 4;
+			case "sea_lantern", "shroomlight", "froglight" -> 2;
+			case "copper_bulb", "redstone_lamp", "end_rod" -> 4;
 			case "iron_ingot" -> 4;
 			case "gold_ingot" -> 4;
 			case "copper_ingot" -> 4;
+			case "copper_block" -> 1;
 			case "raw_iron" -> 8;
 			case "raw_copper" -> 8;
 			case "redstone" -> 16;
@@ -656,6 +691,16 @@ public final class TradeBoardTradeRules {
 			case "honey_bottle" -> Items.HONEY_BOTTLE;
 			case "honeycomb" -> Items.HONEYCOMB;
 			case "candle" -> Items.CANDLE;
+			case "glow_berries" -> Items.GLOW_BERRIES;
+			case "glowstone_dust" -> Items.GLOWSTONE_DUST;
+			case "glowstone" -> Items.GLOWSTONE;
+			case "soul_sand" -> Items.SOUL_SAND;
+			case "soul_soil" -> Items.SOUL_SOIL;
+			case "blaze_rod" -> Items.BLAZE_ROD;
+			case "chorus_fruit" -> Items.CHORUS_FRUIT;
+			case "popped_chorus_fruit" -> Items.POPPED_CHORUS_FRUIT;
+			case "prismarine_shard" -> Items.PRISMARINE_SHARD;
+			case "prismarine_crystals" -> Items.PRISMARINE_CRYSTALS;
 			case "shears" -> Items.SHEARS;
 			case "string" -> Items.STRING;
 			case "sling" -> LiveVillagesItems.SLING;
@@ -691,6 +736,7 @@ public final class TradeBoardTradeRules {
 			case "sugar" -> Items.SUGAR;
 			case "cocoa_beans" -> Items.COCOA_BEANS;
 			case "pumpkin" -> Items.PUMPKIN;
+			case "carved_pumpkin" -> Items.CARVED_PUMPKIN;
 			case "flower" -> Items.POPPY;
 			case "oak_sapling" -> Items.OAK_SAPLING;
 			case "spruce_sapling" -> Items.SPRUCE_SAPLING;
@@ -726,14 +772,25 @@ public final class TradeBoardTradeRules {
 			case "glass" -> Items.GLASS;
 			case "coal" -> Items.COAL;
 			case "torch" -> Items.TORCH;
+			case "soul_torch" -> Items.SOUL_TORCH;
+			case "copper_torch" -> Items.COPPER_TORCH;
 			case "campfire" -> Items.CAMPFIRE;
 			case "bee_hive" -> Items.BEEHIVE;
+			case "jack_o_lantern" -> Items.JACK_O_LANTERN;
 			case "lantern" -> Items.LANTERN;
+			case "soul_lantern" -> Items.SOUL_LANTERN;
+			case "sea_lantern" -> Items.SEA_LANTERN;
+			case "shroomlight" -> Items.SHROOMLIGHT;
+			case "froglight" -> Items.OCHRE_FROGLIGHT;
+			case "copper_bulb" -> Items.COPPER_BULB;
+			case "redstone_lamp" -> Items.REDSTONE_LAMP;
+			case "end_rod" -> Items.END_ROD;
 			case "copper_nugget" -> Items.COPPER_NUGGET;
 			case "iron_nugget" -> Items.IRON_NUGGET;
 			case "iron_ingot" -> Items.IRON_INGOT;
 			case "gold_ingot" -> Items.GOLD_INGOT;
 			case "copper_ingot" -> Items.COPPER_INGOT;
+			case "copper_block" -> Items.COPPER_BLOCK;
 			case "raw_iron" -> Items.RAW_IRON;
 			case "raw_copper" -> Items.RAW_COPPER;
 			case "redstone" -> Items.REDSTONE;
@@ -969,7 +1026,17 @@ public final class TradeBoardTradeRules {
 			case "copperhead_arrow" -> new ProductionRecipe("copperhead_arrow", 8, Map.of("stick", 1, "copper_nugget", 1, "feather", 1));
 			case "ironhead_arrow" -> new ProductionRecipe("ironhead_arrow", 8, Map.of("stick", 1, "iron_nugget", 1, "feather", 1));
 			case "diamondhead_arrow" -> new ProductionRecipe("diamondhead_arrow", 4, Map.of("stick", 1, "diamond", 1, "feather", 1));
-			case "candle" -> new ProductionRecipe("candle", 1, Map.of("honeycomb", 1));
+			case "candle" -> new ProductionRecipe("candle", 1, Map.of("honeycomb", 1, "string", 1));
+			case "soul_torch" -> new ProductionRecipe("soul_torch", 4, Map.of("coal", 1, "stick", 1, "soul_soil", 1));
+			case "jack_o_lantern" -> new ProductionRecipe("jack_o_lantern", 1, Map.of("carved_pumpkin", 1, "torch", 1));
+			case "lantern" -> new ProductionRecipe("lantern", 1, Map.of("iron_nugget", 8, "torch", 1));
+			case "soul_lantern" -> new ProductionRecipe("soul_lantern", 1, Map.of("iron_nugget", 8, "soul_torch", 1));
+			case "glowstone" -> new ProductionRecipe("glowstone", 1, Map.of("glowstone_dust", 4));
+			case "sea_lantern" -> new ProductionRecipe("sea_lantern", 1, Map.of("prismarine_shard", 4, "prismarine_crystals", 5));
+			case "copper_block" -> new ProductionRecipe("copper_block", 1, Map.of("copper_ingot", 9));
+			case "copper_bulb" -> new ProductionRecipe("copper_bulb", 4, Map.of("copper_block", 3, "redstone", 1, "blaze_rod", 1));
+			case "redstone_lamp" -> new ProductionRecipe("redstone_lamp", 1, Map.of("glowstone", 1, "redstone", 4));
+			case "end_rod" -> new ProductionRecipe("end_rod", 4, Map.of("blaze_rod", 1, "popped_chorus_fruit", 1));
 			case "bee_hive" -> new ProductionRecipe("bee_hive", 1, Map.of("planks", 6, "honeycomb", 3));
 			case "glass" -> new ProductionRecipe("glass", 1, Map.of("sand", 1));
 			case "stone" -> new ProductionRecipe("stone", 1, Map.of("cobblestone", 1));
@@ -1002,12 +1069,14 @@ public final class TradeBoardTradeRules {
 		}
 
 		return switch (goodsKey) {
-			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "string", "crooked_staff", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "flower", "cobblestone", "stone", "smooth_stone", "stone_bricks", "dirt", "bone_meal", "sand", "torch" -> 1;
+			case "bread", "baked_potato", "cookie", "wheat", "wheat_seeds", "carrot", "potato", "beetroot", "wool", "paper", "glass_bottle", "nether_wart", "glistering_melon_slice", "honey_bottle", "honeycomb", "candle", "glow_berries", "glowstone_dust", "soul_sand", "soul_soil", "chorus_fruit", "popped_chorus_fruit", "prismarine_shard", "prismarine_crystals", "string", "crooked_staff", "logs", "planks", "stairs", "slab", "trapdoor", "stick", "flint", "feather", "arrow", "copperhead_arrow", "ironhead_arrow", "copper_nugget", "iron_nugget", "apple", "egg", "sugar", "cocoa_beans", "pumpkin", "carved_pumpkin", "flower", "cobblestone", "stone", "smooth_stone", "stone_bricks", "dirt", "bone_meal", "sand", "torch", "soul_torch", "copper_torch" -> 1;
 			case "diamondhead_arrow" -> 4;
 			case "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling", "cherry_sapling", "dark_oak_sapling", "pale_oak_sapling", "mangrove_propagule" -> 1;
-			case "chest", "ladder", "campfire", "redstone" -> 1;
+			case "chest", "ladder", "campfire", "jack_o_lantern", "redstone" -> 1;
 			case "iron_bars" -> 2;
-			case "glass", "bed", "book", "bookshelf", "healing_potion", "lantern", "milepost", "trade_board", "carpenter_bench", "bakers_counter", "forester_table", "miner_workstation", "surveyor_table", "portmaster_anchor", "lighthouse", "scribe_desk", "guard_post", "gardener_workstation", "honey_separator", "pumpkin_pie", "milk_bucket", "shears", "sling", "bee_hive" -> 2;
+			case "glass", "bed", "book", "bookshelf", "healing_potion", "glowstone", "lantern", "soul_lantern", "milepost", "trade_board", "carpenter_bench", "bakers_counter", "forester_table", "miner_workstation", "surveyor_table", "portmaster_anchor", "lighthouse", "scribe_desk", "guard_post", "gardener_workstation", "honey_separator", "pumpkin_pie", "milk_bucket", "shears", "sling", "bee_hive" -> 2;
+			case "sea_lantern", "shroomlight", "copper_bulb", "redstone_lamp", "end_rod", "blaze_rod", "copper_block" -> 3;
+			case "froglight" -> 4;
 			case "beef" -> 2;
 			case "cod" -> 2;
 			case "mutton" -> 2;
@@ -1107,6 +1176,43 @@ public final class TradeBoardTradeRules {
 		return contents != null && (contents.is(Potions.HEALING) || contents.is(Potions.STRONG_HEALING));
 	}
 
+	private static boolean isCandleGoods(ItemStack stack) {
+		return stack.is(Items.CANDLE)
+			|| stack.is(Items.WHITE_CANDLE)
+			|| stack.is(Items.LIGHT_GRAY_CANDLE)
+			|| stack.is(Items.GRAY_CANDLE)
+			|| stack.is(Items.BLACK_CANDLE)
+			|| stack.is(Items.BROWN_CANDLE)
+			|| stack.is(Items.RED_CANDLE)
+			|| stack.is(Items.ORANGE_CANDLE)
+			|| stack.is(Items.YELLOW_CANDLE)
+			|| stack.is(Items.LIME_CANDLE)
+			|| stack.is(Items.GREEN_CANDLE)
+			|| stack.is(Items.CYAN_CANDLE)
+			|| stack.is(Items.LIGHT_BLUE_CANDLE)
+			|| stack.is(Items.BLUE_CANDLE)
+			|| stack.is(Items.PURPLE_CANDLE)
+			|| stack.is(Items.MAGENTA_CANDLE)
+			|| stack.is(Items.PINK_CANDLE);
+	}
+
+	private static boolean isFroglightGoods(ItemStack stack) {
+		return stack.is(Items.OCHRE_FROGLIGHT)
+			|| stack.is(Items.VERDANT_FROGLIGHT)
+			|| stack.is(Items.PEARLESCENT_FROGLIGHT);
+	}
+
+	private static boolean isCopperBulbGoods(ItemStack stack) {
+		return stack.is(Items.COPPER_BULB)
+			|| stack.is(Items.EXPOSED_COPPER_BULB)
+			|| stack.is(Items.WEATHERED_COPPER_BULB)
+			|| stack.is(Items.OXIDIZED_COPPER_BULB)
+			|| stack.is(Items.WAXED_COPPER_BULB)
+			|| stack.is(Items.WAXED_EXPOSED_COPPER_BULB)
+			|| stack.is(Items.WAXED_WEATHERED_COPPER_BULB)
+			|| stack.is(Items.WAXED_OXIDIZED_COPPER_BULB);
+	}
+
 	private static boolean matchesGoods(String goodsKey, ItemStack stack) {
 		if (stack.isEmpty()) {
 			return false;
@@ -1139,7 +1245,17 @@ public final class TradeBoardTradeRules {
 			case "glistering_melon_slice" -> stack.is(Items.GLISTERING_MELON_SLICE);
 			case "honey_bottle" -> stack.is(Items.HONEY_BOTTLE);
 			case "honeycomb" -> stack.is(Items.HONEYCOMB);
-			case "candle" -> stack.is(Items.CANDLE);
+			case "candle" -> isCandleGoods(stack);
+			case "glow_berries" -> stack.is(Items.GLOW_BERRIES);
+			case "glowstone_dust" -> stack.is(Items.GLOWSTONE_DUST);
+			case "glowstone" -> stack.is(Items.GLOWSTONE);
+			case "soul_sand" -> stack.is(Items.SOUL_SAND);
+			case "soul_soil" -> stack.is(Items.SOUL_SOIL);
+			case "blaze_rod" -> stack.is(Items.BLAZE_ROD);
+			case "chorus_fruit" -> stack.is(Items.CHORUS_FRUIT);
+			case "popped_chorus_fruit" -> stack.is(Items.POPPED_CHORUS_FRUIT);
+			case "prismarine_shard" -> stack.is(Items.PRISMARINE_SHARD);
+			case "prismarine_crystals" -> stack.is(Items.PRISMARINE_CRYSTALS);
 			case "shears" -> stack.is(Items.SHEARS);
 			case "string" -> stack.is(Items.STRING);
 			case "sling" -> stack.is(LiveVillagesItems.SLING);
@@ -1177,6 +1293,7 @@ public final class TradeBoardTradeRules {
 			case "sugar" -> stack.is(Items.SUGAR);
 			case "cocoa_beans" -> stack.is(Items.COCOA_BEANS);
 			case "pumpkin" -> stack.is(Items.PUMPKIN);
+			case "carved_pumpkin" -> stack.is(Items.CARVED_PUMPKIN);
 			case "flower" -> stack.is(ItemTags.FLOWERS);
 			case "oak_sapling" -> stack.is(Items.OAK_SAPLING);
 			case "spruce_sapling" -> stack.is(Items.SPRUCE_SAPLING);
@@ -1212,14 +1329,25 @@ public final class TradeBoardTradeRules {
 			case "glass" -> stack.is(Items.GLASS);
 			case "coal" -> stack.is(Items.COAL) || stack.is(Items.CHARCOAL);
 			case "torch" -> stack.is(Items.TORCH);
+			case "soul_torch" -> stack.is(Items.SOUL_TORCH);
+			case "copper_torch" -> stack.is(Items.COPPER_TORCH);
 			case "campfire" -> stack.is(Items.CAMPFIRE);
 			case "bee_hive" -> stack.is(Items.BEEHIVE);
+			case "jack_o_lantern" -> stack.is(Items.JACK_O_LANTERN);
 			case "lantern" -> stack.is(Items.LANTERN);
+			case "soul_lantern" -> stack.is(Items.SOUL_LANTERN);
+			case "sea_lantern" -> stack.is(Items.SEA_LANTERN);
+			case "shroomlight" -> stack.is(Items.SHROOMLIGHT);
+			case "froglight" -> isFroglightGoods(stack);
+			case "copper_bulb" -> isCopperBulbGoods(stack);
+			case "redstone_lamp" -> stack.is(Items.REDSTONE_LAMP);
+			case "end_rod" -> stack.is(Items.END_ROD);
 			case "copper_nugget" -> stack.is(Items.COPPER_NUGGET);
 			case "iron_nugget" -> stack.is(Items.IRON_NUGGET);
 			case "iron_ingot" -> stack.is(Items.IRON_INGOT);
 			case "gold_ingot" -> stack.is(Items.GOLD_INGOT);
 			case "copper_ingot" -> stack.is(Items.COPPER_INGOT);
+			case "copper_block" -> stack.is(Items.COPPER_BLOCK);
 			case "raw_iron" -> stack.is(Items.RAW_IRON) || stack.is(Items.IRON_ORE) || stack.is(Items.DEEPSLATE_IRON_ORE);
 			case "raw_copper" -> stack.is(Items.RAW_COPPER) || stack.is(Items.COPPER_ORE) || stack.is(Items.DEEPSLATE_COPPER_ORE);
 			case "redstone" -> stack.is(Items.REDSTONE) || stack.is(Items.REDSTONE_ORE) || stack.is(Items.DEEPSLATE_REDSTONE_ORE);

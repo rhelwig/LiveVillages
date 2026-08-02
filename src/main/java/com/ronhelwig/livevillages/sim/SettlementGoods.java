@@ -135,8 +135,48 @@ public final class SettlementGoods {
 			return "honeycomb";
 		}
 
-		if (stack.is(Items.CANDLE)) {
+		if (isCandleGoods(stack)) {
 			return "candle";
+		}
+
+		if (stack.is(Items.GLOW_BERRIES)) {
+			return "glow_berries";
+		}
+
+		if (stack.is(Items.GLOWSTONE_DUST)) {
+			return "glowstone_dust";
+		}
+
+		if (stack.is(Items.GLOWSTONE)) {
+			return "glowstone";
+		}
+
+		if (stack.is(Items.SOUL_SAND)) {
+			return "soul_sand";
+		}
+
+		if (stack.is(Items.SOUL_SOIL)) {
+			return "soul_soil";
+		}
+
+		if (stack.is(Items.BLAZE_ROD)) {
+			return "blaze_rod";
+		}
+
+		if (stack.is(Items.CHORUS_FRUIT)) {
+			return "chorus_fruit";
+		}
+
+		if (stack.is(Items.POPPED_CHORUS_FRUIT)) {
+			return "popped_chorus_fruit";
+		}
+
+		if (stack.is(Items.PRISMARINE_SHARD)) {
+			return "prismarine_shard";
+		}
+
+		if (stack.is(Items.PRISMARINE_CRYSTALS)) {
+			return "prismarine_crystals";
 		}
 
 		if (stack.is(Items.SHEARS)) {
@@ -241,6 +281,10 @@ public final class SettlementGoods {
 
 		if (stack.is(Items.PUMPKIN)) {
 			return "pumpkin";
+		}
+
+		if (stack.is(Items.CARVED_PUMPKIN)) {
+			return "carved_pumpkin";
 		}
 
 		if (stack.is(net.minecraft.tags.ItemTags.FLOWERS)) {
@@ -459,6 +503,10 @@ public final class SettlementGoods {
 			return "torch";
 		}
 
+		if (stack.is(Items.SOUL_TORCH)) {
+			return "soul_torch";
+		}
+
 		if (stack.is(Items.CAMPFIRE)) {
 			return "campfire";
 		}
@@ -471,8 +519,40 @@ public final class SettlementGoods {
 			return "copper_torch";
 		}
 
+		if (stack.is(Items.JACK_O_LANTERN)) {
+			return "jack_o_lantern";
+		}
+
 		if (stack.is(Items.LANTERN)) {
 			return "lantern";
+		}
+
+		if (stack.is(Items.SOUL_LANTERN)) {
+			return "soul_lantern";
+		}
+
+		if (stack.is(Items.SEA_LANTERN)) {
+			return "sea_lantern";
+		}
+
+		if (stack.is(Items.SHROOMLIGHT)) {
+			return "shroomlight";
+		}
+
+		if (isFroglightGoods(stack)) {
+			return "froglight";
+		}
+
+		if (isCopperBulbGoods(stack)) {
+			return "copper_bulb";
+		}
+
+		if (stack.is(Items.REDSTONE_LAMP)) {
+			return "redstone_lamp";
+		}
+
+		if (stack.is(Items.END_ROD)) {
+			return "end_rod";
 		}
 
 		if (stack.is(Items.IRON_INGOT)) {
@@ -499,6 +579,10 @@ public final class SettlementGoods {
 			return "copper_ingot";
 		}
 
+		if (stack.is(Items.COPPER_BLOCK)) {
+			return "copper_block";
+		}
+
 		return null;
 	}
 
@@ -509,6 +593,43 @@ public final class SettlementGoods {
 
 		PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
 		return contents != null && (contents.is(Potions.HEALING) || contents.is(Potions.STRONG_HEALING));
+	}
+
+	private static boolean isCandleGoods(ItemStack stack) {
+		return stack.is(Items.CANDLE)
+			|| stack.is(Items.WHITE_CANDLE)
+			|| stack.is(Items.LIGHT_GRAY_CANDLE)
+			|| stack.is(Items.GRAY_CANDLE)
+			|| stack.is(Items.BLACK_CANDLE)
+			|| stack.is(Items.BROWN_CANDLE)
+			|| stack.is(Items.RED_CANDLE)
+			|| stack.is(Items.ORANGE_CANDLE)
+			|| stack.is(Items.YELLOW_CANDLE)
+			|| stack.is(Items.LIME_CANDLE)
+			|| stack.is(Items.GREEN_CANDLE)
+			|| stack.is(Items.CYAN_CANDLE)
+			|| stack.is(Items.LIGHT_BLUE_CANDLE)
+			|| stack.is(Items.BLUE_CANDLE)
+			|| stack.is(Items.PURPLE_CANDLE)
+			|| stack.is(Items.MAGENTA_CANDLE)
+			|| stack.is(Items.PINK_CANDLE);
+	}
+
+	private static boolean isFroglightGoods(ItemStack stack) {
+		return stack.is(Items.OCHRE_FROGLIGHT)
+			|| stack.is(Items.VERDANT_FROGLIGHT)
+			|| stack.is(Items.PEARLESCENT_FROGLIGHT);
+	}
+
+	private static boolean isCopperBulbGoods(ItemStack stack) {
+		return stack.is(Items.COPPER_BULB)
+			|| stack.is(Items.EXPOSED_COPPER_BULB)
+			|| stack.is(Items.WEATHERED_COPPER_BULB)
+			|| stack.is(Items.OXIDIZED_COPPER_BULB)
+			|| stack.is(Items.WAXED_COPPER_BULB)
+			|| stack.is(Items.WAXED_EXPOSED_COPPER_BULB)
+			|| stack.is(Items.WAXED_WEATHERED_COPPER_BULB)
+			|| stack.is(Items.WAXED_OXIDIZED_COPPER_BULB);
 	}
 
 	private static boolean isWoodenTrapdoor(ItemStack stack) {

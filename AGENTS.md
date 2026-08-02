@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Search Tooling
+
+- Use `rg`/ripgrep for local text and file searches by default. Treat `rg` as pre-approved for local searches; do not ask before running it.
+
 This repository now uses the GitHub issues tracker as the primary issue tracker. `known-issues.md` has been retired.
 
 ## General

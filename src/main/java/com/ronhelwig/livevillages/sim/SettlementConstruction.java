@@ -23,6 +23,8 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CandleBlock;
+import net.minecraft.world.level.block.CaveVines;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.DoorBlock;
@@ -47,6 +49,7 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
@@ -68,6 +71,7 @@ public final class SettlementConstruction {
 	private static final int SCAN_HEIGHT_BLOCKS = 20;
 	private static final int MAX_TERRAIN_CUT_BLOCKS = 3;
 	private static final int MAX_TERRAIN_FILL_BLOCKS = 3;
+	private static final int MAX_STRUCTURE_FOUNDATION_BLOCKS = 5;
 	private static final int MAX_SITE_LANDSCAPING_BLOCKS = 40;
 	private static final int MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS = 72;
 	private static final int MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS = 140;
@@ -125,17 +129,23 @@ public final class SettlementConstruction {
 	 * G = fence gate
 	 * H = chest
 	 * I = iron/copper bars
+	 * J = semantic serious guard-space accent
 	 * K = campfire
 	 * L = log
 	 * M = stone / cobblestone-family block
 	 * N = hanging lantern
+	 * O = semantic storefront fixture base / concealed power
 	 * P = planks
 	 * Q = glass display case
 	 * R = ladder
 	 * S = stairs
 	 * T = wall torch
+	 * U = semantic interior light, resolved per settlement to a stable saved material key
 	 * V = glass / window block
 	 * W = workstation
+	 * X = semantic storefront light on an authored support
+	 * Y = optional glow-berry garden trellis below an authored support
+	 * Z = semantic farm / garden light on an authored support
 	 *
 	 * Orientation symbols:
 	 * . = no explicit orientation
@@ -847,7 +857,7 @@ public final class SettlementConstruction {
 			},
 			{
 				"LPPPL",
-				"PBABP",
+				"PBUBP",
 				"PBABP",
 				"PAAAP",
 				"LPDPL",
@@ -867,7 +877,7 @@ public final class SettlementConstruction {
 			},
 			{
 				"LPPPL",
-				"PATAP",
+				"PAAAP",
 				"PAAAP",
 				"PAAAP",
 				"LPPPL",
@@ -930,7 +940,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"LPDPL",
 				"GAAAG",
-				"FAAAF",
+				"FPPPF",
 				"LFWFL"
 			},
 			{
@@ -939,7 +949,7 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LIDIL",
-				"AAAAA",
+				"AJAJA",
 				"AAAAA",
 				"LAAAL"
 			},
@@ -1008,7 +1018,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"LPDPL",
 				"FAAAF",
-				"FAAAG",
+				"FAPAG",
 				"LAWAL"
 			},
 			{
@@ -1017,8 +1027,8 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"FAAAF",
-				"FAAAG",
+				"FAYAF",
+				"FAZAG",
 				"LAAAL"
 			},
 			{
@@ -1027,7 +1037,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"PAAAP",
 				"LPPPL",
-				"FAAAF",
+				"FPPPF",
 				"FAAAG",
 				"LFFFL"
 			},
@@ -1378,7 +1388,7 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"AAAAA",
+				"AXAXA",
 				"AAAAA",
 				"LAAAL"
 			},
@@ -1518,7 +1528,7 @@ public final class SettlementConstruction {
 				"MAAAM",
 				"LMDML",
 				"GAAAG",
-				"QAAAQ",
+				"QOPOQ",
 				"LQWQL"
 			},
 			{
@@ -1527,7 +1537,7 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"AAAAA",
+				"AXAXA",
 				"AAAAA",
 				"LAAAL"
 			},
@@ -3351,7 +3361,7 @@ public final class SettlementConstruction {
 			site != null,
 			site != null ? "" : "Dock needs deeper adjacent water and shoreline access.",
 			site != null ? List.of() : List.of(anchorPos.immutable()),
-			buildDockPreviewBlocks(level, anchorPos, origin, dockFacing, site != null)
+			buildDockPreviewBlocks(level, settlementId, anchorPos, origin, dockFacing, site != null)
 		);
 	}
 
@@ -3374,7 +3384,7 @@ public final class SettlementConstruction {
 			placementValid,
 			placementValid ? "" : "Starter Farm needs an open area workers can flatten away from existing farms.",
 			placementValid ? List.of() : List.of(composterPos.immutable()),
-			buildFarmStarterPreviewBlocks(level, site)
+			buildFarmStarterPreviewBlocks(level, settlement, site)
 		);
 	}
 
@@ -3397,7 +3407,7 @@ public final class SettlementConstruction {
 			placementValid,
 			placementValid ? "" : "Starter Farm needs an open area workers can flatten away from existing farms.",
 			placementValid ? List.of() : List.of(composterPos.immutable()),
-			buildFarmStarterPreviewBlocks(level, site)
+			buildFarmStarterPreviewBlocks(level, settlement, site)
 		);
 	}
 
@@ -3987,6 +3997,10 @@ public final class SettlementConstruction {
 			return null;
 		}
 
+		if ("0".equals(buildBlock.blueprintSymbol()) && "dirt".equals(buildBlock.expectedMaterialKey())) {
+			return Blocks.DIRT.defaultBlockState();
+		}
+
 		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK) {
 			return dockBuildState(buildBlock.blueprintSymbol().charAt(0), buildSite.woodFamily());
 		}
@@ -4004,6 +4018,7 @@ public final class SettlementConstruction {
 			buildSite.woodFamily(),
 			buildSite.stoneMaterial(),
 			buildBlock.blueprintSymbol().charAt(0),
+			buildBlock.expectedMaterialKey(),
 			relativePos.right(),
 			relativePos.forward(),
 			relativePos.up()
@@ -4220,6 +4235,7 @@ public final class SettlementConstruction {
 						"oak",
 						"cobblestone",
 						symbol,
+						"",
 						right,
 						forward,
 						up
@@ -4264,17 +4280,19 @@ public final class SettlementConstruction {
 		return new BlockPos(frontPos.getX(), Math.max(anchorPos.getY(), groundY + 1), frontPos.getZ());
 	}
 
-	private static List<StructurePreviewBlock> buildDockPreviewBlocks(ServerLevel level, BlockPos anchorPos, BlockPos origin, Direction facing, boolean placementValid) {
+	private static List<StructurePreviewBlock> buildDockPreviewBlocks(ServerLevel level, String settlementId, BlockPos anchorPos, BlockPos origin, Direction facing, boolean placementValid) {
 		String woodFamily = materialPaletteFor(level, anchorPos).woodFamily();
+		String dockLightMaterialKey = dockLightMaterialKey(level, settlementId);
 		List<StructurePreviewBlock> blocks = new ArrayList<>();
 
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
 			for (int right = -DOCK_HALF_WIDTH_BLOCKS; right <= DOCK_HALF_WIDTH_BLOCKS; right++) {
 				BlockPos deckPos = offset(origin, facing, right, forward, 0);
+				boolean dockLight = !dockLightMaterialKey.isBlank() && isDockLightOffset(right, forward);
 				blocks.add(new StructurePreviewBlock(
 					deckPos,
-					"planks",
-					BuiltInRegistries.BLOCK.getKey(woodPlankBlock(woodFamily)).toString()
+					dockLight ? dockLightMaterialKey : "planks",
+					BuiltInRegistries.BLOCK.getKey(dockLight ? Blocks.SEA_LANTERN : woodPlankBlock(woodFamily)).toString()
 				));
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
@@ -4295,8 +4313,9 @@ public final class SettlementConstruction {
 		return blocks;
 	}
 
-	private static List<StructurePreviewBlock> buildFarmStarterPreviewBlocks(ServerLevel level, FarmStarterSite site) {
+	private static List<StructurePreviewBlock> buildFarmStarterPreviewBlocks(ServerLevel level, SettlementState settlement, FarmStarterSite site) {
 		Block woodLogBlock = woodLogBlock(materialPaletteFor(level, site.origin()).woodFamily());
+		String farmLightMaterialKey = farmStarterLightMaterialKey(level, settlement);
 		List<StructurePreviewBlock> blocks = new ArrayList<>();
 
 		for (int offsetX = 0; offsetX < site.width(); offsetX++) {
@@ -4308,8 +4327,13 @@ public final class SettlementConstruction {
 				String materialKey;
 
 				if (border) {
-					plannedBlock = woodLogBlock;
-					materialKey = "logs";
+					if (!farmLightMaterialKey.isBlank() && isFarmStarterLightOffset(site, offsetX, offsetZ)) {
+						plannedBlock = Blocks.JACK_O_LANTERN;
+						materialKey = farmLightMaterialKey;
+					} else {
+						plannedBlock = woodLogBlock;
+						materialKey = "logs";
+					}
 				} else if (groundPos.equals(site.waterPos())) {
 					plannedBlock = Blocks.WATER;
 					materialKey = "water";
@@ -4346,6 +4370,10 @@ public final class SettlementConstruction {
 			return buildBlock.blueprintSymbol().isBlank() ? 'A' : buildBlock.blueprintSymbol().charAt(0);
 		}
 
+		if (isStructureFoundationBlock(buildBlock)) {
+			return '0';
+		}
+
 		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(buildBlock.position());
 
 		if (relativePos == null) {
@@ -4365,10 +4393,23 @@ public final class SettlementConstruction {
 			return palisadeWallMaterialKey(symbol);
 		}
 
+		if (isStructureFoundationBlock(buildBlock)) {
+			return "dirt";
+		}
+
 		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(buildBlock.position());
 
 		if (relativePos == null) {
 			return "";
+		}
+
+		if ((isSemanticLightSymbol(symbol) && isSemanticLightMaterialKey(buildBlock.expectedMaterialKey()))
+			|| (symbol == 'T' && isSemanticWallLightMaterialKey(buildBlock.expectedMaterialKey()))) {
+			return buildBlock.expectedMaterialKey();
+		}
+
+		if (symbol == 'O' && isStorefrontFixtureBaseMaterialKey(buildBlock.expectedMaterialKey())) {
+			return buildBlock.expectedMaterialKey();
 		}
 
 		return blueprintMaterialKey(
@@ -4408,6 +4449,9 @@ public final class SettlementConstruction {
 
 					int right = blueprint.minRight() + column;
 					String materialKey = blueprintMaterialKey(structureKind, symbol, right, forward, up);
+					if (symbol == 'Y' && materialKey.isBlank()) {
+						continue;
+					}
 					String position = relativeBlueprintPosition(right, forward, up);
 
 					if (isAnchoredWorkstationSymbol(structureKind, symbol, up)
@@ -4429,6 +4473,10 @@ public final class SettlementConstruction {
 
 	static boolean isStructureMarginGroundBackfillBlock(SettlementBuildBlockState block) {
 		return STRUCTURE_MARGIN_GROUND_BACKFILL_KEY.equals(block.expectedMaterialKey());
+	}
+
+	private static boolean isStructureFoundationBlock(SettlementBuildBlockState block) {
+		return "0".equals(block.blueprintSymbol()) && "dirt".equals(block.expectedMaterialKey());
 	}
 
 	static boolean matchesStructureMarginGroundReplacement(BlockState state) {
@@ -4526,7 +4574,7 @@ public final class SettlementConstruction {
 		return true;
 	}
 
-	private static BlockState localMaterialStateFor(ServerLevel level, BlockPos pos, String materialKey) {
+	static BlockState localMaterialStateFor(ServerLevel level, BlockPos pos, String materialKey) {
 		if (materialKey == null || materialKey.isBlank()) {
 			return null;
 		}
@@ -4559,14 +4607,39 @@ public final class SettlementConstruction {
 			case "glass_display_case" -> LiveVillagesBlocks.isGlassDisplayCase(currentState) && LiveVillagesBlocks.isGlassDisplayCase(plannedState);
 			case "iron_bars" -> currentState.is(Blocks.IRON_BARS) && plannedState.is(Blocks.IRON_BARS);
 			case "copper_bars" -> isCopperBars(currentState) && isCopperBars(plannedState);
+			case "candle" -> isCandleBlockState(currentState) && isCandleBlockState(plannedState);
+			case "copper_bulb" -> isCopperBulbBlockState(currentState) && isCopperBulbBlockState(plannedState);
+			case "froglight" -> isFroglightBlockState(currentState) && isFroglightBlockState(plannedState);
 			case "lantern" -> currentState.hasProperty(LanternBlock.HANGING) && plannedState.hasProperty(LanternBlock.HANGING);
 			case "logs" -> currentState.is(BlockTags.LOGS) && plannedState.is(BlockTags.LOGS);
 			case "planks" -> currentState.is(BlockTags.PLANKS) && plannedState.is(BlockTags.PLANKS);
 			case "slab" -> currentState.is(BlockTags.WOODEN_SLABS) && plannedState.getBlock() instanceof SlabBlock;
 			case "smithing_station" -> isSmithingStation(currentState) && isSmithingStation(plannedState);
 			case "stairs" -> currentState.is(BlockTags.WOODEN_STAIRS) && plannedState.getBlock() instanceof StairBlock;
+			case "torch" -> currentState.is(Blocks.TORCH) && plannedState.is(Blocks.TORCH);
 			default -> false;
 		};
+	}
+
+	private static boolean isCandleBlockState(BlockState state) {
+		return state.getBlock() instanceof CandleBlock;
+	}
+
+	private static boolean isCopperBulbBlockState(BlockState state) {
+		return state.is(Blocks.COPPER_BULB)
+			|| state.is(Blocks.EXPOSED_COPPER_BULB)
+			|| state.is(Blocks.WEATHERED_COPPER_BULB)
+			|| state.is(Blocks.OXIDIZED_COPPER_BULB)
+			|| state.is(Blocks.WAXED_COPPER_BULB)
+			|| state.is(Blocks.WAXED_EXPOSED_COPPER_BULB)
+			|| state.is(Blocks.WAXED_WEATHERED_COPPER_BULB)
+			|| state.is(Blocks.WAXED_OXIDIZED_COPPER_BULB);
+	}
+
+	private static boolean isFroglightBlockState(BlockState state) {
+		return state.is(Blocks.OCHRE_FROGLIGHT)
+			|| state.is(Blocks.VERDANT_FROGLIGHT)
+			|| state.is(Blocks.PEARLESCENT_FROGLIGHT);
 	}
 
 	public static boolean isTierUpgradeMaterialMismatch(BlockState currentState, BlockState plannedState, String materialKey) {
@@ -4735,9 +4808,8 @@ public final class SettlementConstruction {
 							continue;
 						}
 
-						consumeCost(stock, cost);
-						placeHousingShelter(level, site.origin(), site.facing(), stock);
-						return CompletionResult.completed(2);
+						startAutonomousHousingBuildSite(level, settlement, site, StructureKind.HOUSING_SHELTER, HOUSING_SHELTER_BLUEPRINT, stock);
+						return CompletionResult.completed(0);
 					}
 				}
 			}
@@ -4746,12 +4818,41 @@ public final class SettlementConstruction {
 		HousingSite fallbackSite = findSimpleHousingSite(level, settlement);
 
 		if (fallbackSite != null) {
-			consumeCost(stock, cost);
-			placeSimpleHousingShelter(level, fallbackSite.origin(), fallbackSite.facing(), stock);
-			return CompletionResult.completed(1);
+			startAutonomousHousingBuildSite(
+				level,
+				settlement,
+				fallbackSite,
+				StructureKind.SIMPLE_HOUSING_SHELTER,
+				SIMPLE_HOUSING_SHELTER_BLUEPRINT,
+				stock
+			);
+			return CompletionResult.completed(0);
 		}
 
 		return CompletionResult.notCompleted();
+	}
+
+	private static void startAutonomousHousingBuildSite(
+		ServerLevel level,
+		SettlementState settlement,
+		HousingSite site,
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		Map<String, Integer> stock
+	) {
+		long tick = level.getServer().getTickCount();
+		SettlementBuildSite buildSite = createPendingBuildSite(
+			level,
+			structureKind,
+			blueprint,
+			settlement.id(),
+			site.origin(),
+			site.origin(),
+			site.origin(),
+			site.facing(),
+			tick
+		);
+		LiveVillagesSavedData.get(level.getServer()).putBuildSite(updateBuildSiteMaterialStatus(buildSite, stock, tick));
 	}
 
 	private static CompletionResult tryBuildCarpenterWorkshop(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
@@ -5017,7 +5118,7 @@ public final class SettlementConstruction {
 					groundPos = groundPos.below();
 				}
 
-				if (groundY > baseY + maxTerrainCutBlocks || groundY < baseY - MAX_TERRAIN_FILL_BLOCKS) {
+				if (groundY > baseY + maxTerrainCutBlocks || groundY < baseY - (MAX_STRUCTURE_FOUNDATION_BLOCKS + 1)) {
 					return PlacementPreviewResult.invalid("Terrain is too uneven for this structure.", groundPos);
 				}
 
@@ -5128,7 +5229,7 @@ public final class SettlementConstruction {
 		}
 
 		int minBuildY = maxGroundY - MAX_TERRAIN_CUT_BLOCKS;
-		int maxBuildY = minGroundY + MAX_TERRAIN_FILL_BLOCKS;
+		int maxBuildY = minGroundY + MAX_STRUCTURE_FOUNDATION_BLOCKS + 1;
 
 		if (minBuildY > maxBuildY) {
 			return null;
@@ -5240,7 +5341,7 @@ public final class SettlementConstruction {
 
 		consumeCost(stock, cost);
 		if (site.farmStarterSite() != null) {
-			placeFarmStarter(level, site.farmStarterSite(), stock);
+			placeFarmStarter(level, settlement, site.farmStarterSite(), stock);
 		} else {
 			placeStandaloneComposter(level, site, stock);
 		}
@@ -5289,7 +5390,7 @@ public final class SettlementConstruction {
 				continue;
 			}
 
-			placeFarmStarter(level, site, stock);
+			placeFarmStarter(level, settlement, site, stock);
 			LiveVillagesSavedData.get(level.getServer()).surveyCache.remove(settlement.id());
 			return true;
 		}
@@ -5523,7 +5624,7 @@ public final class SettlementConstruction {
 		}
 
 		StructureMaterialPalette palette = materialPaletteFor(level, pos);
-		BlockState state = blueprintStateFor(facing, blueprint, structureKind, palette.woodFamily(), palette.stoneMaterial(), symbol, right, forward, up);
+		BlockState state = blueprintStateFor(facing, blueprint, structureKind, palette.woodFamily(), palette.stoneMaterial(), symbol, "", right, forward, up);
 
 		if (state == null) {
 			clearBlockToWarehouse(level, pos, stock);
@@ -5540,6 +5641,7 @@ public final class SettlementConstruction {
 		String woodFamily,
 		String stoneMaterial,
 		char symbol,
+		String materialKey,
 		int right,
 		int forward,
 		int up
@@ -5576,8 +5678,11 @@ public final class SettlementConstruction {
 			case 'F' -> fenceStateFor(blueprint, structureKind, facing, woodFamily, right, forward, up);
 			case 'G' -> woodFenceGateBlock(woodFamily).defaultBlockState().setValue(FenceGateBlock.FACING, fenceGateFacingFor(blueprint, structureKind, facing, right, forward, up));
 			case 'N' -> lanternStateFor(structureKind);
+			case 'O' -> storefrontFixtureBaseStateFor(materialKey, woodFamily);
 			case 'R' -> ladderStateFor(blueprint, facing, right, forward, up);
-			case 'T' -> torchStateFor(blueprint, facing, right, forward, up);
+			case 'T' -> semanticWallLightStateFor(materialKey, blueprint, facing, right, forward, up);
+			case 'J', 'U', 'X', 'Z' -> semanticLightStateFor(materialKey);
+			case 'Y' -> gardenTrellisStateFor(materialKey);
 			case 'V' -> structureKind == StructureKind.CARTOGRAPHER_HOUSE ? Blocks.GLASS_PANE.defaultBlockState() : Blocks.GLASS.defaultBlockState();
 			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
 			case 'W' -> workstationStateFor(structureKind, facing);
@@ -5838,9 +5943,55 @@ public final class SettlementConstruction {
 		return lanternStateFor();
 	}
 
+	private static BlockState semanticLightStateFor(String materialKey) {
+		return switch (materialKey == null ? "" : materialKey) {
+			case "candle" -> Blocks.CANDLE.defaultBlockState().setValue(CandleBlock.LIT, true);
+			case "copper_bulb" -> Blocks.WAXED_COPPER_BULB.defaultBlockState()
+				.setValue(BlockStateProperties.LIT, true)
+				.setValue(BlockStateProperties.POWERED, false);
+			case "end_rod" -> Blocks.END_ROD.defaultBlockState();
+			case "froglight" -> Blocks.PEARLESCENT_FROGLIGHT.defaultBlockState();
+			case "glowstone" -> Blocks.GLOWSTONE.defaultBlockState();
+			case "jack_o_lantern" -> Blocks.JACK_O_LANTERN.defaultBlockState();
+			case "lantern" -> Blocks.LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, false);
+			case "redstone_lamp" -> Blocks.REDSTONE_LAMP.defaultBlockState().setValue(BlockStateProperties.LIT, true);
+			case "shroomlight" -> Blocks.SHROOMLIGHT.defaultBlockState();
+			case "soul_lantern" -> Blocks.SOUL_LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, false);
+			default -> Blocks.TORCH.defaultBlockState();
+		};
+	}
+
+	private static BlockState storefrontFixtureBaseStateFor(String materialKey, String woodFamily) {
+		return "redstone_block".equals(materialKey)
+			? Blocks.REDSTONE_BLOCK.defaultBlockState()
+			: woodPlankBlock(woodFamily).defaultBlockState();
+	}
+
+	private static BlockState gardenTrellisStateFor(String materialKey) {
+		return "glow_berries".equals(materialKey)
+			? Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true)
+			: Blocks.AIR.defaultBlockState();
+	}
+
 	private static BlockState torchStateFor(StructureBlueprint blueprint, Direction facing, int right, int forward, int up) {
 		return Blocks.WALL_TORCH.defaultBlockState()
 			.setValue(WallTorchBlock.FACING, blueprintTorchFacing(blueprint, facing, right, forward, up));
+	}
+
+	private static BlockState semanticWallLightStateFor(
+		String materialKey,
+		StructureBlueprint blueprint,
+		Direction facing,
+		int right,
+		int forward,
+		int up
+	) {
+		Direction lightFacing = blueprintTorchFacing(blueprint, facing, right, forward, up);
+		return switch (materialKey == null ? "" : materialKey) {
+			case "copper_torch" -> Blocks.COPPER_WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, lightFacing);
+			case "soul_torch" -> Blocks.SOUL_WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, lightFacing);
+			default -> torchStateFor(blueprint, facing, right, forward, up);
+		};
 	}
 
 	private static BlockState stairStateFor(
@@ -6303,6 +6454,8 @@ public final class SettlementConstruction {
 		String anchorPosition = relativeBlueprintPositionFromWorld(origin, facing, anchorPos);
 		boolean anchorMappedInBlueprint = false;
 
+		addStructureFoundationBlocks(level, blueprint, origin, facing, blocks, plannedPositions);
+
 		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
 			int up = blueprint.minUp() + layerIndex;
 			String[] rows = blueprint.layers()[layerIndex];
@@ -6319,7 +6472,10 @@ public final class SettlementConstruction {
 					}
 
 					int right = blueprint.minRight() + column;
-					String materialKey = blueprintMaterialKey(structureKind, symbol, right, forward, up);
+					String materialKey = resolveBlueprintMaterialKey(level, settlementId, structureKind, symbol, right, forward, up);
+					if (symbol == 'Y' && materialKey.isBlank()) {
+						continue;
+					}
 					String position = relativeBlueprintPosition(right, forward, up);
 					BlockPos worldPos = offset(origin, facing, right, forward, up);
 
@@ -6373,6 +6529,40 @@ public final class SettlementConstruction {
 			tick,
 			tick
 		);
+	}
+
+	private static void addStructureFoundationBlocks(
+		ServerLevel level,
+		StructureBlueprint blueprint,
+		BlockPos origin,
+		Direction facing,
+		List<SettlementBuildBlockState> blocks,
+		Set<String> plannedPositions
+	) {
+		for (int right = blueprint.minRight(); right <= blueprint.maxRight(); right++) {
+			for (int forward = blueprint.minForward(); forward <= blueprint.maxForward(); forward++) {
+				BlockPos floorPos = offset(origin, facing, right, forward, 0);
+				BlockPos groundPos = resolveStructureGroundPos(level, floorPos);
+
+				if (groundPos == null || groundPos.getY() >= origin.getY()) {
+					continue;
+				}
+
+				int fillDepth = origin.getY() - groundPos.getY() - 1;
+				if (fillDepth > MAX_STRUCTURE_FOUNDATION_BLOCKS) {
+					continue;
+				}
+
+				for (int y = groundPos.getY() + 1; y < origin.getY(); y++) {
+					int up = y - origin.getY();
+					String position = relativeBlueprintPosition(right, forward, up);
+
+					if (plannedPositions.add(position)) {
+						blocks.add(SettlementBuildBlockState.pending(position, '0', "dirt"));
+					}
+				}
+			}
+		}
 	}
 
 	private static void addPlacementClearanceBlocks(
@@ -6756,6 +6946,19 @@ public final class SettlementConstruction {
 			return materialKey.equals(block.expectedMaterialKey()) ? block : block.withExpectedMaterialKey(materialKey);
 		}
 
+		if (isStructureFoundationBlock(block)) {
+			return block;
+		}
+
+		if ((isSemanticLightSymbol(block.blueprintSymbol().charAt(0)) && isSemanticLightMaterialKey(block.expectedMaterialKey()))
+			|| (block.blueprintSymbol().charAt(0) == 'T' && isSemanticWallLightMaterialKey(block.expectedMaterialKey()))) {
+			return block;
+		}
+
+		if (block.blueprintSymbol().charAt(0) == 'O' && isStorefrontFixtureBaseMaterialKey(block.expectedMaterialKey())) {
+			return block;
+		}
+
 		String materialKey = blueprintMaterialKey(
 			structureKindFor(buildSite.blueprintId()),
 			block.blueprintSymbol().charAt(0),
@@ -6816,15 +7019,21 @@ public final class SettlementConstruction {
 			case 'G' -> "fence_gate";
 			case 'H' -> "chest";
 			case 'I' -> structureKind == StructureKind.COPPER_PALISADE_GATEHOUSE ? "copper_bars" : "iron_bars";
+			case 'J' -> "torch";
 			case 'K' -> "campfire";
 			case 'L' -> "logs";
 			case 'M' -> "cobblestone";
 			case 'N' -> "lantern";
+			case 'O' -> "planks";
 			case 'P' -> "planks";
 			case 'Q' -> "glass_display_case";
 			case 'R' -> "ladder";
 			case 'S' -> "stairs";
 			case 'T' -> "torch";
+			case 'U' -> "torch";
+			case 'X' -> "torch";
+			case 'Y' -> "";
+			case 'Z' -> "torch";
 			case 'V' -> "glass";
 			case 'W' -> switch (structureKind) {
 				case BAKERY -> "bakers_counter";
@@ -6852,6 +7061,128 @@ public final class SettlementConstruction {
 			};
 			default -> "";
 		};
+	}
+
+	private static String resolveBlueprintMaterialKey(
+		ServerLevel level,
+		String settlementId,
+		StructureKind structureKind,
+		char symbol,
+		int right,
+		int forward,
+		int up
+	) {
+		if (symbol == 'U') {
+			return resolveSemanticLightMaterialKey(level, settlementId, SettlementLightingPlan.Role.INTERIOR);
+		}
+
+		if (symbol == 'T') {
+			return resolveSemanticWallLightMaterialKey(level, settlementId, structureKind);
+		}
+
+		if (symbol == 'J') {
+			return resolveSemanticLightMaterialKey(level, settlementId, SettlementLightingPlan.Role.GUARD);
+		}
+
+		if (symbol == 'X') {
+			return resolveSemanticLightMaterialKey(level, settlementId, SettlementLightingPlan.Role.STOREFRONT);
+		}
+
+		if (symbol == 'O') {
+			return "redstone_lamp".equals(resolveSemanticLightMaterialKey(level, settlementId, SettlementLightingPlan.Role.STOREFRONT))
+				? "redstone_block"
+				: "planks";
+		}
+
+		if (symbol == 'Z') {
+			return resolveSemanticLightMaterialKey(level, settlementId, SettlementLightingPlan.Role.FARM);
+		}
+
+		if (symbol == 'Y') {
+			return resolveGardenTrellisMaterialKey(level, settlementId);
+		}
+
+		return blueprintMaterialKey(structureKind, symbol, right, forward, up);
+	}
+
+	private static String resolveSemanticLightMaterialKey(ServerLevel level, String settlementId, SettlementLightingPlan.Role role) {
+		if (level == null || settlementId == null || settlementId.isBlank()) {
+			return "torch";
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.getSettlement(settlementId);
+
+		if (settlement.isEmpty()) {
+			return "torch";
+		}
+
+		int tier = SettlementTiers.unlockedTier(settlement.get());
+		Set<String> knownRecipeIds = new HashSet<>(savedData.knownScribeRecipeIds(settlementId));
+		knownRecipeIds.addAll(SettlementRecipeKnowledge.recipeIdsForTier(tier));
+		return SettlementLightingPlan.selectMaterial(
+			tier,
+			role,
+			knownRecipeIds,
+			new HashSet<>(savedData.knownScribeResourceKeys(settlementId)),
+			settlement.get().stock()
+		);
+	}
+
+	private static String resolveSemanticWallLightMaterialKey(ServerLevel level, String settlementId, StructureKind structureKind) {
+		if (level == null || settlementId == null || settlementId.isBlank()) {
+			return "torch";
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.getSettlement(settlementId);
+
+		if (settlement.isEmpty()) {
+			return "torch";
+		}
+
+		int tier = SettlementTiers.unlockedTier(settlement.get());
+		Set<String> knownRecipeIds = new HashSet<>(savedData.knownScribeRecipeIds(settlementId));
+		knownRecipeIds.addAll(SettlementRecipeKnowledge.recipeIdsForTier(tier));
+		boolean seriousSpace = structureKind == StructureKind.GUARD_POST || structureKind == StructureKind.CLERIC_SHRINE;
+		return SettlementLightingPlan.selectWallMaterial(tier, seriousSpace, knownRecipeIds);
+	}
+
+	private static String resolveGardenTrellisMaterialKey(ServerLevel level, String settlementId) {
+		if (level == null || settlementId == null || settlementId.isBlank()) {
+			return "";
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.getSettlement(settlementId);
+		if (settlement.isEmpty()) {
+			return "";
+		}
+
+		return SettlementLightingPlan.selectGardenTrellisMaterial(
+			SettlementTiers.unlockedTier(settlement.get()),
+			new HashSet<>(savedData.knownScribeResourceKeys(settlementId)),
+			settlement.get().stock()
+		);
+	}
+
+	private static boolean isSemanticLightSymbol(char symbol) {
+		return symbol == 'J' || symbol == 'U' || symbol == 'X' || symbol == 'Y' || symbol == 'Z';
+	}
+
+	private static boolean isSemanticLightMaterialKey(String materialKey) {
+		return materialKey != null && switch (materialKey) {
+			case "torch", "candle", "copper_bulb", "end_rod", "froglight", "glow_berries", "glowstone", "jack_o_lantern", "lantern", "redstone_lamp", "shroomlight", "soul_lantern" -> true;
+			default -> false;
+		};
+	}
+
+	private static boolean isStorefrontFixtureBaseMaterialKey(String materialKey) {
+		return "planks".equals(materialKey) || "redstone_block".equals(materialKey);
+	}
+
+	private static boolean isSemanticWallLightMaterialKey(String materialKey) {
+		return "torch".equals(materialKey) || "soul_torch".equals(materialKey) || "copper_torch".equals(materialKey);
 	}
 
 	private static String structureStoneGoodsKey(String stoneMaterial) {
@@ -6919,6 +7250,7 @@ public final class SettlementConstruction {
 		String woodFamily,
 		String stoneMaterial,
 		char symbol,
+		String materialKey,
 		int right,
 		int forward,
 		int up
@@ -6946,7 +7278,7 @@ public final class SettlementConstruction {
 			return bedStateFor(structureKind, facing, right, forward, up);
 		}
 
-		return blueprintStateFor(facing, blueprint, structureKind, woodFamily, stoneMaterial, symbol, right, forward, up);
+		return blueprintStateFor(facing, blueprint, structureKind, woodFamily, stoneMaterial, symbol, materialKey, right, forward, up);
 	}
 
 	private static StructureMaterialPalette materialPaletteFor(ServerLevel level, BlockPos pos) {
@@ -7831,9 +8163,9 @@ public final class SettlementConstruction {
 		}
 
 		long tick = level.getServer().getTickCount();
-		SettlementBuildSite completedBuildSite = completedDockBuildSite(level, settlement.id(), site, tick);
 		consumeCost(stock, cost);
-		placeDock(level, site, stock);
+		Set<String> dockLightPositions = placeDock(level, settlement, site, stock);
+		SettlementBuildSite completedBuildSite = completedDockBuildSite(level, settlement.id(), site, tick, dockLightPositions);
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
 		savedData.putBuildSite(completedBuildSite);
 		savedData.surveyCache.remove(settlement.id());
@@ -8009,8 +8341,10 @@ public final class SettlementConstruction {
 		return foundDeepWaterAtEnd ? new DockSite(origin, facing) : null;
 	}
 
-	private static void placeDock(ServerLevel level, DockSite site, Map<String, Integer> stock) {
+	private static Set<String> placeDock(ServerLevel level, SettlementState settlement, DockSite site, Map<String, Integer> stock) {
 		String woodFamily = dockWoodFamilyForSite(level, site);
+		String dockLightMaterialKey = dockLightMaterialKey(level, settlement.id());
+		Set<String> dockLightPositions = new HashSet<>();
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
 			for (int right = -DOCK_HALF_WIDTH_BLOCKS; right <= DOCK_HALF_WIDTH_BLOCKS; right++) {
 				BlockPos deckPos = offset(site.origin(), site.facing(), right, forward, 0);
@@ -8021,7 +8355,14 @@ public final class SettlementConstruction {
 				}
 
 				clearBlockToWarehouse(level, deckPos, stock);
-				level.setBlock(deckPos, woodPlankBlock(woodFamily).defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				if (!dockLightMaterialKey.isBlank()
+					&& isDockLightOffset(right, forward)
+					&& consumeOptionalConstructionMaterial(stock, dockLightMaterialKey)) {
+					level.setBlock(deckPos, Blocks.SEA_LANTERN.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+					dockLightPositions.add(relativeBlueprintPosition(right, forward, 0));
+				} else {
+					level.setBlock(deckPos, woodPlankBlock(woodFamily).defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				}
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
 					BlockPos footing = findDockFooting(level, deckPos);
@@ -8036,6 +8377,8 @@ public final class SettlementConstruction {
 				}
 			}
 		}
+
+		return dockLightPositions;
 	}
 
 	private static LighthouseSite findLighthouseSite(ServerLevel level, SettlementState settlement) {
@@ -8720,8 +9063,9 @@ public final class SettlementConstruction {
 		level.setBlock(site.composterPos(), Blocks.COMPOSTER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
 	}
 
-	private static void placeFarmStarter(ServerLevel level, FarmStarterSite site, Map<String, Integer> stock) {
+	private static void placeFarmStarter(ServerLevel level, SettlementState settlement, FarmStarterSite site, Map<String, Integer> stock) {
 		BlockState borderState = woodLogBlock(materialPaletteFor(level, site.origin()).woodFamily()).defaultBlockState();
+		String farmLightMaterialKey = farmStarterLightMaterialKey(level, settlement);
 
 		for (int offsetX = 0; offsetX < site.width(); offsetX++) {
 			for (int offsetZ = 0; offsetZ < site.length(); offsetZ++) {
@@ -8733,7 +9077,13 @@ public final class SettlementConstruction {
 
 				if (border) {
 					clearBlockToWarehouse(level, groundPos, stock);
-					level.setBlock(groundPos, consumeFarmStarterBorderLog(stock) ? borderState : Blocks.DIRT.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+					if (!farmLightMaterialKey.isBlank()
+						&& isFarmStarterLightOffset(site, offsetX, offsetZ)
+						&& consumeOptionalConstructionMaterial(stock, farmLightMaterialKey)) {
+						level.setBlock(groundPos, Blocks.JACK_O_LANTERN.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+					} else {
+						level.setBlock(groundPos, consumeFarmStarterBorderLog(stock) ? borderState : Blocks.DIRT.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+					}
 				} else if (groundPos.equals(site.waterPos())) {
 					clearBlockToWarehouse(level, groundPos, stock);
 					level.setBlock(groundPos, Blocks.WATER.defaultBlockState(), BLOCK_UPDATE_FLAGS);
@@ -8747,6 +9097,48 @@ public final class SettlementConstruction {
 				}
 			}
 		}
+	}
+
+	private static String farmStarterLightMaterialKey(ServerLevel level, SettlementState settlement) {
+		if (SettlementTiers.unlockedTier(settlement) < 2
+			|| !settlementKnowsRecipe(level, settlement.id(), "minecraft:jack_o_lantern")
+			|| !canSupplyOptionalConstructionMaterial(settlement.stock(), "jack_o_lantern", 4)) {
+			return "";
+		}
+
+		return "jack_o_lantern";
+	}
+
+	private static boolean settlementKnowsRecipe(ServerLevel level, String settlementId, String recipeId) {
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Optional<SettlementState> settlement = savedData.getSettlement(settlementId);
+		int tier = settlement.map(SettlementTiers::unlockedTier).orElse(1);
+		Set<String> knownRecipeIds = new HashSet<>(savedData.knownScribeRecipeIds(settlementId));
+		knownRecipeIds.addAll(SettlementRecipeKnowledge.recipeIdsForTier(tier));
+		return knownRecipeIds.contains(recipeId);
+	}
+
+	private static boolean isFarmStarterLightOffset(FarmStarterSite site, int offsetX, int offsetZ) {
+		return (offsetX == 0 && offsetZ == 0)
+			|| (offsetX == site.width() - 1 && offsetZ == 0)
+			|| (offsetX == 0 && offsetZ == site.length() - 1)
+			|| (offsetX == site.width() - 1 && offsetZ == site.length() - 1);
+	}
+
+	private static boolean consumeOptionalConstructionMaterial(Map<String, Integer> stock, String materialKey) {
+		return SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), materialKey).supplied();
+	}
+
+	private static boolean canSupplyOptionalConstructionMaterial(Map<String, Integer> stock, String materialKey, int count) {
+		Map<String, Integer> workingStock = new LinkedHashMap<>(stock);
+
+		for (int supplied = 0; supplied < count; supplied++) {
+			if (!consumeOptionalConstructionMaterial(workingStock, materialKey)) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private static void prepareFarmStarterColumn(ServerLevel level, FarmStarterSite site, BlockPos groundPos, Map<String, Integer> stock) {
@@ -9020,11 +9412,17 @@ public final class SettlementConstruction {
 		long tick
 	) {
 		StructureMaterialPalette palette = materialPaletteFor(level, anchorPos);
+		String dockLightMaterialKey = dockLightMaterialKey(level, settlementId);
 		List<SettlementBuildBlockState> blocks = new ArrayList<>();
 
 		for (int forward = 0; forward < DOCK_LENGTH_BLOCKS; forward++) {
 			for (int right = -DOCK_HALF_WIDTH_BLOCKS; right <= DOCK_HALF_WIDTH_BLOCKS; right++) {
-				blocks.add(SettlementBuildBlockState.pending(relativeBlueprintPosition(right, forward, 0), 'P', "planks"));
+				boolean dockLight = !dockLightMaterialKey.isBlank() && isDockLightOffset(right, forward);
+				blocks.add(SettlementBuildBlockState.pending(
+					relativeBlueprintPosition(right, forward, 0),
+					dockLight ? 'Y' : 'P',
+					dockLight ? dockLightMaterialKey : "planks"
+				));
 
 				if (isDockSupportRow(forward) && Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS) {
 					BlockPos deckPos = offset(site.origin(), site.facing(), right, forward, 0);
@@ -9063,18 +9461,29 @@ public final class SettlementConstruction {
 		);
 	}
 
-	private static SettlementBuildSite completedDockBuildSite(ServerLevel level, String settlementId, DockSite site, long tick) {
+	private static SettlementBuildSite completedDockBuildSite(ServerLevel level, String settlementId, DockSite site, long tick, Set<String> dockLightPositions) {
 		SettlementBuildSite pendingBuildSite = createPendingDockBuildSite(level, settlementId, site.origin(), site, tick);
 		List<SettlementBuildBlockState> placedBlocks = pendingBuildSite.blocks().stream()
-			.map(block -> block.withStatus(SettlementBuildBlockStatus.PLACED, ""))
+			.map(block -> completedDockBlock(block, dockLightPositions))
 			.toList();
 		return pendingBuildSite.withBlocks(placedBlocks, true, tick);
+	}
+
+	private static SettlementBuildBlockState completedDockBlock(SettlementBuildBlockState block, Set<String> dockLightPositions) {
+		SettlementBuildBlockState normalizedBlock = block;
+
+		if ("Y".equals(block.blueprintSymbol()) && !dockLightPositions.contains(block.position())) {
+			normalizedBlock = block.withBlueprintSymbol('P', "planks");
+		}
+
+		return normalizedBlock.withStatus(SettlementBuildBlockStatus.PLACED, "");
 	}
 
 	private static BlockState dockBuildState(char symbol, String woodFamily) {
 		return switch (symbol) {
 			case 'L' -> woodLogBlock(woodFamily).defaultBlockState();
 			case 'P' -> woodPlankBlock(woodFamily).defaultBlockState();
+			case 'Y' -> Blocks.SEA_LANTERN.defaultBlockState();
 			default -> null;
 		};
 	}
@@ -9097,6 +9506,7 @@ public final class SettlementConstruction {
 		return switch (symbol) {
 			case 'L' -> "logs";
 			case 'P' -> "planks";
+			case 'Y' -> "sea_lantern";
 			default -> "";
 		};
 	}
@@ -9202,6 +9612,22 @@ public final class SettlementConstruction {
 		return forward % DOCK_SUPPORT_SPACING_BLOCKS == 0;
 	}
 
+	private static String dockLightMaterialKey(ServerLevel level, String settlementId) {
+		Optional<SettlementState> settlement = LiveVillagesSavedData.get(level.getServer()).getSettlement(settlementId);
+
+		if (settlement.isEmpty()
+			|| SettlementTiers.unlockedTier(settlement.get()) < 3
+			|| !settlementKnowsRecipe(level, settlementId, "minecraft:sea_lantern")) {
+			return "";
+		}
+
+		return "sea_lantern";
+	}
+
+	private static boolean isDockLightOffset(int right, int forward) {
+		return Math.abs(right) == DOCK_HALF_WIDTH_BLOCKS && forward == DOCK_LENGTH_BLOCKS - 2;
+	}
+
 	private static boolean isMinimalDock(ServerLevel level, BlockPos origin, Direction facing) {
 		if (!isDockDeck(level.getBlockState(origin)) || isDockDeck(level.getBlockState(origin.relative(facing.getOpposite())))) {
 			return false;
@@ -9253,7 +9679,7 @@ public final class SettlementConstruction {
 	}
 
 	private static boolean isDockDeck(BlockState state) {
-		return isInTag(state, BlockTags.PLANKS);
+		return isInTag(state, BlockTags.PLANKS) || state.is(Blocks.SEA_LANTERN);
 	}
 
 	private static boolean isDockSupportLog(BlockState state) {

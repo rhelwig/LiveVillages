@@ -228,6 +228,16 @@ public class ScribeDeskBlock extends HorizontalDirectionalBlock {
 			case "ladder" -> "ladder";
 			case "torch" -> "torch";
 			case "campfire" -> "campfire";
+			case "lantern" -> "lantern";
+			case "candle" -> "candle";
+			case "jack_o_lantern" -> "jack_o_lantern";
+			case "soul_torch" -> "soul_torch";
+			case "soul_lantern" -> "soul_lantern";
+			case "glowstone" -> "glowstone";
+			case "sea_lantern" -> "sea_lantern";
+			case "copper_bulb" -> "copper_bulb";
+			case "redstone_lamp" -> "redstone_lamp";
+			case "end_rod" -> "end_rod";
 			case "lectern" -> "lectern";
 			case "cartography_table" -> "cartography_table";
 			case "fletching_table" -> "fletching_table";

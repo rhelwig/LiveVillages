@@ -49,7 +49,7 @@ public record OutpostPlayerStanding(
 			return this;
 		}
 
-		int newSupportPoints = supportPoints + addedSupportPoints;
+		int newSupportPoints = (int) Math.min(Integer.MAX_VALUE, (long) supportPoints + addedSupportPoints);
 		OutpostPlayerRank newRank = rank;
 		if (newRank.ordinal() < OutpostPlayerRank.ASSOCIATE.ordinal() && newSupportPoints >= associateThreshold) {
 			newRank = OutpostPlayerRank.ASSOCIATE;

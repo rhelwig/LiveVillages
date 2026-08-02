@@ -4646,6 +4646,7 @@ public final class SettlementVillagers {
 			case "extinguishing_lighthouse" -> "extinguishing lighthouse";
 			case "harvesting_honey" -> "harvesting honey";
 			case "harvesting_honeycomb" -> "harvesting honeycomb";
+			case "inspecting_apiary" -> "inspecting apiary";
 			case "harvesting_real_honey" -> "harvesting honey";
 			case "harvesting_real_honeycomb" -> "harvesting honeycomb";
 			case "marking_underground_discovery" -> "marking underground discovery";

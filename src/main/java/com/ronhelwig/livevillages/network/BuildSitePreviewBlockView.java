@@ -80,10 +80,46 @@ public record BuildSitePreviewBlockView(
 			case "fence" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_FENCES) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "fence_gate" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.FENCE_GATES) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "bed" -> blockItem != null && blockItem.getBlock() instanceof BedBlock && stack.is(ItemTags.BEDS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "candle" -> isCandleItem(stack) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "copper_bulb" -> blockItem != null && isCopperBulbItem(blockItem) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "end_rod" -> stack.is(Items.END_ROD) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "froglight" -> stack.is(Items.OCHRE_FROGLIGHT) || stack.is(Items.VERDANT_FROGLIGHT) || stack.is(Items.PEARLESCENT_FROGLIGHT)
+				? ItemMatch.COMPATIBLE_MATERIAL
+				: ItemMatch.NONE;
+			case "glowstone" -> stack.is(Items.GLOWSTONE) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "glow_berries" -> stack.is(Items.GLOW_BERRIES) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "jack_o_lantern" -> stack.is(Items.JACK_O_LANTERN) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "sea_lantern" -> stack.is(Items.SEA_LANTERN) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "shroomlight" -> stack.is(Items.SHROOMLIGHT) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "soul_lantern" -> stack.is(Items.SOUL_LANTERN) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "redstone_block" -> stack.is(Items.REDSTONE_BLOCK) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "redstone_lamp" -> stack.is(Items.REDSTONE_LAMP) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "torch" -> stack.is(Items.TORCH) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "soul_torch" -> stack.is(Items.SOUL_TORCH) ? ItemMatch.EXACT : ItemMatch.NONE;
+			case "copper_torch" -> stack.is(Items.COPPER_TORCH) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "lantern" -> stack.is(Items.LANTERN) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			default -> ItemMatch.NONE;
 		};
+	}
+
+	private static boolean isCandleItem(ItemStack stack) {
+		return stack.is(Items.CANDLE)
+			|| stack.is(Items.WHITE_CANDLE)
+			|| stack.is(Items.LIGHT_GRAY_CANDLE)
+			|| stack.is(Items.GRAY_CANDLE)
+			|| stack.is(Items.BLACK_CANDLE)
+			|| stack.is(Items.BROWN_CANDLE)
+			|| stack.is(Items.RED_CANDLE)
+			|| stack.is(Items.ORANGE_CANDLE)
+			|| stack.is(Items.YELLOW_CANDLE)
+			|| stack.is(Items.LIME_CANDLE)
+			|| stack.is(Items.GREEN_CANDLE)
+			|| stack.is(Items.CYAN_CANDLE)
+			|| stack.is(Items.LIGHT_BLUE_CANDLE)
+			|| stack.is(Items.BLUE_CANDLE)
+			|| stack.is(Items.PURPLE_CANDLE)
+			|| stack.is(Items.MAGENTA_CANDLE)
+			|| stack.is(Items.PINK_CANDLE);
 	}
 
 	private static boolean isDirtFamilyItem(BlockItem blockItem) {
@@ -121,6 +157,17 @@ public record BuildSitePreviewBlockView(
 
 	private static boolean isCopperBars(BlockItem blockItem) {
 		return BuiltInRegistries.BLOCK.getKey(blockItem.getBlock()).getPath().endsWith("copper_bars");
+	}
+
+	private static boolean isCopperBulbItem(BlockItem blockItem) {
+		return blockItem.getBlock().defaultBlockState().is(Blocks.COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.EXPOSED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.WEATHERED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.OXIDIZED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.WAXED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.WAXED_EXPOSED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.WAXED_WEATHERED_COPPER_BULB)
+			|| blockItem.getBlock().defaultBlockState().is(Blocks.WAXED_OXIDIZED_COPPER_BULB);
 	}
 
 	private static boolean isSmithingStationItem(BlockItem blockItem) {

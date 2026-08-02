@@ -1,6 +1,7 @@
 package com.ronhelwig.livevillages.sim;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,12 +16,13 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiRecord;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -28,10 +30,11 @@ import net.minecraft.world.level.chunk.LevelChunk;
 public final class VillageAutodetector {
 	private static final int BACKGROUND_SCAN_CHUNKS_PER_CYCLE = 2;
 	private static final int MAX_PENDING_BACKGROUND_SCANS = 6;
+	private static final int LANTERN_OBSERVATION_SCANS_PER_TICK = 1;
 	private static final int VILLAGE_SCAN_RADIUS_BLOCKS = 96;
 	private static final double MERGE_RADIUS_BLOCKS = 128.0D;
-	private static final TicketType BACKGROUND_SCAN_TICKET_TYPE = TicketType.PLAYER_LOADING;
 	private static final Set<String> PENDING_BACKGROUND_SCANS = ConcurrentHashMap.newKeySet();
+	private static final Map<String, PendingLanternObservation> PENDING_LANTERN_OBSERVATIONS = new ConcurrentHashMap<>();
 	private static final Predicate<Holder<net.minecraft.world.entity.ai.village.poi.PoiType>> HOME_POI = holder -> holder.is(PoiTypes.HOME);
 	private static final Predicate<Holder<net.minecraft.world.entity.ai.village.poi.PoiType>> MEETING_POI = holder -> holder.is(PoiTypes.MEETING);
 
@@ -51,6 +54,8 @@ public final class VillageAutodetector {
 		if (overworld == null) {
 			return;
 		}
+
+		processPendingLanternObservations(server);
 
 		int availableBudget = Math.min(BACKGROUND_SCAN_CHUNKS_PER_CYCLE, MAX_PENDING_BACKGROUND_SCANS - PENDING_BACKGROUND_SCANS.size());
 
@@ -136,6 +141,7 @@ public final class VillageAutodetector {
 					savedData.putSettlement(updatedSettlement);
 				}
 
+				queueObservedLanternRecipe(level, settlement.id(), candidateCenter, meetingPoints, homePoints);
 				return;
 			}
 
@@ -165,6 +171,7 @@ public final class VillageAutodetector {
 			currentTick
 		);
 		savedData.putSettlement(settlement);
+		queueObservedLanternRecipe(level, settlement.id(), candidateCenter, meetingPoints, homePoints);
 	}
 
 	private static Map<String, Integer> starterStockForPopulation(int estimatedPopulation, long nearbyHomes) {
@@ -185,6 +192,90 @@ public final class VillageAutodetector {
 		stock.put("ladder", Math.max(4, population));
 
 		return stock;
+	}
+
+	private static void queueObservedLanternRecipe(
+		ServerLevel level,
+		String settlementId,
+		BlockPos center,
+		List<BlockPos> meetingPoints,
+		List<BlockPos> homePoints
+	) {
+		PENDING_LANTERN_OBSERVATIONS.put(
+			settlementId,
+			new PendingLanternObservation(
+				level.dimension(),
+				settlementId,
+				candidateLanternObservationAnchors(center, meetingPoints, homePoints)
+			)
+		);
+	}
+
+	private static void processPendingLanternObservations(MinecraftServer server) {
+		int scanned = 0;
+		Iterator<Map.Entry<String, PendingLanternObservation>> iterator = PENDING_LANTERN_OBSERVATIONS.entrySet().iterator();
+
+		while (iterator.hasNext() && scanned < LANTERN_OBSERVATION_SCANS_PER_TICK) {
+			PendingLanternObservation observation = iterator.next().getValue();
+			iterator.remove();
+			ServerLevel level = server.getLevel(observation.dimension());
+
+			if (level == null) {
+				continue;
+			}
+
+			scanned++;
+
+			if (hasNearbyLoadedLantern(level, observation.anchors())) {
+				LiveVillagesSavedData.get(server).ensureScribeStarterRecipes(
+					observation.settlementId(),
+					SettlementRecipeKnowledge.observedLanternRecipeIds()
+				);
+			}
+		}
+	}
+
+	private static List<BlockPos> candidateLanternObservationAnchors(BlockPos center, List<BlockPos> meetingPoints, List<BlockPos> homePoints) {
+		List<BlockPos> anchors = java.util.stream.Stream.concat(meetingPoints.stream(), homePoints.stream())
+			.sorted(Comparator.comparingDouble(point -> point.distSqr(center)))
+			.limit(32)
+			.map(BlockPos::immutable)
+			.toList();
+
+		if (anchors.isEmpty()) {
+			return List.of(center.immutable());
+		}
+
+		return anchors;
+	}
+
+	private static boolean hasNearbyLoadedLantern(ServerLevel level, List<BlockPos> anchors) {
+		for (BlockPos anchor : anchors) {
+			if (hasLanternNearAnchor(level, anchor)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean hasLanternNearAnchor(ServerLevel level, BlockPos anchor) {
+		BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+
+		for (int x = anchor.getX() - 6; x <= anchor.getX() + 6; x++) {
+			for (int y = Math.max(level.getMinY(), anchor.getY() - 8); y <= Math.min(level.getMaxY() - 1, anchor.getY() + 8); y++) {
+				for (int z = anchor.getZ() - 6; z <= anchor.getZ() + 6; z++) {
+					scanPos.set(x, y, z);
+
+					if (level.getChunkSource().getChunkNow(scanPos.getX() >> 4, scanPos.getZ() >> 4) != null
+						&& level.getBlockState(scanPos).is(Blocks.LANTERN)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
 	}
 
 	public static boolean isLikelyVillage(ServerLevel level, BlockPos center) {
@@ -240,37 +331,20 @@ public final class VillageAutodetector {
 	}
 
 	private static void queueBackgroundChunkScan(ServerLevel level, ChunkPos chunkPos) {
+		if (level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z()) == null) {
+			return;
+		}
+
 		String scanKey = level.dimension().identifier() + ":" + chunkPos.x() + "," + chunkPos.z();
 
 		if (!PENDING_BACKGROUND_SCANS.add(scanKey)) {
 			return;
 		}
 
-		if (level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z()) != null) {
-			try {
-				registerVillageFromChunk(level, chunkPos, SettlementClock.persistentTick(level));
-			} finally {
-				PENDING_BACKGROUND_SCANS.remove(scanKey);
-			}
-
-			return;
-		}
-
 		try {
-			level.getChunkSource().addTicketAndLoadWithRadius(BACKGROUND_SCAN_TICKET_TYPE, chunkPos, 0)
-				.whenComplete((result, throwable) -> level.getServer().execute(() -> {
-					try {
-						if (throwable == null) {
-							registerVillageFromChunk(level, chunkPos, SettlementClock.persistentTick(level));
-						}
-					} finally {
-						level.getChunkSource().removeTicketWithRadius(BACKGROUND_SCAN_TICKET_TYPE, chunkPos, 0);
-						PENDING_BACKGROUND_SCANS.remove(scanKey);
-					}
-				}));
-		} catch (RuntimeException exception) {
+			registerVillageFromChunk(level, chunkPos, SettlementClock.persistentTick(level));
+		} finally {
 			PENDING_BACKGROUND_SCANS.remove(scanKey);
-			throw exception;
 		}
 	}
 
@@ -282,5 +356,8 @@ public final class VillageAutodetector {
 		}
 
 		return BlockPos.ZERO;
+	}
+
+	private record PendingLanternObservation(ResourceKey<Level> dimension, String settlementId, List<BlockPos> anchors) {
 	}
 }

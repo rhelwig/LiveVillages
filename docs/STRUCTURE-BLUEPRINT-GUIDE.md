@@ -44,15 +44,21 @@ These are the symbols currently used by the codebase. We can add more explicit m
 | `F` | Fence | Uses the local biome's wood family in the current implementation. |
 | `G` | Fence gate | Uses the local biome's wood family in the current implementation. |
 | `H` | Chest | Faces automatically unless special handling is added later. |
+| `J` | Semantic guard-space accent | Resolves to a serious-space light such as a learned soul lantern, with a safe fallback. |
 | `K` | Campfire | Used where a structure needs a fire/cooking point. |
 | `L` | Log | Uses the local biome's wood family in the current implementation. |
 | `M` | Stone-family block | Uses the local stone palette in the current implementation. |
 | `N` | Hanging lantern | This is a hanging lantern, not a floor lantern. |
+| `O` | Semantic storefront fixture base | Resolves to local planks, or concealed power when its paired Tier 4 storefront light needs it. |
 | `P` | Planks | Uses the local biome's wood family in the current implementation. |
 | `S` | Stairs | Uses the local biome's wood family and auto-facing unless an orientation layer overrides it. |
-| `T` | Wall torch | Uses auto-facing unless an orientation layer overrides it. |
+| `T` | Semantic wall light | Uses auto-facing and saves a tier/knowledge-aware Torch-family choice; ordinary Torch remains the fallback. |
+| `U` | Semantic interior light | Resolves once per build site and saves the chosen material. |
 | `V` | Glass / window block | Usually glass blocks; the cartographer house currently uses panes for this symbol. |
 | `W` | Workstation / anchor block | This is structure-specific, such as a `Trade Board`, `Carpenter's Bench`, `Forester's Table`, or vanilla workstation. |
+| `X` | Semantic storefront light | Place above an authored solid support such as a counter or shelf. |
+| `Y` | Optional glow-berry trellis | Hangs below an authored support when the Tier `3+` settlement has discovered and stocked Glow Berries; otherwise resolves to air for that saved site. |
+| `Z` | Semantic farm / garden light | Place above an authored solid support. |
 
 ## Orientation Symbols
 

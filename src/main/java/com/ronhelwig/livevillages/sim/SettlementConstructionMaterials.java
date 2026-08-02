@@ -66,14 +66,25 @@ public final class SettlementConstructionMaterials {
 			case "fence" -> craftWoodPart(goods, "fence", 2, 1);
 			case "fence_gate" -> craftWoodPart(goods, "fence_gate", 4, 1);
 			case "bed" -> craftBed(goods);
+			case "candle" -> craftCandle(goods);
+			case "glowstone" -> craftGlowstone(goods);
+			case "jack_o_lantern" -> craftJackOLantern(goods);
 			case "glass" -> craftGlass(goods);
 			case "stone" -> craftStone(goods);
 			case "smooth_stone" -> craftSmoothStone(goods);
 			case "stone_bricks" -> craftStoneBricks(goods);
 			case "iron_ingot" -> craftRefinedMaterial(goods, "iron_ingot");
 			case "copper_ingot" -> craftRefinedMaterial(goods, "copper_ingot");
+			case "copper_block" -> craftCopperBlock(goods);
+			case "copper_bulb" -> craftCopperBulb(goods);
+			case "end_rod" -> craftEndRod(goods);
+			case "redstone_block" -> craftRedstoneBlock(goods);
+			case "redstone_lamp" -> craftRedstoneLamp(goods);
 			case "ladder" -> craftLadder(goods);
 			case "lantern" -> craftLantern(goods);
+			case "soul_lantern" -> craftSoulLantern(goods);
+			case "soul_torch" -> craftSoulTorch(goods);
+			case "sea_lantern" -> craftSeaLantern(goods);
 			case "trade_board" -> craftWoodPart(goods, "trade_board", 6, 1);
 			case "carpenter_bench" -> craftWoodPart(goods, "carpenter_bench", 4, 1);
 			case "surveyor_table" -> craftWoodPart(goods, "surveyor_table", 4, 1);
@@ -177,6 +188,57 @@ public final class SettlementConstructionMaterials {
 		return ConstructionMaterialResult.supplied(1);
 	}
 
+	private static ConstructionMaterialResult craftCopperBlock(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		for (int ingot = 0; ingot < 9; ingot++) {
+			if (!SettlementRefining.consumeRefinedMaterial(workingGoods, "copper_ingot")) {
+				return ConstructionMaterialResult.missing("copper_ingot");
+			}
+
+			craftingSteps++;
+		}
+
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftCopperBulb(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		for (int block = 0; block < 3; block++) {
+			if (!consumeDirect(workingGoods, "copper_block", 1)) {
+				ConstructionMaterialResult copperBlockResult = craftCopperBlock(workingGoods);
+
+				if (!copperBlockResult.supplied()) {
+					return ConstructionMaterialResult.missing(copperBlockResult.missingMaterialKey());
+				}
+
+				craftingSteps += copperBlockResult.craftingSteps();
+
+				if (!consumeDirect(workingGoods, "copper_block", 1)) {
+					return ConstructionMaterialResult.missing("copper_block");
+				}
+			}
+		}
+
+		if (!consumeDirect(workingGoods, "redstone", 1)) {
+			return ConstructionMaterialResult.missing("redstone");
+		}
+
+		if (!consumeDirect(workingGoods, "blaze_rod", 1)) {
+			return ConstructionMaterialResult.missing("blaze_rod");
+		}
+
+		addGoods(workingGoods, "copper_bulb", 3);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
 	private static ConstructionMaterialResult craftTorch(Map<String, Integer> goods) {
 		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
 		int craftingSteps = ensureSticks(workingGoods, 1);
@@ -194,6 +256,98 @@ public final class SettlementConstructionMaterials {
 		}
 
 		addGoods(workingGoods, "torch", 3);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftCandle(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "honeycomb", 1)) {
+			return ConstructionMaterialResult.missing("honeycomb");
+		}
+
+		if (!consumeDirect(goods, "string", 1)) {
+			addGoods(goods, "honeycomb", 1);
+			return ConstructionMaterialResult.missing("string");
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftGlowstone(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "glowstone_dust", 4)) {
+			return ConstructionMaterialResult.missing("glowstone_dust");
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftEndRod(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+
+		if (!consumeDirect(workingGoods, "blaze_rod", 1)) {
+			return ConstructionMaterialResult.missing("blaze_rod");
+		}
+
+		if (!consumeDirect(workingGoods, "popped_chorus_fruit", 1)) {
+			return ConstructionMaterialResult.missing("popped_chorus_fruit");
+		}
+
+		addGoods(workingGoods, "end_rod", 3);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftRedstoneBlock(Map<String, Integer> goods) {
+		if (!consumeDirect(goods, "redstone", 9)) {
+			return ConstructionMaterialResult.missing("redstone");
+		}
+
+		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftRedstoneLamp(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		if (!consumeDirect(workingGoods, "glowstone", 1)) {
+			ConstructionMaterialResult glowstoneResult = craftGlowstone(workingGoods);
+
+			if (!glowstoneResult.supplied()) {
+				return ConstructionMaterialResult.missing(glowstoneResult.missingMaterialKey());
+			}
+
+			craftingSteps += glowstoneResult.craftingSteps();
+		}
+
+		if (!consumeDirect(workingGoods, "redstone", 4)) {
+			return ConstructionMaterialResult.missing("redstone");
+		}
+
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftJackOLantern(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		if (!consumeDirect(workingGoods, "carved_pumpkin", 1)) {
+			return ConstructionMaterialResult.missing("carved_pumpkin");
+		}
+
+		if (!consumeDirect(workingGoods, "torch", 1)) {
+			ConstructionMaterialResult torchResult = craftTorch(workingGoods);
+
+			if (!torchResult.supplied()) {
+				return ConstructionMaterialResult.missing(torchResult.missingMaterialKey());
+			}
+
+			craftingSteps += torchResult.craftingSteps();
+		}
+
 		goods.clear();
 		goods.putAll(workingGoods);
 		return ConstructionMaterialResult.supplied(craftingSteps + 1);
@@ -254,19 +408,93 @@ public final class SettlementConstructionMaterials {
 			}
 
 			craftingSteps += torchResult.craftingSteps();
-
-			if (!consumeDirect(workingGoods, "torch", 1)) {
-				return ConstructionMaterialResult.missing("torch");
-			}
 		}
 
-		if (!SettlementRefining.consumeRefinedMaterial(workingGoods, "iron_ingot")) {
-			return ConstructionMaterialResult.missing("iron_ingot");
+		if (!consumeLanternIron(workingGoods)) {
+			return ConstructionMaterialResult.missing("iron_nugget");
 		}
 
 		goods.clear();
 		goods.putAll(workingGoods);
 		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftSoulLantern(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		if (!consumeDirect(workingGoods, "soul_torch", 1)) {
+			ConstructionMaterialResult soulTorchResult = craftSoulTorch(workingGoods);
+
+			if (!soulTorchResult.supplied()) {
+				return ConstructionMaterialResult.missing(soulTorchResult.missingMaterialKey());
+			}
+
+			craftingSteps += soulTorchResult.craftingSteps();
+		}
+
+		if (!consumeLanternIron(workingGoods)) {
+			return ConstructionMaterialResult.missing("iron_nugget");
+		}
+
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static boolean consumeLanternIron(Map<String, Integer> goods) {
+		if (consumeDirect(goods, "iron_nugget", 8)) {
+			return true;
+		}
+
+		if (!SettlementRefining.consumeRefinedMaterial(goods, "iron_ingot")) {
+			return false;
+		}
+
+		addGoods(goods, "iron_nugget", 1);
+		return true;
+	}
+
+	private static ConstructionMaterialResult craftSoulTorch(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = ensureSticks(workingGoods, 1);
+
+		if (craftingSteps < 0) {
+			return ConstructionMaterialResult.missing("stick");
+		}
+
+		if (!consumeDirect(workingGoods, "coal", 1)) {
+			return ConstructionMaterialResult.missing("coal");
+		}
+
+		if (!consumeDirect(workingGoods, "stick", 1)) {
+			return ConstructionMaterialResult.missing("stick");
+		}
+
+		if (!consumeDirect(workingGoods, "soul_soil", 1) && !consumeDirect(workingGoods, "soul_sand", 1)) {
+			return ConstructionMaterialResult.missing("soul_soil");
+		}
+
+		addGoods(workingGoods, "soul_torch", 3);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
+	}
+
+	private static ConstructionMaterialResult craftSeaLantern(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+
+		if (!consumeDirect(workingGoods, "prismarine_shard", 4)) {
+			return ConstructionMaterialResult.missing("prismarine_shard");
+		}
+
+		if (!consumeDirect(workingGoods, "prismarine_crystals", 5)) {
+			return ConstructionMaterialResult.missing("prismarine_crystals");
+		}
+
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(1);
 	}
 
 	private static int ensurePlanks(Map<String, Integer> goods, int requiredPlanks) {

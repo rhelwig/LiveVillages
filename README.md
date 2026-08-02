@@ -86,6 +86,7 @@ Server/debug utilities:
 ## Project Docs
 
 - [docs/PROMO.md](docs/PROMO.md): public-facing Modrinth/CurseForge style description copy
+- [docs/VERSION-NOTES.md](docs/VERSION-NOTES.md): short user-facing release notes for Modrinth, CurseForge, GitHub releases, and announcements
 - [docs/SPECS.md](docs/SPECS.md): full gameplay and systems specification
 - [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
 - [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes

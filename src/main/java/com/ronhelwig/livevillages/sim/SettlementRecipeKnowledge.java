@@ -33,7 +33,13 @@ public final class SettlementRecipeKnowledge {
 		"loom"
 	);
 	private static final List<String> TIER_TWO_RECIPE_PATHS = List.of(
-		"cobblestone_stairs"
+		"cobblestone_stairs",
+		"candle",
+		"jack_o_lantern"
+	);
+	private static final List<String> TIER_THREE_RECIPE_PATHS = List.of(
+		"glowstone",
+		"sea_lantern"
 	);
 
 	private SettlementRecipeKnowledge() {
@@ -54,7 +60,17 @@ public final class SettlementRecipeKnowledge {
 				.forEach(recipes::add);
 		}
 
+		if (SettlementTiers.normalize(tier) >= 3) {
+			TIER_THREE_RECIPE_PATHS.stream()
+				.map(path -> Identifier.withDefaultNamespace(path).toString())
+				.forEach(recipes::add);
+		}
+
 		return List.copyOf(recipes);
+	}
+
+	public static List<String> observedLanternRecipeIds() {
+		return List.of(Identifier.withDefaultNamespace("lantern").toString());
 	}
 
 	public static Optional<ResourceKey<Recipe<?>>> recipeKey(String recipeId) {
@@ -75,11 +91,15 @@ public final class SettlementRecipeKnowledge {
 			return new ScribeRecipePrice(BuiltInRegistries.ITEM.getKey(Items.BOOK).toString(), 2);
 		}
 
-		if (path.equals("map") || path.equals("compass") || path.equals("bookshelf") || outputItemId.endsWith(":bookshelf")) {
+		if (path.equals("copper_bulb") || path.equals("redstone_lamp") || path.equals("sea_lantern") || path.equals("end_rod")) {
+			return new ScribeRecipePrice(BuiltInRegistries.ITEM.getKey(Items.BOOK).toString(), 3);
+		}
+
+		if (path.equals("map") || path.equals("compass") || path.equals("bookshelf") || path.equals("lantern") || path.equals("soul_lantern") || outputItemId.endsWith(":bookshelf")) {
 			return new ScribeRecipePrice(BuiltInRegistries.ITEM.getKey(Items.BOOK).toString(), 1);
 		}
 
-		if (path.equals("oak_chest_boat") || path.equals("furnace") || path.equals("book") || path.equals("campfire")) {
+		if (path.equals("oak_chest_boat") || path.equals("furnace") || path.equals("book") || path.equals("campfire") || path.equals("candle") || path.equals("jack_o_lantern") || path.equals("glowstone")) {
 			return new ScribeRecipePrice(BuiltInRegistries.ITEM.getKey(Items.PAPER).toString(), 2);
 		}
 

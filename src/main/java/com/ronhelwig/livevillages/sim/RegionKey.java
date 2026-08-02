@@ -26,9 +26,13 @@ public record RegionKey(ResourceKey<Level> dimension, int x, int z) {
 	}
 
 	public static RegionKey midpoint(ResourceKey<Level> dimension, BlockPos from, BlockPos to) {
-		long midX = (((long) from.getX()) + to.getX()) / 2L;
-		long midZ = (((long) from.getZ()) + to.getZ()) / 2L;
-		return new RegionKey(dimension, Math.floorDiv((int) midX, REGION_SIZE_BLOCKS), Math.floorDiv((int) midZ, REGION_SIZE_BLOCKS));
+		long midX = Math.floorDiv(((long) from.getX()) + to.getX(), 2L);
+		long midZ = Math.floorDiv(((long) from.getZ()) + to.getZ(), 2L);
+		return new RegionKey(
+			dimension,
+			(int) Math.floorDiv(midX, REGION_SIZE_BLOCKS),
+			(int) Math.floorDiv(midZ, REGION_SIZE_BLOCKS)
+		);
 	}
 
 	public String asDebugString() {

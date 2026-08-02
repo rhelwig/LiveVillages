@@ -43,6 +43,11 @@ public final class SettlementScribeWork {
 		List<String> previousRecipes = savedData.knownScribeRecipeIds(settlement.id());
 		List<String> knownRecipes = savedData.ensureScribeStarterRecipes(settlement.id(), SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(settlement)));
 		boolean dataChanged = !knownRecipes.equals(previousRecipes);
+		boolean resourcesDiscovered = savedData.addKnownScribeResources(
+			settlement.id(),
+			SettlementLightingKnowledge.observedResourceKeys(settlement.stock())
+		);
+		dataChanged |= resourcesDiscovered;
 		long tick = level.getServer().getTickCount();
 
 		for (Villager scribe : scribes) {
@@ -62,7 +67,9 @@ public final class SettlementScribeWork {
 				continue;
 			}
 
-			String taskKey = dataChanged ? "cataloging_starter_recipes" : "copying_settlement_recipes";
+			String taskKey = resourcesDiscovered
+				? "cataloging_lighting_resources"
+				: dataChanged ? "cataloging_starter_recipes" : "copying_settlement_recipes";
 			BlockPos workPos = standableDeskAccess(level, desk).orElse(desk);
 			ACTIVE_TASKS.put(scribe.getUUID().toString(), new TimedTask(taskKey, tick));
 
@@ -83,7 +90,9 @@ public final class SettlementScribeWork {
 				settlement,
 				SettlementRoleKeys.SCRIBE,
 				scribe,
-				dataChanged ? "cataloged starter recipes" : "copied settlement recipes"
+				resourcesDiscovered
+					? "cataloged lighting resources"
+					: dataChanged ? "cataloged starter recipes" : "copied settlement recipes"
 			);
 		}
 

@@ -70,6 +70,8 @@ public final class SettlementRoadwrightWork {
 	private static final long ROADWORK_TASK_CACHE_TICKS = 1_200L; // Keep expensive path searches from repeating while the same task remains useful.
 	private static final long ROADWORK_PATH_CACHE_TICKS = 1_200L;
 	private static final long ROADWORK_VISUAL_MEMORY_TICKS = 12_000L;
+	private static final long INTERNAL_POI_TARGET_CACHE_TICKS = 1_200L;
+	private static final int MAX_INTERNAL_POI_TARGET_CACHE_ENTRIES = 256;
 	private static final long ROADWORK_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long MILEPOST_TARGET_CACHE_TICKS = 100L;
 	private static final int MILEPOST_MIN_SETTLEMENT_DISTANCE_BLOCKS = 48;
@@ -78,6 +80,7 @@ public final class SettlementRoadwrightWork {
 	private static final int MILEPOST_EXISTING_SKIP_DISTANCE_BLOCKS = 50;
 	private static final int EXTERNAL_ROUTE_ANCHOR_SAMPLE_STEP_BLOCKS = 8;
 	private static final int EXTERNAL_ROUTE_ANCHOR_SAMPLE_SEARCH_RADIUS_BLOCKS = 4;
+	private static final int PATH_LIGHT_SPACING_HASH = 12;
 	private static final double INTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 8.0D;
 	private static final double EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS = 12.0D;
 	private static final double MIN_PATH_STEP_COST = 0.3D;
@@ -1058,13 +1061,28 @@ public final class SettlementRoadwrightWork {
 		long currentTick = level.getServer().getTickCount();
 		CachedPoiTargets cachedTargets = INTERNAL_POI_TARGET_CACHE.get(cacheKey);
 
-		if (cachedTargets != null && currentTick - cachedTargets.tick() <= 20) {
+		if (cachedTargets != null && currentTick - cachedTargets.tick() <= INTERNAL_POI_TARGET_CACHE_TICKS) {
 			return cachedTargets.targets();
 		}
 
 		List<PathTarget> targets = scannedInternalPoiTargets(level, settlement);
 		INTERNAL_POI_TARGET_CACHE.put(cacheKey, new CachedPoiTargets(currentTick, targets));
+		pruneInternalPoiTargetCache(currentTick);
 		return targets;
+	}
+
+	private static void pruneInternalPoiTargetCache(long currentTick) {
+		if (INTERNAL_POI_TARGET_CACHE.size() <= MAX_INTERNAL_POI_TARGET_CACHE_ENTRIES) {
+			return;
+		}
+
+		INTERNAL_POI_TARGET_CACHE.entrySet().removeIf(
+			entry -> currentTick - entry.getValue().tick() > INTERNAL_POI_TARGET_CACHE_TICKS
+		);
+
+		if (INTERNAL_POI_TARGET_CACHE.size() > MAX_INTERNAL_POI_TARGET_CACHE_ENTRIES) {
+			INTERNAL_POI_TARGET_CACHE.clear();
+		}
 	}
 
 	private static List<PathTarget> scannedInternalPoiTargets(ServerLevel level, SettlementState settlement) {
@@ -2188,7 +2206,94 @@ public final class SettlementRoadwrightWork {
 		}
 
 		level.setBlock(surfacePos, targetRoadSurfaceState(settlement), BLOCK_UPDATE_FLAGS);
+		maybePlacePathLight(level, settlement, stock, surfacePos);
 		return true;
+	}
+
+	private static void maybePlacePathLight(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		BlockPos roadSurfacePos
+	) {
+		if (!shouldPlacePathLightAt(roadSurfacePos)) {
+			return;
+		}
+
+		String preferredLightMaterialKey = pathLightMaterialKey(level, settlement);
+		List<Direction> directions = List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST);
+		int directionOffset = Math.floorMod(roadSurfacePos.getX() + roadSurfacePos.getZ(), directions.size());
+
+		for (int index = 0; index < directions.size(); index++) {
+			Direction direction = directions.get((directionOffset + index) % directions.size());
+			BlockPos groundPos = roadSurfacePos.relative(direction);
+			BlockPos postPos = groundPos.above();
+			BlockPos lightPos = postPos.above();
+			BlockState groundState = level.getBlockState(groundPos);
+
+			if (isRoadSurface(groundState)
+				|| !groundState.isFaceSturdy(level, groundPos, Direction.UP)
+				|| !level.getBlockState(postPos).isAir()
+				|| !level.getBlockState(lightPos).isAir()) {
+				continue;
+			}
+
+			PathLightSupply supply = pathLightSupply(stock, preferredLightMaterialKey);
+			if (supply == null) {
+				return;
+			}
+
+			Map<String, Integer> workingStock = supply.remainingStock();
+			BlockState lightState = "lantern".equals(supply.lightMaterialKey())
+				? Blocks.LANTERN.defaultBlockState()
+				: Blocks.TORCH.defaultBlockState();
+			BlockState postState = SettlementConstruction.localMaterialStateFor(level, postPos, "fence");
+			if (postState == null) {
+				return;
+			}
+			level.setBlock(postPos, postState, BLOCK_UPDATE_FLAGS);
+
+			if (!lightState.canSurvive(level, lightPos)) {
+				level.setBlock(postPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+				continue;
+			}
+
+			level.setBlock(lightPos, lightState, BLOCK_UPDATE_FLAGS);
+			stock.clear();
+			stock.putAll(workingStock);
+			return;
+		}
+	}
+
+	private static PathLightSupply pathLightSupply(Map<String, Integer> stock, String preferredLightMaterialKey) {
+		List<String> candidates = "lantern".equals(preferredLightMaterialKey)
+			? List.of("lantern", "torch")
+			: List.of("torch");
+
+		for (String lightMaterialKey : candidates) {
+			Map<String, Integer> workingStock = new HashMap<>(stock);
+			if (SettlementConstructionMaterials.consumeMaterial(workingStock, new HashMap<>(), "fence").supplied()
+				&& SettlementConstructionMaterials.consumeMaterial(workingStock, new HashMap<>(), lightMaterialKey).supplied()) {
+				return new PathLightSupply(lightMaterialKey, workingStock);
+			}
+		}
+
+		return null;
+	}
+
+	static boolean shouldPlacePathLightAt(BlockPos roadSurfacePos) {
+		return Math.floorMod(roadSurfacePos.getX() * 31 + roadSurfacePos.getZ(), PATH_LIGHT_SPACING_HASH) == 0;
+	}
+
+	private static String pathLightMaterialKey(ServerLevel level, SettlementState settlement) {
+		if (SettlementTiers.unlockedTier(settlement) < 2) {
+			return "torch";
+		}
+
+		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(level.getServer());
+		Set<String> knownRecipes = new HashSet<>(savedData.knownScribeRecipeIds(settlement.id()));
+		knownRecipes.addAll(SettlementRecipeKnowledge.recipeIdsForTier(SettlementTiers.unlockedTier(settlement)));
+		return knownRecipes.contains("minecraft:lantern") ? "lantern" : "torch";
 	}
 
 	private static boolean collectLeafLitter(ServerLevel level, Map<String, Integer> stock, BlockPos leafLitterPos) {
@@ -2614,6 +2719,9 @@ public final class SettlementRoadwrightWork {
 		private MilepostPlacementCandidate {
 			routeSurfacePos = routeSurfacePos.immutable();
 		}
+	}
+
+	private record PathLightSupply(String lightMaterialKey, Map<String, Integer> remainingStock) {
 	}
 
 	public record RoadworkDebugPlan(

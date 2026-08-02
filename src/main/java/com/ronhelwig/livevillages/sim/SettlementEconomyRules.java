@@ -54,6 +54,16 @@ public final class SettlementEconomyRules {
 		new TargetRule("honey_bottle", population -> 0),
 		new TargetRule("honeycomb", population -> 0),
 		new TargetRule("candle", population -> 0),
+		new TargetRule("glow_berries", population -> 0),
+		new TargetRule("glowstone_dust", population -> 0),
+		new TargetRule("glowstone", population -> 0),
+		new TargetRule("soul_sand", population -> 0),
+		new TargetRule("soul_soil", population -> 0),
+		new TargetRule("blaze_rod", population -> 0),
+		new TargetRule("chorus_fruit", population -> 0),
+		new TargetRule("popped_chorus_fruit", population -> 0),
+		new TargetRule("prismarine_shard", population -> 0),
+		new TargetRule("prismarine_crystals", population -> 0),
 		new TargetRule("shears", population -> 0),
 		new TargetRule("string", population -> 0),
 		new TargetRule("sling", population -> 0),
@@ -88,6 +98,7 @@ public final class SettlementEconomyRules {
 		new TargetRule("sugar", population -> 0),
 		new TargetRule("cocoa_beans", population -> 0),
 		new TargetRule("pumpkin", population -> 0),
+		new TargetRule("carved_pumpkin", population -> 0),
 		new TargetRule("flower", population -> 0),
 		new TargetRule("oak_sapling", population -> 0),
 		new TargetRule("spruce_sapling", population -> 0),
@@ -105,10 +116,24 @@ public final class SettlementEconomyRules {
 		new TargetRule("dirt", population -> 0),
 		new TargetRule("ladder", population -> 0),
 		new TargetRule("milepost", population -> 0),
+		new TargetRule("torch", population -> 0),
+		new TargetRule("soul_torch", population -> 0),
+		new TargetRule("copper_torch", population -> 0),
 		new TargetRule("campfire", population -> 0),
 		new TargetRule("bee_hive", population -> 0),
+		new TargetRule("jack_o_lantern", population -> 0),
+		new TargetRule("lantern", population -> 0),
+		new TargetRule("soul_lantern", population -> 0),
+		new TargetRule("sea_lantern", population -> 0),
+		new TargetRule("shroomlight", population -> 0),
+		new TargetRule("froglight", population -> 0),
+		new TargetRule("copper_bulb", population -> 0),
+		new TargetRule("redstone_lamp", population -> 0),
+		new TargetRule("end_rod", population -> 0),
 		new TargetRule("iron_ingot", population -> 4 + population * 2),
 		new TargetRule("gold_ingot", population -> 0),
+		new TargetRule("copper_ingot", population -> 0),
+		new TargetRule("copper_block", population -> 0),
 		new TargetRule("emerald", population -> 4 + population)
 	);
 
@@ -229,9 +254,9 @@ public final class SettlementEconomyRules {
 
 	public static int requiredTierForGoods(String goodsKey) {
 		return switch (goodsKey) {
-			case "diamond", "redstone", "cookie", "pumpkin_pie", "stone" -> 2;
-			case "cake", "smooth_stone", "stone_bricks" -> 3;
-			case "golden_apple" -> 4;
+			case "diamond", "redstone", "cookie", "pumpkin_pie", "stone", "candle", "jack_o_lantern", "carved_pumpkin", "soul_torch", "soul_lantern", "soul_sand", "soul_soil" -> 2;
+			case "cake", "smooth_stone", "stone_bricks", "glow_berries", "glowstone_dust", "glowstone", "sea_lantern", "prismarine_shard", "prismarine_crystals" -> 3;
+			case "golden_apple", "blaze_rod", "chorus_fruit", "popped_chorus_fruit", "shroomlight", "froglight", "copper_bulb", "redstone_lamp", "end_rod", "copper_block" -> 4;
 			default -> 1;
 		};
 	}
@@ -329,6 +354,7 @@ public final class SettlementEconomyRules {
 
 		int farmers = settlement.population().getOrDefault(SettlementRoleKeys.FARMER, 0);
 		int gardeners = settlement.population().getOrDefault(SettlementRoleKeys.GARDENER, 0);
+		int portmasters = settlement.population().getOrDefault(SettlementRoleKeys.PORTMASTER, 0);
 		int shepherds = settlement.population().getOrDefault(SettlementRoleKeys.SHEPHERD, 0);
 
 		if (goodsKey.equals("sling")) {
@@ -342,6 +368,14 @@ public final class SettlementEconomyRules {
 
 		if (goodsKey.equals("scythe")) {
 			return farmers > 0 ? Math.max(1, farmers) : 0;
+		}
+
+		if (goodsKey.equals("jack_o_lantern") && farmers > 0 && SettlementTiers.unlockedTier(settlement) >= 2) {
+			return 4;
+		}
+
+		if (goodsKey.equals("sea_lantern") && portmasters > 0 && SettlementTiers.unlockedTier(settlement) >= 3) {
+			return 2;
 		}
 
 		if (goodsKey.equals("string") && gardeners + shepherds > 0) {

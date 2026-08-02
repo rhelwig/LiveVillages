@@ -53,6 +53,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final long POPULATION_DIAGNOSTIC_INTERVAL_TICKS = 1_200L;
 	private static final int SCRIBE_ROUTE_EXCHANGE_ONE_SIDED_LIMIT = 2;
 	private static final int SCRIBE_ROUTE_EXCHANGE_TWO_SIDED_LIMIT = 3;
+	private static final int SCRIBE_ROUTE_RESOURCE_EXCHANGE_LIMIT = 1;
 	public static final int SHARED_MAP_SAMPLE_STRIDE_BLOCKS = 4;
 	public static final long SURVEY_CACHE_DURATION_TICKS = 2_000L; // Cache survey for 100 seconds
 	private static final long DEFAULT_LOADED_ROADWORK_CATCHUP_TICKS = (long) SettlementEconomyRules.TICKS_PER_DAY;
@@ -112,7 +113,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private static final com.mojang.serialization.MapCodec<SupplementalPersistence> SUPPLEMENTAL_PERSISTENCE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(SupplementalPersistence::playerStandings),
 		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(SupplementalPersistence::raids),
-		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_recipe_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeRecipeLedgers)
+		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_recipe_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeRecipeLedgers),
+		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_resource_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeResourceLedgers)
 	).apply(instance, SupplementalPersistence::new));
 	private static final Codec<LiveVillagesSavedData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, SettlementState.CODEC).optionalFieldOf("settlements", Map.of()).forGetter(data -> data.settlements),
@@ -124,7 +126,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
-		SUPPLEMENTAL_PERSISTENCE_CODEC.forGetter(data -> new SupplementalPersistence(data.outpostPlayerStandings, data.outpostRaidStates, data.scribeRecipeLedgers)),
+		SUPPLEMENTAL_PERSISTENCE_CODEC.forGetter(data -> new SupplementalPersistence(data.outpostPlayerStandings, data.outpostRaidStates, data.scribeRecipeLedgers, data.scribeResourceLedgers)),
 		Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("villager_settlements", Map.of()).forGetter(data -> data.villagerSettlements),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
@@ -149,6 +151,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, Map<String, SettlementRoadwrightWork.RoadworkDebugPlan>> savedRoadworkPlans;
 	private final LinkedHashMap<String, Map<String, Integer>> bakeryFreebiesOwed;
 	private final LinkedHashMap<String, List<String>> scribeRecipeLedgers;
+	private final LinkedHashMap<String, List<String>> scribeResourceLedgers;
 	private final LinkedHashMap<String, Map<String, OutpostPlayerStanding>> outpostPlayerStandings;
 	private final LinkedHashMap<String, OutpostRaidState> outpostRaidStates;
 	private final LinkedHashMap<String, String> villagerSettlements;
@@ -178,12 +181,14 @@ public class LiveVillagesSavedData extends SavedData {
 	private record SupplementalPersistence(
 		Map<String, Map<String, OutpostPlayerStanding>> playerStandings,
 		Map<String, OutpostRaidState> raids,
-		Map<String, List<String>> scribeRecipeLedgers
+		Map<String, List<String>> scribeRecipeLedgers,
+		Map<String, List<String>> scribeResourceLedgers
 	) {
 		private SupplementalPersistence {
 			playerStandings = playerStandings == null ? Map.of() : playerStandings;
 			raids = raids == null ? Map.of() : raids;
 			scribeRecipeLedgers = scribeRecipeLedgers == null ? Map.of() : scribeRecipeLedgers;
+			scribeResourceLedgers = scribeResourceLedgers == null ? Map.of() : scribeResourceLedgers;
 		}
 	}
 
@@ -203,7 +208,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new SupplementalPersistence(Map.of(), Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new SupplementalPersistence(Map.of(), Map.of(), Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -237,6 +242,10 @@ public class LiveVillagesSavedData extends SavedData {
 		bakeryFreebiesOwed.forEach((settlementId, playerFreebies) -> this.bakeryFreebiesOwed.put(settlementId, new LinkedHashMap<>(playerFreebies)));
 		this.scribeRecipeLedgers = new LinkedHashMap<>();
 		supplementalPersistence.scribeRecipeLedgers().forEach((settlementId, recipeIds) -> this.scribeRecipeLedgers.put(settlementId, sortedRecipeIds(recipeIds)));
+		this.scribeResourceLedgers = new LinkedHashMap<>();
+		supplementalPersistence.scribeResourceLedgers().forEach((settlementId, resourceKeys) ->
+			this.scribeResourceLedgers.put(settlementId, SettlementLightingKnowledge.validResourceKeys(resourceKeys))
+		);
 		this.outpostPlayerStandings = new LinkedHashMap<>();
 		supplementalPersistence.playerStandings().forEach((settlementId, playerStandings) -> this.outpostPlayerStandings.put(settlementId, new LinkedHashMap<>(playerStandings)));
 		this.outpostRaidStates = new LinkedHashMap<>(supplementalPersistence.raids());
@@ -314,6 +323,31 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		scribeRecipeLedgers.put(settlementId, updated);
+		setDirty();
+		return true;
+	}
+
+	public List<String> knownScribeResourceKeys(String settlementId) {
+		if (settlementId == null || settlementId.isBlank()) {
+			return List.of();
+		}
+
+		return List.copyOf(scribeResourceLedgers.getOrDefault(settlementId, List.of()));
+	}
+
+	public boolean addKnownScribeResources(String settlementId, Collection<String> resourceKeys) {
+		if (settlementId == null || settlementId.isBlank() || resourceKeys == null || resourceKeys.isEmpty()) {
+			return false;
+		}
+
+		List<String> previous = scribeResourceLedgers.getOrDefault(settlementId, List.of());
+		List<String> updated = SettlementLightingKnowledge.validResourceKeys(sortedRecipeIds(previous, resourceKeys));
+
+		if (updated.equals(previous)) {
+			return false;
+		}
+
+		scribeResourceLedgers.put(settlementId, updated);
 		setDirty();
 		return true;
 	}
@@ -837,14 +871,33 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public void removeSettlement(String settlementId) {
+		Set<String> assignedVillagerIds = villagerSettlements.entrySet().stream()
+			.filter(entry -> entry.getValue().equals(settlementId))
+			.map(Map.Entry::getKey)
+			.collect(java.util.stream.Collectors.toSet());
 		boolean removed = settlements.remove(settlementId) != null;
 		removed |= bootstrapVillagerSpawnTicks.remove(settlementId) != null;
 		removed |= bakeryFreebiesOwed.remove(settlementId) != null;
 		removed |= outpostPlayerStandings.remove(settlementId) != null;
 		removed |= outpostRaidStates.remove(settlementId) != null;
 		removed |= outpostRaidStates.entrySet().removeIf(entry -> entry.getValue().targetSettlementId().equals(settlementId));
+		removed |= routes.entrySet().removeIf(entry ->
+			entry.getValue().fromSettlementId().equals(settlementId)
+				|| entry.getValue().toSettlementId().equals(settlementId)
+		);
 		removed |= buildSites.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 		removed |= constructionDeliveries.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
+		removed |= scribeRecipeLedgers.remove(settlementId) != null;
+		removed |= scribeResourceLedgers.remove(settlementId) != null;
+		removed |= savedSurveyorObservations.remove(settlementId) != null;
+		removed |= savedRoadworkPlans.remove(settlementId) != null;
+		removed |= loadedRoadworkCatchupTicks.remove(settlementId) != null;
+		removed |= surveyCache.remove(settlementId) != null;
+		removed |= villagerSettlements.entrySet().removeIf(entry -> entry.getValue().equals(settlementId));
+		removed |= preferredVillagerHomes.keySet().removeAll(assignedVillagerIds);
+		removed |= autonomousSupportStartOffsets.keySet().removeIf(key -> key.startsWith(settlementId + "|"));
+		removed |= autonomousSupportRetryAfterTicks.keySet().removeIf(key -> key.startsWith(settlementId + "|"));
+		removed |= populationDiagnosticTicks.keySet().removeIf(key -> key.contains("|" + settlementId + "|"));
 
 		if (removed) {
 			setDirty();
@@ -3194,6 +3247,33 @@ public class LiveVillagesSavedData extends SavedData {
 				);
 				changed = true;
 			}
+		}
+
+		List<String> fromResources = knownScribeResourceKeys(fromSettlement.id());
+		List<String> toResources = knownScribeResourceKeys(toSettlement.id());
+		List<String> resourcesForTo = unknownRecipes(fromResources, toResources, SCRIBE_ROUTE_RESOURCE_EXCHANGE_LIMIT);
+		List<String> resourcesForFrom = unknownRecipes(toResources, fromResources, SCRIBE_ROUTE_RESOURCE_EXCHANGE_LIMIT);
+
+		if (addKnownScribeResources(toSettlement.id(), resourcesForTo)) {
+			SettlementProfessionDiagnostics.log(
+				level,
+				toSettlement,
+				SettlementRoleKeys.SCRIBE,
+				"resource_knowledge_received",
+				"route=" + routeId + " from=" + fromSettlement.name() + " resources=" + String.join(",", resourcesForTo)
+			);
+			changed = true;
+		}
+
+		if (addKnownScribeResources(fromSettlement.id(), resourcesForFrom)) {
+			SettlementProfessionDiagnostics.log(
+				level,
+				fromSettlement,
+				SettlementRoleKeys.SCRIBE,
+				"resource_knowledge_received",
+				"route=" + routeId + " from=" + toSettlement.name() + " resources=" + String.join(",", resourcesForFrom)
+			);
+			changed = true;
 		}
 
 		return changed;

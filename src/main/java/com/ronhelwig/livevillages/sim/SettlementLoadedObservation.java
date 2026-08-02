@@ -24,6 +24,7 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 
 import com.ronhelwig.livevillages.block.MilepostBlock;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
@@ -47,6 +48,7 @@ public final class SettlementLoadedObservation {
 	private static final int SURVEYOR_MAX_WATER_COLUMNS = 8_192;
 	private static final int SURVEYOR_MAX_POINTS = 160;
 	private static final int SURVEYOR_MAX_OBSERVED_AREAS = 768;
+	private static final int MAX_VILLAGER_CACHE_ENTRIES = 512;
 	private static final Map<String, CachedVillagers> VILLAGER_CACHE = new HashMap<>();
 	private static final Map<String, SurveyorMemory> SURVEYOR_MEMORY = new HashMap<>();
 
@@ -265,16 +267,38 @@ public final class SettlementLoadedObservation {
 		}
 
 		double maxDistanceSquared = (double) radiusBlocks * radiusBlocks;
+		AABB bounds = new AABB(
+			center.getX() - radiusBlocks,
+			level.getMinY(),
+			center.getZ() - radiusBlocks,
+			center.getX() + radiusBlocks + 1,
+			level.getMaxY(),
+			center.getZ() + radiusBlocks + 1
+		);
 		List<Villager> villagers = new ArrayList<>(level.getEntities(
 			EntityTypeTest.forClass(Villager.class),
+			bounds,
 			villager -> horizontalDistanceToCenterSqr(villager.getX(), villager.getZ(), center) <= maxDistanceSquared
 		));
 		List<Villager> snapshot = List.copyOf(villagers);
 		VILLAGER_CACHE.put(cacheKey, new CachedVillagers(snapshot, tick));
+		pruneVillagerCache(tick);
 		return snapshot;
 	}
 
-	private static double horizontalDistanceToCenterSqr(double x, double z, BlockPos center) {
+	private static void pruneVillagerCache(long tick) {
+		if (VILLAGER_CACHE.size() <= MAX_VILLAGER_CACHE_ENTRIES) {
+			return;
+		}
+
+		VILLAGER_CACHE.entrySet().removeIf(entry -> tick - entry.getValue().tick() > VILLAGER_CACHE_TICKS);
+
+		if (VILLAGER_CACHE.size() > MAX_VILLAGER_CACHE_ENTRIES) {
+			VILLAGER_CACHE.clear();
+		}
+	}
+
+	static double horizontalDistanceToCenterSqr(double x, double z, BlockPos center) {
 		double dx = x - (center.getX() + 0.5D);
 		double dz = z - (center.getZ() + 0.5D);
 		return (dx * dx) + (dz * dz);

@@ -178,26 +178,7 @@ public final class SettlementBeekeeperWork {
 			return true;
 		}
 
-		if (taskKey.equals("harvesting_honey")) {
-			if (!SettlementGoods.consumeGoods(stock, "glass_bottle", 1)) {
-				return false;
-			}
-
-			SettlementGoods.addGoods(stock, "honey_bottle", 1);
-			SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "glass_bottle", 1);
-			SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "honey_bottle", 1);
-			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "harvested honey bottles");
-			return true;
-		}
-
-		if (stock.getOrDefault("shears", 0) <= 0) {
-			return false;
-		}
-
-		SettlementGoods.addGoods(stock, "honeycomb", 1);
-		SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "honeycomb", 1);
-		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "harvested honeycomb");
-		return true;
+		return false;
 	}
 
 	private static BeekeeperWorkPlan workPlanFor(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, BlockPos separator) {
@@ -264,7 +245,7 @@ public final class SettlementBeekeeperWork {
 			return new BeekeeperWorkPlan("making_candles", separator);
 		}
 
-		return new BeekeeperWorkPlan(stock.getOrDefault("glass_bottle", 0) > 0 ? "harvesting_honey" : "harvesting_honeycomb", separator);
+		return new BeekeeperWorkPlan("inspecting_apiary", separator);
 	}
 
 	private static boolean placeManagedHive(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, Villager beekeeper, BlockPos separator) {

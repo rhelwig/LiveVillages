@@ -31,6 +31,18 @@ You can help by checking things like:
 - textures and models
 - whether something is fun, clear, or confusing
 
+### Settlement lighting
+
+- Confirm a new Scribe Office saves one light choice and does not change it when the settlement gains stock, knowledge, or a tier while construction is underway.
+- Check the supported storefront fixtures at a Bakery and Trading Post, plus the Gardener fixture, at the settlement's current tier.
+- At Tier `2+`, confirm starter-farm previews show four jack o'lantern corners only when the settlement can supply all four, and that construction consumes the expected materials while retaining batch-crafted torch remainders.
+- At Tier `3+`, confirm eligible dock previews and staged builds show sea-lantern edge lights and report prismarine shortages accurately.
+- Give a Scribe-supported settlement glow berries, shroomlight, and each froglight variant; confirm discovery survives save/reload and crosses a Scribe-supported route gradually.
+- With Glow Berries discovered and stocked before planning a Tier `3+` Gardener's Shed, confirm its supported hanging trellis is built with lit berry vines; confirm an already planned fallback does not unpredictably change when berries arrive later.
+- At Tier `4`, confirm a learned copper-bulb fixture is waxed and remains lit across neighbor updates and save/reload.
+- Let a Roadwright extend straight and turning routes with fence and Torch/Lantern supplies available; verify path lights are spaced rather than continuous, use the local wood palette, fall back to Torches when Lantern materials are unavailable, and do not replace road blocks or occupied roadside spaces.
+- Watch server timing while a generated village is first detected; lantern observation should remain deferred without a broad chunk-load scan spike.
+
 ## Simple Playtest Loop
 
 If you want a generic test routine, try this:
