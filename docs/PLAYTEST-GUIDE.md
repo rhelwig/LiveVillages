@@ -30,6 +30,7 @@ You can help by checking things like:
 - villager pathing
 - textures and models
 - whether something is fun, clear, or confusing
+- whether profession uniforms still match the settlement's current civic tier, for example a Forester looking more established after a tier-up
 
 ### Settlement lighting
 

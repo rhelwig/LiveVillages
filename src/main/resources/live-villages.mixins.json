@@ -8,7 +8,9 @@
     "LookAtPlayerGoalMixin",
     "MobTargetMixin",
     "PillagerMixin",
-    "ServerPlayerMixin"
+    "ServerPlayerMixin",
+    "VillagerMixin",
+    "ZombieVillagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

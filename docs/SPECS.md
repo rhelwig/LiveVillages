@@ -87,7 +87,7 @@ Example settlement state:
 
 ## Settlement Tiers
 
-Settlements should use a four-tier civic progression model that gates which upgrades, public projects, path materials, and structure variants they can pursue.
+Settlements should use a four-tier civic progression model that gates which upgrades, public projects, path materials, structure variants, and profession uniforms they can pursue.
 
 - `Tier 1`: the default founding tier. New settlements start here. They focus on survival, starter housing, rough `Dirt Path` routes, simple workshops, and first-pass defensive works such as wooden log palisades or fenced boundaries.
 - Newly autodetected villages should start with modest virtual stock scaled to observed population and homes: about a week of mixed food plus starter wood, planks, cobblestone, sticks, dirt, and ladders so the first `Trade Board` / `Trading Post` work and early loaded construction are not blocked by an empty ledger.
@@ -111,6 +111,20 @@ Settlements should use a four-tier civic progression model that gates which upgr
   - `Tier 2` and above: aim for about `100%` of the settlement radius
 - Tier-specific structure choices should still respect local wood family, stone palette, biome rules, and future style variants rather than forcing one universal block palette everywhere.
 - Once a settlement reaches about `Tier 3`, a small number of profession structures may start desiring imported style variants from another biome set or material palette. This should be a selective luxury preference, not a full immediate village-wide reskin, and it should create new long-distance trade demand for prestige materials.
+
+### Profession Uniforms
+
+When a settlement reaches a new civic tier, the villagers belonging to that settlement should upgrade their profession uniforms to match the new tier's theme. Uniforms are a visible civic-progression signal, like path materials, structure finishes, lighting, and Trade Board screen themes.
+
+- Uniform upgrades should follow the settlement's persisted civic tier, not a momentary wealth or population fluctuation. A settlement that immediately rises to a newly earned tier should start showing that tier's uniforms. If the settlement later regresses because it lacks `Scribe` support, uniforms should fall back to the lower-tier look.
+- Each profession should keep a readable role identity across tiers. A `Forester` should still read as a Forester; the higher-tier look should become more established, better-made, or more aligned with that tier's material and civic language rather than becoming a different job.
+- Example: a `Tier 1` Forester can keep a rough woodland work look, while a `Tier 2` Forester might look more like an established timber worker, a `Tier 3` Forester more like a dressed civic woodsman, and a `Tier 4` Forester a prestige or formal woodland uniform. The same idea applies to other roles: a Baker's whites can become cleaner and more refined, a Guard's kit can look more like established town watch gear, and a Miner can pick up richer stone-and-metal accents without losing the slate work-coat silhouette.
+- Not every profession needs a completely different silhouette at every tier. Trim, fabric quality, color richness, accessories, and material-language accents are enough when a full costume redesign would make the role harder to recognize.
+- First-pass custom profession overlays already exist so loaded villagers do not fall back to missing-texture placeholders. Tiered uniforms are a later art-and-render pass on top of those role identities.
+- Missing higher-tier textures should fall back to the next lower authored look, then to the base profession overlay, so a settlement can still reach a new tier before every profession has a complete four-tier wardrobe.
+- Both ordinary villagers and zombie villagers of the same profession should use matching tiered looks.
+- Unemployed villagers, Nitwits, and children do not need unique civic uniforms. Vanilla professions may receive later-tier overlays after custom roles have a complete first set.
+- Outpost members should keep their current martial presentation; pillager-style profession uniforms remain deferred.
 
 ### Settlement Lighting
 
@@ -764,9 +778,9 @@ Key planned settlement-specific roles:
 
 - `Carpenter`: wood-focused construction, repairs, and upgrades, paired with `Mason`.
 - `Baker`: turns settlement food ingredients into tier-gated baked goods such as bread, baked potatoes, cookies, pies, cakes, and later premium foods like golden apples, while avoiding non-bakery meat cooking outputs.
-- `Baker` should present with a distinct bakery-themed profession overlay in-world, reading as a traditional white baker uniform with light blue trim or accents rather than falling back to a missing-texture placeholder.
+- `Baker` should present with a distinct bakery-themed profession overlay in-world, reading as a traditional white baker uniform with light blue trim or accents rather than falling back to a missing-texture placeholder. Higher settlement tiers should refine that same baker identity rather than replacing it with an unrelated costume.
 - `Beekeeper`: manages bee nests and bee hives, produces honey bottles and honeycomb, maintains safe smoked hives, and grows dispersed apiary capacity from a `Honey Separator`.
-- `Forester`: harvests and replants wood resources, must not cut down trees that contain bee nests or bee hives, maintains a sparse tree presence inside the village, manages denser woodland beyond the village core, and keeps a diverse seedling reserve that can create sapling trade demand. Foresters are surface workers: they should not choose underground dropped-item tasks, descend mine shafts, or remain on loaded mine shaft columns when the mine-rescue logic can move them back to the surface.
+- `Forester`: harvests and replants wood resources, must not cut down trees that contain bee nests or bee hives, maintains a sparse tree presence inside the village, manages denser woodland beyond the village core, and keeps a diverse seedling reserve that can create sapling trade demand. Foresters are surface workers: they should not choose underground dropped-item tasks, descend mine shafts, or remain on loaded mine shaft columns when the mine-rescue logic can move them back to the surface. Their profession overlay should stay woodland-readable at every civic tier, but the uniform should upgrade with the settlement so a higher-tier Forester looks more established and more aligned with that tier's theme.
 - `Miner`: gathers stone, ore, and underground materials, anchored by a stone-like `Miner Workstation` and later a functional mine-entrance structure rather than housing.
 - `Gardener`: improves village appearance and comfort by building decorative raised beds, planting flowers and grass, and managing chickens and eggs. First-pass code includes the `Gardener` profession, `Gardener Workstation`, staged bedded `Gardener's Shed` with a fenced-yard blueprint, bed-linked workforce assignment, preferred shed beds, census/report support, a comfort contribution, unloaded egg and flower output rather than extra staple-crop farming, a loaded stock loop for seed, bone-meal, and egg work that targets nearby real chickens before consuming seeds, bounded raised dirt-and-flower placement near the workstation with a first-pass bias toward nearby paths, exterior walls, under-window and beside-window placements, nearby doors without blocking them, and points of interest, optional trapdoor bed edging from stock, and a chicken pen build/herding loop that reuses nearby partial pens and scores new small pen sites toward chickens and village-visible areas.
 - `Guard`: protects the settlement and its corridors.

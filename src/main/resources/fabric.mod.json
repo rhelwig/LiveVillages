@@ -15,7 +15,8 @@
 	"icon": "assets/live-villages/icon.png",
 	"environment": "*",
 	"mixins": [
-		"live-villages.mixins.json"
+		"live-villages.mixins.json",
+		"live-villages.client.mixins.json"
 	],
 	"entrypoints": {
 		"main": [

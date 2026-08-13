@@ -73,6 +73,8 @@ Put villager or creature textures in:
 - `src/main/resources/assets/live-villages/textures/entity/villager/`
 - `src/main/resources/assets/live-villages/textures/entity/zombie_villager/`
 
+Profession overlays live under `villager/profession/` and the matching `zombie_villager/profession/` folder. The current file, such as `forester.png`, is the `Tier 1` / fallback look. When a higher-tier uniform exists, add it beside the base file as `forester_tier2.png`, `forester_tier3.png`, or `forester_tier4.png`, and keep the same name in the zombie-villager folder. If a higher-tier file is missing, the game should keep using the next lower authored look.
+
 ### Block Models
 
 Put exported block model JSON files in:

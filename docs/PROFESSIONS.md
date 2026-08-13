@@ -12,6 +12,7 @@ Ordered implementation work is tracked in [IMPLEMENTATION-PLAN.md](IMPLEMENTATIO
 ## Design Rules
 
 - Every profession should matter in two layers: visible work in loaded chunks and abstract contribution to settlement simulation.
+- Profession overlays should stay role-readable, and they should upgrade with the owning settlement's persisted civic tier. A higher-tier worker keeps the same job identity, but the uniform should become more established and more aligned with that tier's theme. A `Forester` is the working example: rough woodland workwear at `Tier 1`, a more established timber-worker look at later tiers. Missing higher-tier textures should fall back to the next lower authored look. See [SPECS.md](SPECS.md#profession-uniforms).
 - Workstations are both job-site anchors and infrastructure signals. A settlement should care whether the right stations exist, and when a player places a recognized workstation the settlement should try to grow the matching structure around or beside that exact block.
 - If a player placed recognized workstation cannot support its associated structure because the site is blocked or invalid, villagers should leave a nearby temporary sign saying `can't build here` instead of silently failing. First-pass loaded maintenance now retries placed custom workstation structures such as Carpenter's Workshops, Scribe Offices, Guard Posts, Gardener's Sheds, Beekeeper's Apiaries, Bakeries, Mine Entrances, Roadwright Workshops, and Forester Workshops when no matching build site exists, so clearing a blocked footprint can let the settlement start the staged build later.
 - When a workstation-associated structure includes beds, matching professionals should have first claim on those beds and should be able to reclaim them from non-matching residents when needed, while still letting players displace or reassign beds through normal play.
@@ -284,6 +285,7 @@ These roles have first-pass implementation where noted, but still carry richer l
 
 - Workstation: `Baker's Counter`
 - Associated structure: `Bakery`
+- Visual identity: a traditional white baker uniform with light blue trim or accents. Higher civic tiers should refine that same bakery look rather than replacing it with an unrelated costume.
 - Status: first-pass profession, workstation, bakery structure, display stock, baking loop, bakery-side trade pass, and prompt bakery ingredient display reconciliation are implemented
 - Loaded-world behavior: works in the bakery, collects or requests food inputs, bakes bread, cakes, pies, cookies, and similar baked goods when supplies are available, and visibly stocks bakery counters/display cases with baked goods as sale inventory
 - Settlement behavior: converts farm and livestock supplies into higher-value or more varied food stock, improving food security and trade options without overloading the central `Trade Board`
@@ -295,6 +297,7 @@ These roles have first-pass implementation where noted, but still carry richer l
 - Workstation: `Forester's Table`, a wood-and-log work table with axe visual language
 - Associated structure: `Forester's Workshop`, using the Carpenter/Roadwright workshop layout family but built almost entirely from wood with heavy log use
 - Equipment: carries axes and hoes
+- Visual identity: the Forester overlay should read as woodland workwear rather than a generic woodworker or miner palette. When the owning settlement reaches a new civic tier, that uniform should upgrade with the tier's theme while still reading as a Forester: a rough grove worker at `Tier 1`, a more established timber worker at `Tier 2`, a dressed civic woodsman at `Tier 3`, and a prestige woodland uniform at `Tier 4`.
 - Status: First loaded-world forestry pass implemented
 - Loaded-world behavior: manages groves beyond the village core up to `150%` of the owning settlement radius, chops mature natural trees only when enough nearby trees remain, avoids trees with bee nests or bee hives, replants from carried or village seedling stock, keeps village interiors relatively sparse while allowing thicker exterior woods, collects surface forest drops such as saplings, apples, sticks, and leaf litter, opportunistically picks up nearby surface dropped logs and saplings left by the player, never chooses underground or mine-shaft work, moves out of loaded mine shaft columns when rescue logic can return it to the surface, and uses hoes where ground preparation helps managed groves
 - Settlement behavior: adds logs, sticks, apples, saplings, and similar wood outputs to stock; keeps a small reserve of diverse seedlings; requests tools and saplings when needed; and can surface trade demand for missing saplings through the Trademaster / Trade Board economy

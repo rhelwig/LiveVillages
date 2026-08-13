@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.ronhelwig.livevillages.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LivingEntityRenderStateMixin",
+    "VillagerProfessionLayerMixin",
+    "VillagerRendererMixin",
+    "ZombieVillagerRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
