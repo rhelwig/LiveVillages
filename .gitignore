@@ -48,3 +48,7 @@ replay_*.log
 
 __pycache__/
 *.py[cod]
+
+# local temporary design and working files
+
+/tmp/
