@@ -82,6 +82,8 @@ Server/debug utilities:
 - `/livevillages settlements validate`
 - `gamerule live-villages:daily_settlement_reports false|true` to toggle end-of-day report files; it defaults to `false`
 - `gamerule live-villages:surveyor_map_fog false|true` to toggle the surveyor fog-of-war rule; it currently defaults to `false` for playtesting
+- `gamerule live-villages:worker_productivity <number>` to change how fast settlement villagers work; it defaults to `2.0`, ranges from `0.25` to `50.0`, and can also be edited in the world game-rules screen
+- `gamerule live-villages:villager_texture_scale <64|128|256>` to choose villager, zombie villager, and illager skin detail; new worlds default to `256`, and the setting can also be edited in the world game-rules screen
 
 ## Project Docs
 

@@ -548,7 +548,7 @@ public final class SettlementFishermanWork {
 	}
 
 	private static int scaledAmount(double dailyRate, double elapsedDays) {
-		return (int) Math.round(dailyRate * elapsedDays * SettlementEconomyRules.WORKER_PRODUCTIVITY_MULTIPLIER);
+		return (int) Math.round(dailyRate * elapsedDays * SettlementEconomyRules.DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER);
 	}
 
 	private static double scaledLighthouseCount(int lighthouseCount) {

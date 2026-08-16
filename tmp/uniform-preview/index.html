@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Villages — Uniform redesign preview</title>
+  <style>
+    :root {
+      --bg: #1c1710;
+      --panel: #2a2318;
+      --ink: #f3e6c8;
+      --muted: #b8a888;
+      --line: #4a3d28;
+      --t1: #8a6a3a;
+      --t2: #7a7f86;
+      --t3: #c4b7a0;
+      --t4: #c9a227;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+      background: radial-gradient(1200px 800px at 50% 0%, #2d2418, var(--bg));
+      color: var(--ink);
+    }
+    header {
+      padding: 2.2rem 2rem 1.2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--line);
+    }
+    header p.kicker {
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin: 0 0 0.4rem;
+    }
+    h1 { margin: 0 0 0.5rem; font-size: 2.1rem; font-weight: 600; }
+    header .lede {
+      max-width: 52rem;
+      margin: 0 auto;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      padding: 1rem;
+    }
+    nav a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+    }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(10rem, 1fr));
+      gap: 0.75rem;
+      max-width: 70rem;
+      margin: 0 auto 2rem;
+      padding: 0 1.25rem;
+    }
+    .legend article {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-top-width: 4px;
+      padding: 0.75rem 0.9rem;
+    }
+    .legend article.t1 { border-top-color: var(--t1); }
+    .legend article.t2 { border-top-color: var(--t2); }
+    .legend article.t3 { border-top-color: var(--t3); }
+    .legend article.t4 { border-top-color: var(--t4); }
+    .legend h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+    .legend p { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
+    section.group { padding: 0 1.25rem 2.5rem; max-width: 88rem; margin: 0 auto; }
+    section.group h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.25rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 0.35rem;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 8.5rem repeat(4, 1fr);
+      gap: 0.55rem;
+      align-items: stretch;
+      margin-bottom: 0.7rem;
+    }
+    .job {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0.5rem 0.4rem 0.5rem 0;
+    }
+    .job strong { display: block; font-size: 1rem; }
+    .job span { color: var(--muted); font-size: 0.75rem; }
+    figure {
+      margin: 0;
+      background: #3a3124;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      object-position: center 18%;
+      background: #d9c7a4;
+    }
+    figure figcaption {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.4rem 0.4rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .cols { display: contents; }
+    .col-head {
+      display: grid;
+      grid-template-columns: 8.5rem repeat(4, 1fr);
+      gap: 0.55rem;
+      margin-bottom: 0.45rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 1.5rem 1rem 2.5rem;
+    }
+    @media (max-width: 800px) {
+      .legend { grid-template-columns: 1fr 1fr; }
+      .row, .col-head { grid-template-columns: 1fr; }
+      .job { padding: 0.6rem 0 0.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Live Villages design preview</p>
+    <h1>Profession uniforms by civic tier</h1>
+    <p class="lede">
+      A complete redesign study for villagers and outpost illagers. Same blocky body,
+      same role identity, clothes that grow with the settlement: rough founding workwear,
+      established village kit, dressed civic uniforms, then prestige. Unemployed villagers,
+      Nitwits, and children are omitted on purpose.
+    </p>
+  </header>
+  <nav>
+    <a href="#food">Food &amp; land</a>
+    <a href="#wood">Wood &amp; stone</a>
+    <a href="#craft">Craft &amp; arms</a>
+    <a href="#civic">Civic</a>
+    <a href="#outpost">Outpost illagers</a>
+  </nav>
+  <div class="legend">
+    <article class="t1"><h3>Tier 1 — Founding</h3><p>Homespun, patched, muted dirt-path and wood. Survival kit.</p></article>
+    <article class="t2"><h3>Tier 2 — Established</h3><p>Cleaner dyed cloth, cobble-gray trim, brass. Town that has arrived.</p></article>
+    <article class="t3"><h3>Tier 3 — Dressed civic</h3><p>Tailored cuts, smooth-stone silver, copper clasps. Formal woodsmen and watch.</p></article>
+    <article class="t4"><h3>Tier 4 — Prestige</h3><p>Gold embroidery, brick-red lining, ceremonial versions of the same job.</p></article>
+  </div>
+
+  <section class="group" id="food">
+    <h2>Food &amp; land</h2>
+    <div class="col-head"><span></span><span>Tier 1</span><span>Tier 2</span><span>Tier 3</span><span>Tier 4</span></div>
+    <!-- rows injected below as static markup -->
+    <div class="row">
+      <div class="job"><strong>Farmer</strong><span>Crops &amp; compost</span></div>
+      <figure><img src="portraits/farmer_t1.jpg" alt="Farmer tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/farmer_t2.jpg" alt="Farmer tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/farmer_t3.jpg" alt="Farmer tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/farmer_t4.jpg" alt="Farmer tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Baker</strong><span>White + light blue</span></div>
+      <figure><img src="portraits/baker_t1.jpg" alt="Baker tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/baker_t2.jpg" alt="Baker tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/baker_t3.jpg" alt="Baker tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/baker_t4.jpg" alt="Baker tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Butcher</strong><span>Herd &amp; meat</span></div>
+      <figure><img src="portraits/butcher_t1.jpg" alt="Butcher tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/butcher_t2.jpg" alt="Butcher tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/butcher_t3.jpg" alt="Butcher tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/butcher_t4.jpg" alt="Butcher tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Fisherman</strong><span>Shore &amp; dock</span></div>
+      <figure><img src="portraits/fisherman_t1.jpg" alt="Fisherman tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/fisherman_t2.jpg" alt="Fisherman tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/fisherman_t3.jpg" alt="Fisherman tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/fisherman_t4.jpg" alt="Fisherman tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Shepherd</strong><span>Wool &amp; flock</span></div>
+      <figure><img src="portraits/shepherd_t1.jpg" alt="Shepherd tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/shepherd_t2.jpg" alt="Shepherd tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/shepherd_t3.jpg" alt="Shepherd tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/shepherd_t4.jpg" alt="Shepherd tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Beekeeper</strong><span>Protective whites</span></div>
+      <figure><img src="portraits/beekeeper_t1.jpg" alt="Beekeeper tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/beekeeper_t2.jpg" alt="Beekeeper tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/beekeeper_t3.jpg" alt="Beekeeper tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/beekeeper_t4.jpg" alt="Beekeeper tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Gardener</strong><span>Comfort &amp; flowers</span></div>
+      <figure><img src="portraits/gardener_t1.jpg" alt="Gardener tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/gardener_t2.jpg" alt="Gardener tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/gardener_t3.jpg" alt="Gardener tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/gardener_t4.jpg" alt="Gardener tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="group" id="wood">
+    <h2>Wood &amp; stone</h2>
+    <div class="col-head"><span></span><span>Tier 1</span><span>Tier 2</span><span>Tier 3</span><span>Tier 4</span></div>
+    <div class="row">
+      <div class="job"><strong>Forester</strong><span>Woodland workwear</span></div>
+      <figure><img src="portraits/forester_t1.jpg" alt="Forester tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/forester_t2.jpg" alt="Forester tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/forester_t3.jpg" alt="Forester tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/forester_t4.jpg" alt="Forester tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Carpenter</strong><span>Timber shop</span></div>
+      <figure><img src="portraits/carpenter_t1.jpg" alt="Carpenter tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/carpenter_t2.jpg" alt="Carpenter tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/carpenter_t3.jpg" alt="Carpenter tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/carpenter_t4.jpg" alt="Carpenter tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Mason</strong><span>Stone crew</span></div>
+      <figure><img src="portraits/mason_t1.jpg" alt="Mason tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/mason_t2.jpg" alt="Mason tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/mason_t3.jpg" alt="Mason tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/mason_t4.jpg" alt="Mason tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Miner</strong><span>Slate &amp; copper</span></div>
+      <figure><img src="portraits/miner_t1.jpg" alt="Miner tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/miner_t2.jpg" alt="Miner tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/miner_t3.jpg" alt="Miner tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/miner_t4.jpg" alt="Miner tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Roadwright</strong><span>Paths &amp; survey</span></div>
+      <figure><img src="portraits/roadwright_t1.jpg" alt="Roadwright tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/roadwright_t2.jpg" alt="Roadwright tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/roadwright_t3.jpg" alt="Roadwright tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/roadwright_t4.jpg" alt="Roadwright tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="group" id="craft">
+    <h2>Craft &amp; arms</h2>
+    <div class="col-head"><span></span><span>Tier 1</span><span>Tier 2</span><span>Tier 3</span><span>Tier 4</span></div>
+    <div class="row">
+      <div class="job"><strong>Fletcher</strong><span>Arrows &amp; bow</span></div>
+      <figure><img src="portraits/fletcher_t1.jpg" alt="Fletcher tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/fletcher_t2.jpg" alt="Fletcher tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/fletcher_t3.jpg" alt="Fletcher tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/fletcher_t4.jpg" alt="Fletcher tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Leatherworker</strong><span>Hide &amp; straps</span></div>
+      <figure><img src="portraits/leatherworker_t1.jpg" alt="Leatherworker tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/leatherworker_t2.jpg" alt="Leatherworker tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/leatherworker_t3.jpg" alt="Leatherworker tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/leatherworker_t4.jpg" alt="Leatherworker tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Armorer</strong><span>Plate &amp; shield</span></div>
+      <figure><img src="portraits/armorer_t1.jpg" alt="Armorer tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/armorer_t2.jpg" alt="Armorer tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/armorer_t3.jpg" alt="Armorer tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/armorer_t4.jpg" alt="Armorer tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Toolsmith</strong><span>Picks &amp; tools</span></div>
+      <figure><img src="portraits/toolsmith_t1.jpg" alt="Toolsmith tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/toolsmith_t2.jpg" alt="Toolsmith tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/toolsmith_t3.jpg" alt="Toolsmith tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/toolsmith_t4.jpg" alt="Toolsmith tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Weaponsmith</strong><span>Blades</span></div>
+      <figure><img src="portraits/weaponsmith_t1.jpg" alt="Weaponsmith tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/weaponsmith_t2.jpg" alt="Weaponsmith tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/weaponsmith_t3.jpg" alt="Weaponsmith tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/weaponsmith_t4.jpg" alt="Weaponsmith tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Guard</strong><span>Town watch</span></div>
+      <figure><img src="portraits/guard_t1.jpg" alt="Guard tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/guard_t2.jpg" alt="Guard tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/guard_t3.jpg" alt="Guard tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/guard_t4.jpg" alt="Guard tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="group" id="civic">
+    <h2>Civic</h2>
+    <div class="col-head"><span></span><span>Tier 1</span><span>Tier 2</span><span>Tier 3</span><span>Tier 4</span></div>
+    <div class="row">
+      <div class="job"><strong>Trademaster</strong><span>Trade Board</span></div>
+      <figure><img src="portraits/trademaster_t1.jpg" alt="Trademaster tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/trademaster_t2.jpg" alt="Trademaster tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/trademaster_t3.jpg" alt="Trademaster tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/trademaster_t4.jpg" alt="Trademaster tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Scribe</strong><span>Recipes &amp; memory</span></div>
+      <figure><img src="portraits/scribe_t1.jpg" alt="Scribe tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/scribe_t2.jpg" alt="Scribe tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/scribe_t3.jpg" alt="Scribe tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/scribe_t4.jpg" alt="Scribe tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Librarian</strong><span>Books</span></div>
+      <figure><img src="portraits/librarian_t1.jpg" alt="Librarian tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/librarian_t2.jpg" alt="Librarian tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/librarian_t3.jpg" alt="Librarian tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/librarian_t4.jpg" alt="Librarian tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Cleric</strong><span>Healing</span></div>
+      <figure><img src="portraits/cleric_t1.jpg" alt="Cleric tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/cleric_t2.jpg" alt="Cleric tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/cleric_t3.jpg" alt="Cleric tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/cleric_t4.jpg" alt="Cleric tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Cartographer</strong><span>Maps &amp; range</span></div>
+      <figure><img src="portraits/cartographer_t1.jpg" alt="Cartographer tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/cartographer_t2.jpg" alt="Cartographer tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/cartographer_t3.jpg" alt="Cartographer tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/cartographer_t4.jpg" alt="Cartographer tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Portmaster</strong><span>Navy &amp; brass</span></div>
+      <figure><img src="portraits/portmaster_t1.jpg" alt="Portmaster tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/portmaster_t2.jpg" alt="Portmaster tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/portmaster_t3.jpg" alt="Portmaster tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/portmaster_t4.jpg" alt="Portmaster tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="group" id="outpost">
+    <h2>Outpost illagers</h2>
+    <div class="col-head"><span></span><span>Tier 1</span><span>Tier 2</span><span>Tier 3</span><span>Tier 4</span></div>
+    <div class="row">
+      <div class="job"><strong>Pillager</strong><span>Outpost recruit</span></div>
+      <figure><img src="portraits/pillager_t1.jpg" alt="Pillager tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/pillager_t2.jpg" alt="Pillager tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/pillager_t3.jpg" alt="Pillager tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/pillager_t4.jpg" alt="Pillager tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Vindicator</strong><span>Axe infantry</span></div>
+      <figure><img src="portraits/vindicator_t1.jpg" alt="Vindicator tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/vindicator_t2.jpg" alt="Vindicator tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/vindicator_t3.jpg" alt="Vindicator tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/vindicator_t4.jpg" alt="Vindicator tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+    <div class="row">
+      <div class="job"><strong>Evoker</strong><span>Outpost mage</span></div>
+      <figure><img src="portraits/evoker_t1.jpg" alt="Evoker tier 1"><figcaption>T1</figcaption></figure>
+      <figure><img src="portraits/evoker_t2.jpg" alt="Evoker tier 2"><figcaption>T2</figcaption></figure>
+      <figure><img src="portraits/evoker_t3.jpg" alt="Evoker tier 3"><figcaption>T3</figcaption></figure>
+      <figure><img src="portraits/evoker_t4.jpg" alt="Evoker tier 4"><figcaption>T4</figcaption></figure>
+    </div>
+  </section>
+
+  <footer>
+    Design preview only. These are not in-game textures yet. Open this file in a browser from
+    <code>LiveVillages/tmp/uniform-preview/index.html</code>.
+  </footer>
+</body>
+</html>

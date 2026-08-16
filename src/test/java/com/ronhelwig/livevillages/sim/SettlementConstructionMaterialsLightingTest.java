@@ -115,6 +115,38 @@ class SettlementConstructionMaterialsLightingTest {
 		assertEquals(Map.of("iron_nugget", 1, "soul_torch", 3), stock);
 	}
 
+	@Test
+	void campfireCanUseExtraLogAsCharcoal() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("logs", 4, "stick", 3));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "campfire");
+		assertTrue(result.supplied());
+		assertTrue(stock.isEmpty());
+	}
+
+	@Test
+	void campfireStillUsesCoalWhenPresent() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("logs", 3, "stick", 3, "coal", 1));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "campfire");
+		assertTrue(result.supplied());
+		assertTrue(stock.isEmpty());
+	}
+
+	@Test
+	void farmStarterCostCanCraftPlanksFromLogs() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("planks", 5, "logs", 1));
+		assertTrue(SettlementConstructionMaterials.tryConsumeCost(stock, Map.of("planks", 7)));
+		assertEquals(2, stock.getOrDefault("planks", 0));
+		assertFalse(stock.containsKey("logs"));
+	}
+
+	@Test
+	void farmStarterCostFailsWithoutEnoughWood() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("planks", 5));
+		Map<String, Integer> original = new LinkedHashMap<>(stock);
+		assertFalse(SettlementConstructionMaterials.tryConsumeCost(stock, Map.of("planks", 7)));
+		assertEquals(original, stock);
+	}
+
 	private static Map<String, Integer> stock(String key, int amount) {
 		Map<String, Integer> stock = new LinkedHashMap<>();
 		stock.put(key, amount);

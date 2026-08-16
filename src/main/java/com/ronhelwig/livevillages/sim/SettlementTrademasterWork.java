@@ -23,9 +23,10 @@ public final class SettlementTrademasterWork {
 	private SettlementTrademasterWork() {
 	}
 
-	public static void maintainLoadedTradeManagement(
+	public static boolean maintainLoadedTradeManagement(
 		ServerLevel level,
 		SettlementState settlement,
+		Map<String, Integer> stock,
 		List<SettlementBuildSite> buildSites
 	) {
 		if (SettlementVillagerWorkSchedule.shouldYieldForVillageSchedule(level)) {
@@ -38,16 +39,20 @@ public final class SettlementTrademasterWork {
 				ACTIVE_TASKS.remove(trademaster.getUUID().toString());
 			}
 
-			return;
+			return false;
 		}
+
+		boolean stockChanged = false;
 
 		for (Villager trademaster : SettlementVillagers.nearbyAdultVillagers(level, settlement)) {
 			if (!trademaster.getVillagerData().profession().is(LiveVillagesVillagerProfessions.TRADEMASTER)) {
 				continue;
 			}
 
-			maintainTradeManagementTask(level, settlement, buildSites, trademaster);
+			stockChanged |= maintainTradeManagementTask(level, settlement, stock, buildSites, trademaster);
 		}
+
+		return stockChanged;
 	}
 
 	public static Optional<String> loadedTrademasterTaskKey(ServerLevel level, Villager villager) {
@@ -60,9 +65,10 @@ public final class SettlementTrademasterWork {
 		return Optional.of(task.taskKey());
 	}
 
-	private static void maintainTradeManagementTask(
+	private static boolean maintainTradeManagementTask(
 		ServerLevel level,
 		SettlementState settlement,
+		Map<String, Integer> stock,
 		List<SettlementBuildSite> buildSites,
 		Villager trademaster
 	) {
@@ -72,15 +78,15 @@ public final class SettlementTrademasterWork {
 			SettlementRoleKeys.TRADEMASTER,
 			TRADEMASTER_WORK_DECIDE_INTERVAL_TICKS
 		)) {
-			return;
+			return false;
 		}
 
 		BlockPos workPos = SettlementStockAccess.findStockAccessPos(level, settlement, buildSites)
 			.orElse(settlement.center());
-		ACTIVE_TASKS.put(trademaster.getUUID().toString(), new TimedTask("managing_trades", level.getServer().getTickCount()));
 		SettlementNavigation.moveToRoutineTarget(level, settlement, trademaster, workPos, WORK_WALK_SPEED);
 
 		if (trademaster.blockPosition().distSqr(workPos) > WORK_REACH_DISTANCE_SQUARED) {
+			ACTIVE_TASKS.put(trademaster.getUUID().toString(), new TimedTask("managing_trades", level.getServer().getTickCount()));
 			SettlementProfessionDiagnostics.log(
 				level,
 				settlement,
@@ -88,10 +94,41 @@ public final class SettlementTrademasterWork {
 				"moving_to_work",
 				"villager=" + trademaster.getUUID() + " target=" + workPos.toShortString()
 			);
-			return;
+			return false;
 		}
 
+		if (tryBootstrapHousingWork(level, settlement, stock, trademaster)) {
+			return true;
+		}
+
+		ACTIVE_TASKS.put(trademaster.getUUID().toString(), new TimedTask("managing_trades", level.getServer().getTickCount()));
 		recordDailyTradeReview(level, settlement, trademaster);
+		return false;
+	}
+
+	private static boolean tryBootstrapHousingWork(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager trademaster
+	) {
+		if (SettlementEconomyRules.housingPressure(settlement) <= 0) {
+			return false;
+		}
+
+		if (SettlementConstruction.tryPlaceEmergencyBed(level, settlement, stock)) {
+			ACTIVE_TASKS.put(trademaster.getUUID().toString(), new TimedTask("placing_bed", level.getServer().getTickCount()));
+			SettlementProfessionReports.recordAccomplished(
+				level,
+				settlement,
+				SettlementRoleKeys.TRADEMASTER,
+				trademaster,
+				"placed a bootstrap bed from stored wool and wood"
+			);
+			return true;
+		}
+
+		return false;
 	}
 
 	private static void recordDailyTradeReview(ServerLevel level, SettlementState settlement, Villager trademaster) {

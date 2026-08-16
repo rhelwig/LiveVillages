@@ -141,7 +141,8 @@ public final class TradeBoardLogic {
 				continue;
 			}
 
-			int target = SettlementEconomyRules.targetForGoods(settlement, targetRule.goodsKey());
+			int target = SettlementEconomyRules.targetForGoods(settlement, targetRule.goodsKey())
+				+ Math.max(0, constructionDemand.getOrDefault(targetRule.goodsKey(), 0));
 			int current = effectiveCurrentForDisplay(settlement, targetRule.goodsKey());
 			int tradePricePercent = SettlementEconomyRules.tradePricePercent(current, target);
 			int tradeBundleSize = TradeBoardTradeRules.bundleSize(targetRule.goodsKey());
@@ -326,27 +327,13 @@ public final class TradeBoardLogic {
 			}
 
 			int existingIndex = indexOfGoods(shortages, goodsKey);
-			int current = effectiveCurrentForDisplay(settlement, goodsKey);
-			int target = demand;
-
 			if (existingIndex >= 0) {
-				TradeBoardGoodsView existing = shortages.get(existingIndex);
-				current = existing.current();
-				target = existing.target() + demand;
-			}
-
-			if (current >= target) {
-				if (existingIndex >= 0) {
-					shortages.remove(existingIndex);
-				}
-
 				continue;
 			}
 
-			if (existingIndex >= 0) {
-				shortages.set(existingIndex, goodsView(level, goodsKey, current, target));
-			} else {
-				shortages.add(goodsView(level, goodsKey, current, target));
+			int current = effectiveCurrentForDisplay(settlement, goodsKey);
+			if (current < demand) {
+				shortages.add(goodsView(level, goodsKey, current, demand));
 			}
 		}
 	}

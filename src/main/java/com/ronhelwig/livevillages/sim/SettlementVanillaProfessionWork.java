@@ -39,7 +39,7 @@ public final class SettlementVanillaProfessionWork {
 	private static final long VANILLA_WORK_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long CLERIC_HEAL_COOLDOWN_TICKS = 180L;
 	private static final long DAY_TICKS = 24_000L;
-	private static final int SHEPHERD_BED_BATCH_SIZE = SettlementEconomyRules.scaledWorkerDailyUnits(4);
+	private static final int BASE_SHEPHERD_BED_BATCH_SIZE = 4;
 	private static final Map<String, Long> LAST_PRODUCTION_DAY = new HashMap<>();
 	private static final Map<String, Long> LAST_EQUIPMENT_DAY = new HashMap<>();
 	private static final Map<String, Long> LAST_CLERIC_HEAL_TICKS = new HashMap<>();
@@ -93,7 +93,7 @@ public final class SettlementVanillaProfessionWork {
 				boolean anvilSupportedSmithy = isSmithRole(config.roleKey()) && SettlementConstruction.hasSmithyAnvilSupport(level, settlement, workPos);
 				Optional<ProductionPlan> productionPlan = productionDone
 					? Optional.empty()
-					: chooseProductionPlan(settlement, stock, config.roleKey(), currentDay, anvilSupportedSmithy);
+					: chooseProductionPlan(level, settlement, stock, config.roleKey(), currentDay, anvilSupportedSmithy);
 				Optional<EquipmentPlan> equipmentPlan = productionPlan.isPresent() || equipmentDone
 					? Optional.empty()
 					: chooseEquipmentPlan(stock, config.roleKey(), villager, villagers);
@@ -264,7 +264,14 @@ public final class SettlementVanillaProfessionWork {
 		return Optional.of(task.taskKey());
 	}
 
-	private static Optional<ProductionPlan> chooseProductionPlan(SettlementState settlement, Map<String, Integer> stock, String roleKey, long currentDay, boolean anvilSupportedSmithy) {
+	private static Optional<ProductionPlan> chooseProductionPlan(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		String roleKey,
+		long currentDay,
+		boolean anvilSupportedSmithy
+	) {
 		return switch (roleKey) {
 			case SettlementRoleKeys.CARTOGRAPHER -> Optional.of(new ProductionPlan("refreshing_route_intelligence", "", 0, Map.of()));
 			case SettlementRoleKeys.CLERIC -> planIfAvailable(
@@ -276,7 +283,7 @@ public final class SettlementVanillaProfessionWork {
 			);
 			case SettlementRoleKeys.LIBRARIAN -> librarianPlan(settlement, stock);
 			case SettlementRoleKeys.LEATHERWORKER -> leatherworkerPlan(stock, currentDay);
-			case SettlementRoleKeys.SHEPHERD -> shepherdPlan(settlement, stock);
+			case SettlementRoleKeys.SHEPHERD -> shepherdPlan(level, settlement, stock);
 			case SettlementRoleKeys.ARMORER -> armorerPlan(stock, currentDay, anvilSupportedSmithy);
 			case SettlementRoleKeys.TOOLSMITH -> smithPlanIfAvailable("smithing_iron_pickaxe", "iron_pickaxe", Map.of("iron_ingot", 3, "stick", 2), stock, anvilSupportedSmithy);
 			case SettlementRoleKeys.WEAPONSMITH -> smithPlanIfAvailable("sharpening_iron_sword", "iron_sword", Map.of("iron_ingot", 2, "stick", 1), stock, anvilSupportedSmithy);
@@ -320,10 +327,10 @@ public final class SettlementVanillaProfessionWork {
 		};
 	}
 
-	private static Optional<ProductionPlan> shepherdPlan(SettlementState settlement, Map<String, Integer> stock) {
+	private static Optional<ProductionPlan> shepherdPlan(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		int bedNeed = SettlementEconomyRules.targetForGoods(settlement, "bed") - stock.getOrDefault("bed", 0);
 		int craftableBeds = Math.min(stock.getOrDefault("wool", 0) / 3, stock.getOrDefault("planks", 0) / 3);
-		int bedBatch = Math.min(Math.min(bedNeed, craftableBeds), SHEPHERD_BED_BATCH_SIZE);
+		int bedBatch = Math.min(Math.min(bedNeed, craftableBeds), SettlementEconomyRules.scaledWorkerDailyUnits(level, BASE_SHEPHERD_BED_BATCH_SIZE));
 
 		if (bedBatch > 0) {
 			return Optional.of(new ProductionPlan("weaving_beds", "bed", bedBatch, Map.of("wool", bedBatch * 3, "planks", bedBatch * 3)));

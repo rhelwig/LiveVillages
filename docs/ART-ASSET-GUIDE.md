@@ -75,6 +75,14 @@ Put villager or creature textures in:
 
 Profession overlays live under `villager/profession/` and the matching `zombie_villager/profession/` folder. The current file, such as `forester.png`, is the `Tier 1` / fallback look. When a higher-tier uniform exists, add it beside the base file as `forester_tier2.png`, `forester_tier3.png`, or `forester_tier4.png`, and keep the same name in the zombie-villager folder. If a higher-tier file is missing, the game should keep using the next lower authored look.
 
+Optional 128 and 256 sheets live under `live-villages/textures/entity/scale128/` and `scale256/`, using the same relative paths (`villager/profession/forester.png`, `villager/type/plains.png`, `illager/pillager.png`). Generate them with `tmp/uniform-preview/generate_hd_entity_textures.py`. The world game rule `live-villages:villager_texture_scale` chooses which set to bind.
+
+HD profession sheets must use the real 128/256 pixel grid for narrow seams, folds, stitches, rivets, and curved or diagonal marks rather than drawing every feature in 2x2 or 4x4 logical pixels. The green-coded uniforms use `tmp/uniform-preview/reference/generated-green-uniform-detail-guide.png` as their focused reference: diagonal sash and seal plaque for the Trademaster, paired flower pockets for the Gardener, and a fitted leather vest with diagonal fastening for the Guard.
+
+Every profession also needs its own large, distance-readable signature rather than depending on color alone: job tools or emblems, portrait-derived apron/coat construction, and tier-specific trim. The Fletcher additionally uses `tmp/uniform-preview/reference/generated-fletcher-tier-guide.png`; its pointed green cap, red feather, cross straps, and arrow/fletching marks must remain readable while the fixed hat UV keeps the eyes unobstructed.
+
+Tier 1 profession sheets should retain the concept showcase's founding-workwear language: visible repairs and fraying plus stains appropriate to the job rather than uniform random noise. The enlarged reusable material reference is `tmp/uniform-preview/tier1-wear-reference.png`. Run the generator without arguments for the complete uniform set, or pass profession names (for example `forester carpenter`) to refresh only a focused subset without rewriting unrelated sheets.
+
 ### Block Models
 
 Put exported block model JSON files in:

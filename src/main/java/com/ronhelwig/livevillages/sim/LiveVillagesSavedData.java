@@ -1190,7 +1190,6 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			long taskStart = SettlementPerformanceLog.start();
-			changed |= ensureWorkforceIfNeeded(level, settlement);
 			Map<String, Integer> actualPopulation = SettlementVillagers.censusPopulation(level, settlement);
 			SettlementState workingSettlement = actualPopulation.equals(settlement.population())
 				? settlement
@@ -1347,7 +1346,7 @@ public class LiveVillagesSavedData extends SavedData {
 				.map(SettlementConstructionDelivery::villagerId)
 				.collect(java.util.stream.Collectors.toSet());
 			boolean stockChanged = false;
-			SettlementTrademasterWork.maintainLoadedTradeManagement(level, workingSettlement, activeBuildSites);
+			stockChanged |= SettlementTrademasterWork.maintainLoadedTradeManagement(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementVillagerItemPickupWork.maintainLoadedItemCollection(
 				level,
 				workingSettlement,
@@ -1355,30 +1354,48 @@ public class LiveVillagesSavedData extends SavedData {
 				activeBuildSites,
 				constructionDeliveryVillagerIds
 			);
-			SettlementButcherWork.maintainLoadedButchery(
-				level,
-				workingSettlement,
-				stock,
-				getRoutesForSettlement(workingSettlement.id()).size()
-			);
-			stockChanged |= SettlementShepherdWork.maintainLoadedShepherding(
-				level,
-				workingSettlement,
-				stock,
-				getRoutesForSettlement(workingSettlement.id()).size()
-			);
-			stockChanged |= SettlementFishermanWork.maintainLoadedFishing(level, workingSettlement, stock);
-			stockChanged |= SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
-			stockChanged |= SettlementGardenerWork.maintainLoadedGardening(level, workingSettlement, stock);
-			stockChanged |= SettlementBeekeeperWork.maintainLoadedBeekeeping(level, workingSettlement, stock);
-			stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
-			stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
-			stockChanged |= SettlementBakerWork.maintainLoadedBaking(level, workingSettlement, stock, activeBuildSites);
-			stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
-			stockChanged |= SettlementMasonWork.maintainLoadedMasonry(level, workingSettlement, stock, activeBuildSites);
+			int routeCount = getRoutesForSettlement(workingSettlement.id()).size();
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.BUTCHER)) {
+				SettlementButcherWork.maintainLoadedButchery(level, workingSettlement, stock, routeCount);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.SHEPHERD)) {
+				stockChanged |= SettlementShepherdWork.maintainLoadedShepherding(level, workingSettlement, stock, routeCount);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.FISHERMAN)) {
+				stockChanged |= SettlementFishermanWork.maintainLoadedFishing(level, workingSettlement, stock);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.FORESTER)) {
+				stockChanged |= SettlementForesterWork.maintainLoadedForestry(level, workingSettlement, stock);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.GARDENER)) {
+				stockChanged |= SettlementGardenerWork.maintainLoadedGardening(level, workingSettlement, stock);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.BEEKEEPER)
+				|| isLoadedMaintenanceDue(workingSettlement, currentTick, "beekeeper_bootstrap", 600)) {
+				stockChanged |= SettlementBeekeeperWork.maintainLoadedBeekeeping(level, workingSettlement, stock);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.MINER)) {
+				stockChanged |= SettlementMinerWork.maintainLoadedMining(level, workingSettlement, stock, activeBuildSites);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.CARPENTER)) {
+				stockChanged |= SettlementCarpenterWork.maintainLoadedCarpentry(level, workingSettlement, stock, activeBuildSites);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.BAKER)) {
+				stockChanged |= SettlementBakerWork.maintainLoadedBaking(level, workingSettlement, stock, activeBuildSites);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.FLETCHER)) {
+				stockChanged |= SettlementFletcherWork.maintainLoadedFletching(level, workingSettlement, stock, activeBuildSites);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.MASON)) {
+				stockChanged |= SettlementMasonWork.maintainLoadedMasonry(level, workingSettlement, stock, activeBuildSites);
+			}
 			stockChanged |= SettlementVanillaProfessionWork.maintainLoadedVanillaProfessionWork(level, workingSettlement, stock);
-			changed |= SettlementScribeWork.maintainLoadedScribing(level, workingSettlement, this);
-			SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.SCRIBE)) {
+				changed |= SettlementScribeWork.maintainLoadedScribing(level, workingSettlement, this);
+			}
+			if (hasLoadedRole(workingSettlement, SettlementRoleKeys.PORTMASTER)) {
+				SettlementPortmasterWork.maintainLoadedHarbor(level, workingSettlement);
+			}
 			stockChanged |= !stock.equals(workingSettlement.stock());
 			SettlementState updatedSettlement = stockChanged ? workingSettlement.withStock(stock) : workingSettlement;
 
@@ -1395,7 +1412,11 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 	}
 
-	public void maintainLoadedDefenseState(MinecraftServer server) {
+	private static boolean hasLoadedRole(SettlementState settlement, String roleKey) {
+		return settlement.population().getOrDefault(roleKey, 0) > 0;
+	}
+
+	public void maintainLoadedDefenseState(MinecraftServer server, int intervalTicks) {
 		boolean changed = false;
 		long currentTick = server.getTickCount();
 
@@ -1403,7 +1424,9 @@ public class LiveVillagesSavedData extends SavedData {
 			SettlementState settlement = entry.getValue();
 			ServerLevel level = server.getLevel(settlement.dimension());
 
-			if (level == null || !level.isLoaded(settlement.center()) || !level.isPositionEntityTicking(settlement.center()) || !SettlementVillagers.usesActualVillagers(settlement)) {
+			if (!isLoadedMaintenanceDue(settlement, currentTick, "defense", intervalTicks)
+				|| level == null || level.getDifficulty() == net.minecraft.world.Difficulty.PEACEFUL
+				|| !level.isLoaded(settlement.center()) || !level.isPositionEntityTicking(settlement.center()) || !SettlementVillagers.usesActualVillagers(settlement)) {
 				continue;
 			}
 
@@ -1445,6 +1468,10 @@ public class LiveVillagesSavedData extends SavedData {
 	public void maintainLoadedConstructionState(MinecraftServer server, int intervalTicks) {
 		boolean changed = false;
 		long currentTick = server.getTickCount();
+		int discoveryIntervalTicks = scaledPlanningInterval(server, LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS, 100);
+		int placedWorkstationDiscoveryIntervalTicks = scaledPlanningInterval(server, LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS, 300);
+		int homeIntervalTicks = scaledPlanningInterval(server, LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS, 40);
+		int roadworkIntervalTicks = scaledPlanningInterval(server, LOADED_ROADWORK_MAINTENANCE_INTERVAL_TICKS, 40);
 
 		for (Map.Entry<String, SettlementState> entry : settlements.entrySet()) {
 			SettlementState settlement = entry.getValue();
@@ -1466,13 +1493,17 @@ public class LiveVillagesSavedData extends SavedData {
 				changed |= OutpostGear.maintainOutpostEquipment(level, workingSettlement, stock) > 0;
 				List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 				boolean discoveryDue = activeBuildSites.isEmpty()
-					|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
+					|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", discoveryIntervalTicks, intervalTicks);
+				boolean placedWorkstationDiscoveryDue = activeBuildSites.isEmpty()
+					|| isThrottledConstructionStepDue(workingSettlement, currentTick, "placed_workstation_discovery", placedWorkstationDiscoveryIntervalTicks, intervalTicks);
 
 				if (discoveryDue) {
 					long discoveryStepStart = System.nanoTime();
-					SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, workingSettlement);
-					changed |= tryStartPlacedWorkstationBuildSites(level, workingSettlement, stock, placedWorkstations);
-					discoveryStepStart = warnIfConstructionDiscoverySlow("outpost_placed_workstations", workingSettlement, discoveryStepStart);
+					if (placedWorkstationDiscoveryDue) {
+						SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, workingSettlement);
+						changed |= tryStartPlacedWorkstationBuildSites(level, workingSettlement, stock, placedWorkstations);
+						discoveryStepStart = warnIfConstructionDiscoverySlow("outpost_placed_workstations", workingSettlement, discoveryStepStart);
+					}
 					changed |= retireObsoleteLoadedPalisadeWallBuildSites(level, workingSettlement);
 					warnIfConstructionDiscoverySlow("outpost_palisade_retirement", workingSettlement, discoveryStepStart);
 					activeBuildSites = getBuildSitesForSettlement(settlement.id());
@@ -1518,7 +1549,9 @@ public class LiveVillagesSavedData extends SavedData {
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
 			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			boolean discoveryDue = activeBuildSites.isEmpty()
-				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", LOADED_CONSTRUCTION_DISCOVERY_INTERVAL_TICKS);
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", discoveryIntervalTicks, intervalTicks);
+			boolean placedWorkstationDiscoveryDue = activeBuildSites.isEmpty()
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "placed_workstation_discovery", placedWorkstationDiscoveryIntervalTicks, intervalTicks);
 			boolean catchupMaterialized = false;
 
 			if (discoveryDue) {
@@ -1530,7 +1563,7 @@ public class LiveVillagesSavedData extends SavedData {
 				catchupMaterialized |= tradingPostMaterialization.materialized();
 				discoveryStepStart = warnIfConstructionDiscoverySlow("virtual_trading_post", workingSettlement, discoveryStepStart);
 
-				if (!catchupMaterialized) {
+				if (!catchupMaterialized && placedWorkstationDiscoveryDue) {
 					MaterializationResult supportMaterialization = tryMaterializeAutonomousSupportWorkstation(level, workingSettlement, stock);
 					changed |= supportMaterialization.changed();
 					catchupMaterialized |= supportMaterialization.materialized();
@@ -1559,7 +1592,7 @@ public class LiveVillagesSavedData extends SavedData {
 			}
 
 			boolean homeMaintenanceDue = activeBuildSites.isEmpty()
-				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_homes", LOADED_CONSTRUCTION_HOME_INTERVAL_TICKS);
+				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_homes", homeIntervalTicks, intervalTicks);
 
 			if (homeMaintenanceDue) {
 				long homesStart = System.nanoTime();
@@ -1578,7 +1611,7 @@ public class LiveVillagesSavedData extends SavedData {
 			);
 			long elapsedRoadworkCatchupTicks = Math.max(0L, currentTick - lastRoadworkCatchupTick);
 			boolean roadworkCatchupChanged = false;
-			boolean roadworkDue = isThrottledConstructionStepDue(workingSettlement, currentTick, "roadwork", LOADED_ROADWORK_MAINTENANCE_INTERVAL_TICKS);
+			boolean roadworkDue = isThrottledConstructionStepDue(workingSettlement, currentTick, "roadwork", roadworkIntervalTicks, intervalTicks);
 			SettlementRoadwrightWork.RoadworkResult roadworkResult = SettlementRoadwrightWork.RoadworkResult.unchanged();
 
 			if (roadworkDue && elapsedRoadworkCatchupTicks >= SettlementEconomyRules.MIN_SIMULATION_TICKS) {
@@ -1671,6 +1704,10 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 	}
 
+	private static int scaledPlanningInterval(MinecraftServer server, int baseTicks, int minimumTicks) {
+		return Math.max(minimumTicks, SettlementEconomyRules.scaledWorkerTickInterval(server, baseTicks));
+	}
+
 	private static boolean isLoadedMaintenanceDue(SettlementState settlement, long currentTick, String operationKey, int intervalTicks) {
 		if (intervalTicks <= LiveVillagesScheduler.LOADED_MAINTENANCE_CHECK_INTERVAL) {
 			return true;
@@ -1694,8 +1731,14 @@ public class LiveVillagesSavedData extends SavedData {
 		return System.nanoTime();
 	}
 
-	private static boolean isThrottledConstructionStepDue(SettlementState settlement, long currentTick, String operationKey, int intervalTicks) {
-		int stepTicks = Math.max(1, LiveVillagesScheduler.TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
+	private static boolean isThrottledConstructionStepDue(
+		SettlementState settlement,
+		long currentTick,
+		String operationKey,
+		int intervalTicks,
+		int constructionMaintenanceTicks
+	) {
+		int stepTicks = Math.max(1, constructionMaintenanceTicks);
 		int stepSlots = Math.max(1, (intervalTicks + stepTicks - 1) / stepTicks);
 		long step = Math.floorDiv(currentTick, stepTicks);
 		long phase = stableModulo(settlement.id() + "|" + operationKey, stepSlots);
@@ -1919,11 +1962,24 @@ public class LiveVillagesSavedData extends SavedData {
 		int fuelShortage = Math.max(0, 8 - stock.getOrDefault("coal", 0) - stock.getOrDefault("charcoal", 0));
 		SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, settlement);
 
-		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.FORESTER, (logShortage * 3) + plankShortage + woodDemand + 80);
-		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.CARPENTER, (plankShortage * 2) + woodworkShortage + woodDemand + 60);
-		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.MINER, (cobbleShortage * 3) + (ironShortage * 2) + (fuelShortage * 3) + stoneDemand + 55);
+		int housingBonus = SettlementEconomyRules.housingPressure(settlement) * 50;
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.FORESTER, (logShortage * 3) + plankShortage + woodDemand + housingBonus + 80);
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.CARPENTER, (plankShortage * 2) + woodworkShortage + woodDemand + housingBonus + 60);
+		addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.MINER, (cobbleShortage * 3) + (ironShortage * 2) + (fuelShortage * 3) + stoneDemand + housingBonus + 55);
+		if (settlement.totalPopulation() >= 4) {
+			int terrainBonus = SettlementTerrainAssessment.assess(level, settlement).roadwrightPriorityBonus();
+			addAutonomousSupportNeed(needs, settlement, placedWorkstations, AutonomousSupportType.ROADWRIGHT, 76 + settlement.totalPopulation() + terrainBonus);
+		}
 		needs.sort((left, right) -> Integer.compare(right.score(), left.score()));
 		return needs;
+	}
+
+	public boolean shouldPreferDualUseWorkshopHousing(ServerLevel level, SettlementState settlement) {
+		if (level == null || settlement.totalPopulation() < 4) {
+			return false;
+		}
+
+		return !autonomousSupportNeeds(level, settlement, settlement.stock()).isEmpty();
 	}
 
 	private void addAutonomousSupportNeed(
@@ -1969,6 +2025,8 @@ public class LiveVillagesSavedData extends SavedData {
 				|| !placedWorkstations.foresterTables().isEmpty();
 			case MINER -> findBuildSite(settlement.id(), SettlementBuildSiteType.MINE_ENTRANCE).isPresent()
 				|| !placedWorkstations.minerWorkstations().isEmpty();
+			case ROADWRIGHT -> findBuildSite(settlement.id(), SettlementBuildSiteType.ROADWRIGHT_WORKSHOP).isPresent()
+				|| !placedWorkstations.surveyorTables().isEmpty();
 		};
 	}
 
@@ -2114,6 +2172,7 @@ public class LiveVillagesSavedData extends SavedData {
 			case CARPENTER -> LiveVillagesBlocks.CARPENTER_BENCH.defaultBlockState();
 			case FORESTER -> LiveVillagesBlocks.FORESTER_TABLE.defaultBlockState();
 			case MINER -> LiveVillagesBlocks.MINER_WORKSTATION.defaultBlockState();
+			case ROADWRIGHT -> LiveVillagesBlocks.SURVEYOR_TABLE.defaultBlockState();
 		};
 	}
 
@@ -2142,6 +2201,14 @@ public class LiveVillagesSavedData extends SavedData {
 				Optional.empty()
 			);
 			case MINER -> SettlementConstruction.tryStartMineEntranceAtWorkstation(
+				level,
+				site.pos(),
+				site.facing(),
+				settlement.id(),
+				stock,
+				Optional.empty()
+			);
+			case ROADWRIGHT -> SettlementConstruction.tryStartRoadwrightWorkshopAtWorkstation(
 				level,
 				site.pos(),
 				site.facing(),
@@ -3462,7 +3529,7 @@ public class LiveVillagesSavedData extends SavedData {
 				break;
 			}
 
-			if (!SettlementVillagers.spawnVillager(level, spawnPos.get())) {
+			if (SettlementVillagers.spawnPersistentVillager(level, spawnPos.get(), settlement.id()).isEmpty()) {
 				LiveVillages.LOGGER.info(
 					"Settlement villager spawn failed: settlement={} reason=entity_rejected spawnPos={} requested={} spawned={}",
 					settlement.id(),
@@ -3534,7 +3601,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private enum AutonomousSupportType {
 		FORESTER("Forester's Workshop", 80),
 		CARPENTER("Carpenter's Workshop", 70),
-		MINER("Mine Entrance", 75);
+		MINER("Mine Entrance", 75),
+		ROADWRIGHT("Roadwright's Workshop", 75);
 
 		private final String structureLabel;
 		private final int minimumScore;

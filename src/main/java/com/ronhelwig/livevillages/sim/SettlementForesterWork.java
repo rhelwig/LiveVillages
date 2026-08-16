@@ -41,11 +41,13 @@ public final class SettlementForesterWork {
 	private static final int SAPLING_TO_SAPLING_CLEARANCE_BLOCKS = 3;
 	private static final int SAPLING_TO_TREE_CLEARANCE_BLOCKS = 4;
 	private static final int MAX_LOGS_PER_TREE = 48;
+	private static final int SEARCH_RINGS_PER_DECISION = 2;
 	private static final long FORESTRY_TASK_CACHE_TICKS = 200L;
 	private static final long FORESTRY_DECIDE_INTERVAL_TICKS = 320L;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, CachedForestryTask> FORESTRY_TASK_CACHE = new HashMap<>();
+	private static final Map<String, Integer> SHARED_SEARCH_RING = new HashMap<>();
 
 	private SettlementForesterWork() {
 	}
@@ -164,6 +166,7 @@ public final class SettlementForesterWork {
 		}
 
 		Optional<ForestryTask> task = nearestCollectableItemTask(level, settlement, forester)
+			.or(() -> nearestPlannedSiteTreeTask(level, settlement, forester))
 			.or(() -> nearestPlantTask(level, settlement, stock, forester, tick))
 			.or(() -> nearestTreeTask(level, settlement, stock, forester, tick));
 		FORESTRY_TASK_CACHE.put(cacheKey, new CachedForestryTask(task, tick));
@@ -186,7 +189,41 @@ public final class SettlementForesterWork {
 				yield seedlingState != null && stock.getOrDefault(task.seedlingGoods(), 0) > seedlingReserve(task.seedlingGoods()) && canPlantSeedling(level, task.workPos(), seedlingState);
 			}
 			case CHOP_TREE -> level.hasChunkAt(task.workPos()) && isLog(level.getBlockState(task.workPos())) && stock.getOrDefault(task.seedlingGoods(), 0) >= (task.seedlingGoods().equals("dark_oak_sapling") ? 4 : 1);
+			case CLEAR_SITE_TREE -> level.hasChunkAt(task.workPos()) && isLog(level.getBlockState(task.workPos()));
 		};
+	}
+
+	private static Optional<ForestryTask> nearestPlannedSiteTreeTask(ServerLevel level, SettlementState settlement, Villager forester) {
+		ForestryTask bestTask = null;
+		double bestDistanceSquared = Double.POSITIVE_INFINITY;
+		for (SettlementBuildSite buildSite : LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())) {
+			if (buildSite.complete()) {
+				continue;
+			}
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				if (blockPos.isEmpty() || !isLog(level.getBlockState(blockPos.get()))) {
+					continue;
+				}
+				BlockPos treeBase = blockPos.get();
+				while (treeBase.getY() > level.getMinY() && isLog(level.getBlockState(treeBase.below()))) {
+					treeBase = treeBase.below();
+				}
+				if (!isNaturalTreeBase(level, treeBase) || !hasNearbyLeaves(level, treeBase)) {
+					continue;
+				}
+				Optional<BlockPos> standPos = standableAround(level, treeBase);
+				if (standPos.isEmpty()) {
+					continue;
+				}
+				double distanceSquared = standPos.get().distSqr(forester.blockPosition());
+				if (bestTask == null || distanceSquared < bestDistanceSquared) {
+					bestTask = new ForestryTask(ForestryAction.CLEAR_SITE_TREE, treeBase, standPos.get(), "", -1, "clearing_planned_site");
+					bestDistanceSquared = distanceSquared;
+				}
+			}
+		}
+		return Optional.ofNullable(bestTask);
 	}
 
 	private static Optional<ForestryTask> nearestCollectableItemTask(ServerLevel level, SettlementState settlement, Villager forester) {
@@ -253,11 +290,12 @@ public final class SettlementForesterWork {
 		BlockPos bestStandPos = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 		int radius = Math.min(112, workRadius(settlement));
-		int offset = Math.floorMod((int) (tick / 20L), PLANT_SCAN_STEP_BLOCKS);
 		List<PlantingStructureBounds> protectedStructureBounds = plantingStructureBounds(level, settlement);
+		String searchKey = forestrySearchKey(settlement, "plant");
 
-		for (int x = origin.getX() - radius + offset; x <= origin.getX() + radius; x += PLANT_SCAN_STEP_BLOCKS) {
-			for (int z = origin.getZ() - radius + offset; z <= origin.getZ() + radius; z += PLANT_SCAN_STEP_BLOCKS) {
+		for (SearchOffset searchOffset : nextSharedSearchBand(searchKey, PLANT_SCAN_STEP_BLOCKS, radius)) {
+			int x = origin.getX() + searchOffset.x();
+			int z = origin.getZ() + searchOffset.z();
 				Optional<BlockPos> plantPos = surfacePlantPos(level, x, z, seedlingState);
 
 				if (plantPos.isEmpty() || !isPreferredPlantingArea(settlement, plantPos.get())) {
@@ -291,12 +329,14 @@ public final class SettlementForesterWork {
 					bestStandPos = standPos.get();
 					bestDistanceSquared = distanceSquared;
 				}
-			}
 		}
 
-		return bestPlantPos == null
-			? Optional.empty()
-			: Optional.of(new ForestryTask(ForestryAction.PLANT_SEEDLING, bestPlantPos, bestStandPos, seedlingGoods, -1, "planting_seedlings"));
+		if (bestPlantPos == null) {
+			return Optional.empty();
+		}
+
+		SHARED_SEARCH_RING.put(searchKey, 0);
+		return Optional.of(new ForestryTask(ForestryAction.PLANT_SEEDLING, bestPlantPos, bestStandPos, seedlingGoods, -1, "planting_seedlings"));
 	}
 
 	private static Optional<ForestryTask> nearestTreeTask(
@@ -316,10 +356,11 @@ public final class SettlementForesterWork {
 		String bestSeedlingGoods = "";
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 		int radius = Math.min(128, workRadius(settlement));
-		int offset = Math.floorMod((int) (tick / 20L), TREE_SCAN_STEP_BLOCKS);
+		String searchKey = forestrySearchKey(settlement, "tree");
 
-		for (int x = origin.getX() - radius + offset; x <= origin.getX() + radius; x += TREE_SCAN_STEP_BLOCKS) {
-			for (int z = origin.getZ() - radius + offset; z <= origin.getZ() + radius; z += TREE_SCAN_STEP_BLOCKS) {
+		for (SearchOffset searchOffset : nextSharedSearchBand(searchKey, TREE_SCAN_STEP_BLOCKS, radius)) {
+			int x = origin.getX() + searchOffset.x();
+			int z = origin.getZ() + searchOffset.z();
 				Optional<BlockPos> treeBase = surfaceTreeBase(level, x, z);
 
 				if (treeBase.isEmpty() || !isCuttableTree(level, settlement, treeBase.get())) {
@@ -349,12 +390,46 @@ public final class SettlementForesterWork {
 					bestSeedlingGoods = seedlingGoods;
 					bestDistanceSquared = distanceSquared;
 				}
-			}
 		}
 
-		return bestTreePos == null
-			? Optional.empty()
-			: Optional.of(new ForestryTask(ForestryAction.CHOP_TREE, bestTreePos, bestStandPos, bestSeedlingGoods, -1, "cutting_trees"));
+		if (bestTreePos == null) {
+			return Optional.empty();
+		}
+
+		SHARED_SEARCH_RING.put(searchKey, 0);
+		return Optional.of(new ForestryTask(ForestryAction.CHOP_TREE, bestTreePos, bestStandPos, bestSeedlingGoods, -1, "cutting_trees"));
+	}
+
+	private static String forestrySearchKey(SettlementState settlement, String purpose) {
+		return settlement.dimension().identifier() + "|" + settlement.id() + "|" + purpose;
+	}
+
+	private static List<SearchOffset> nextSharedSearchBand(String key, int step, int maxRadius) {
+		int radius = Math.min(maxRadius, Math.max(0, SHARED_SEARCH_RING.getOrDefault(key, 0)));
+		List<SearchOffset> offsets = new java.util.ArrayList<>();
+		for (int ring = 0; ring < SEARCH_RINGS_PER_DECISION; ring++) {
+			offsets.addAll(searchRing(radius, step));
+			radius = radius >= maxRadius ? 0 : Math.min(maxRadius, radius + step);
+		}
+		SHARED_SEARCH_RING.put(key, radius);
+		return offsets;
+	}
+
+	private static List<SearchOffset> searchRing(int radius, int step) {
+		if (radius <= 0) {
+			return List.of(new SearchOffset(0, 0));
+		}
+
+		List<SearchOffset> offsets = new java.util.ArrayList<>((radius * 8 / step) + 4);
+		for (int offset = -radius; offset <= radius; offset += step) {
+			offsets.add(new SearchOffset(offset, -radius));
+			offsets.add(new SearchOffset(offset, radius));
+		}
+		for (int offset = -radius + step; offset <= radius - step; offset += step) {
+			offsets.add(new SearchOffset(-radius, offset));
+			offsets.add(new SearchOffset(radius, offset));
+		}
+		return offsets;
 	}
 
 	private static boolean performForestryTask(
@@ -369,6 +444,7 @@ public final class SettlementForesterWork {
 			case COLLECT_DROP -> collectDrop(level, forester, task.entityId());
 			case PLANT_SEEDLING -> plantSeedling(level, settlement, stock, forester, task.workPos(), task.seedlingGoods());
 			case CHOP_TREE -> chopTree(level, settlement, stock, forester, task.workPos(), task.seedlingGoods());
+			case CLEAR_SITE_TREE -> clearPlannedSiteTree(level, settlement, stock, forester, task.workPos());
 		};
 
 		if (completed) {
@@ -432,6 +508,24 @@ public final class SettlementForesterWork {
 
 		level.setBlock(plantPos, seedlingState, BLOCK_UPDATE_FLAGS);
 		return true;
+	}
+
+	private static boolean clearPlannedSiteTree(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, Villager forester, BlockPos treeBase) {
+		if (!isLog(level.getBlockState(treeBase)) || !isNaturalTreeBase(level, treeBase)) {
+			return false;
+		}
+		Set<BlockPos> logs = connectedTreeLogs(level, treeBase);
+		for (BlockPos logPos : logs) {
+			BlockState logState = level.getBlockState(logPos);
+			if (!isLog(logState)) {
+				continue;
+			}
+			level.levelEvent(2001, logPos, Block.getId(logState));
+			level.setBlock(logPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+			SettlementGoods.addGoods(stock, "logs", 1);
+			SettlementProfessionReports.recordHarvestedBlock(level, settlement, SettlementRoleKeys.FORESTER, forester, logState, Map.of("logs", 1));
+		}
+		return !logs.isEmpty();
 	}
 
 	private static boolean chopTree(
@@ -956,7 +1050,8 @@ public final class SettlementForesterWork {
 	private enum ForestryAction {
 		COLLECT_DROP,
 		PLANT_SEEDLING,
-		CHOP_TREE
+		CHOP_TREE,
+		CLEAR_SITE_TREE
 	}
 
 	private record ForestryTask(
@@ -973,6 +1068,9 @@ public final class SettlementForesterWork {
 	}
 
 	private record CachedForestryTask(Optional<ForestryTask> task, long tick) {
+	}
+
+	private record SearchOffset(int x, int z) {
 	}
 
 	private record PlantingStructureBounds(int minX, int maxX, int minZ, int maxZ) {

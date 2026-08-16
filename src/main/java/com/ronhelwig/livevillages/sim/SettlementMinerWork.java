@@ -49,7 +49,7 @@ public final class SettlementMinerWork {
 	private static final long MINING_DECIDE_INTERVAL_TICKS = 40L;
 	private static final int MAX_MINER_TASKS_PER_PASS = 8;
 	private static final int ADJACENT_VEIN_SEARCH_RADIUS_BLOCKS = 3;
-	private static final int MAX_MINER_COMPLETED_TASKS_PER_DAY = SettlementEconomyRules.scaledWorkerDailyUnits(48);
+	private static final int BASE_MAX_MINER_COMPLETED_TASKS_PER_DAY = 48;
 	private static final int MAX_SHAFT_DEPTH_BLOCKS = 96;
 	private static final int MAX_CAVE_SCAN_RADIUS_BLOCKS = 10;
 	private static final int MAX_CAVE_SCAN_AIR_CELLS = 96;
@@ -196,7 +196,8 @@ public final class SettlementMinerWork {
 			}
 
 			int tasksThisPass = 0;
-			while (tasksThisPass < MAX_MINER_TASKS_PER_PASS && completedMinerActionsToday(level, miner) < MAX_MINER_COMPLETED_TASKS_PER_DAY) {
+			int maxMinerCompletedTasksPerDay = SettlementEconomyRules.scaledWorkerDailyUnits(level, BASE_MAX_MINER_COMPLETED_TASKS_PER_DAY);
+			while (tasksThisPass < MAX_MINER_TASKS_PER_PASS && completedMinerActionsToday(level, miner) < maxMinerCompletedTasksPerDay) {
 				if (activeWork == null) {
 					if (!decideTurn) {
 						break;
@@ -246,7 +247,7 @@ public final class SettlementMinerWork {
 				activeWork = null;
 			}
 
-			if (completedMinerActionsToday(level, miner) >= MAX_MINER_COMPLETED_TASKS_PER_DAY) {
+			if (completedMinerActionsToday(level, miner) >= maxMinerCompletedTasksPerDay) {
 				SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.MINER, "daily_cap_reached", "villager=" + miner.getUUID() + " completed=" + completedMinerActionsToday(level, miner));
 			}
 		}

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Difficulty;
 
 public final class SettlementEconomySimulator {
 	private static final List<String> FOOD_PRIORITY = List.of(
@@ -137,6 +138,15 @@ public final class SettlementEconomySimulator {
 			elapsedDays
 		);
 		double growthProgress = growthResult.progress();
+		int requestedVillagerSpawns = growthResult.requestedVillagerSpawns();
+		if (requestedVillagerSpawns <= 0
+			&& loadedSettlement
+			&& level != null
+			&& SettlementVillagers.usesActualVillagers(settlement)
+			&& projectResult.housingCapacity() > population
+			&& needsStaffingSpawn(level, settlement, nearbyProfessions)) {
+			requestedVillagerSpawns = 1;
+		}
 
 		cleanMap(stock);
 		cleanMap(wealth);
@@ -154,7 +164,25 @@ public final class SettlementEconomySimulator {
 			projectResult.projects(),
 			currentTick
 		);
-		return new SimulationResult(updatedSettlement, projectResult.createdRoutes(), growthResult.requestedVillagerSpawns());
+		return new SimulationResult(updatedSettlement, projectResult.createdRoutes(), requestedVillagerSpawns);
+	}
+
+	private static boolean needsStaffingSpawn(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> census
+	) {
+		if (census.getOrDefault(SettlementRoleKeys.UNEMPLOYED, 0) > 0) {
+			return false;
+		}
+
+		if (census.getOrDefault(SettlementRoleKeys.BEEKEEPER, 0) <= 0
+			&& !SettlementConstruction.findPlacedHoneySeparators(level, settlement).isEmpty()) {
+			return true;
+		}
+
+		return census.getOrDefault(SettlementRoleKeys.FARMER, 0) <= 0
+			&& !SettlementConstruction.findPlacedComposters(level, settlement).isEmpty();
 	}
 
 	private static void applyProduction(
@@ -440,7 +468,11 @@ public final class SettlementEconomySimulator {
 
 		int population = settlement.totalPopulation();
 		int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity()) + infrastructure.incompleteHousingCapacity();
-		boolean needsHousing = population > 0 && effectiveHousing < population + 1;
+		int desiredHousing = desiredGrowthHousingCapacity(settlement);
+		boolean needsHousing = population > 0 && effectiveHousing < desiredHousing;
+		boolean preferDualUseWorkshopHousing = level != null
+			&& infrastructure.incompleteHousingCapacity() <= 0
+			&& LiveVillagesSavedData.get(level.getServer()).shouldPreferDualUseWorkshopHousing(level, settlement);
 
 		if (infrastructure.available()) {
 			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
@@ -454,7 +486,7 @@ public final class SettlementEconomySimulator {
 			projects.add(new SettlementProject(nextProjectId(projects, "trading-post"), SettlementProjectType.TRADING_POST, "", 0.0D, 0.35D));
 		}
 
-		if (needsHousing && !hasProjectType(projects, SettlementProjectType.HOUSING)) {
+		if (needsHousing && !preferDualUseWorkshopHousing && !hasProjectType(projects, SettlementProjectType.HOUSING)) {
 			projects.add(new SettlementProject(nextProjectId(projects, "housing"), SettlementProjectType.HOUSING, "", 0.0D, 1.2D));
 		}
 
@@ -466,37 +498,47 @@ public final class SettlementEconomySimulator {
 			projects.add(new SettlementProject(nextProjectId(projects, "carpenter-workshop"), SettlementProjectType.CARPENTER_WORKSHOP, "", 0.0D, 0.65D));
 		}
 
-		if (infrastructure.available() && !needsHousing) {
+		if (infrastructure.available()) {
 			int desiredFarmSites = SettlementConstruction.desiredFarmSites(settlement, infrastructure.farmAreas());
 			int pendingFarmStarterAnchors = level == null ? 0 : SettlementConstruction.pendingFarmStarterAnchors(level, settlement);
+			int plannedFarms = infrastructure.coveredFarmAreas() + pendingFarmStarterAnchors
+				+ countProjectType(projects, SettlementProjectType.COMPOSTER);
+			// Keep one starter farm moving even while housing is short so villages
+			// are not stuck with no farmers and therefore no later farm demand.
+			boolean allowStarterFarm = plannedFarms < 1 && desiredFarmSites > 0;
+			boolean allowExtraFarms = !needsHousing && desiredFarmSites > plannedFarms;
 
-			if (desiredFarmSites > 0
-				&& infrastructure.coveredFarmAreas() + pendingFarmStarterAnchors + countProjectType(projects, SettlementProjectType.COMPOSTER) < desiredFarmSites) {
+			if (allowStarterFarm || allowExtraFarms) {
 				projects.add(new SettlementProject(nextProjectId(projects, "composter"), SettlementProjectType.COMPOSTER, "", 0.0D, 0.55D));
 			}
 
-			int totalStock = settlement.stock().values().stream()
-				.mapToInt(Integer::intValue)
-				.sum();
+			if (!needsHousing) {
+				int totalStock = settlement.stock().values().stream()
+					.mapToInt(Integer::intValue)
+					.sum();
 
-			if (totalStock >= 48 && infrastructure.storageBlocks() + countProjectType(projects, SettlementProjectType.STORAGE) < 1) {
-				projects.add(new SettlementProject(nextProjectId(projects, "storage"), SettlementProjectType.STORAGE, "", 0.0D, 0.7D));
-			}
+				if (totalStock >= 48 && infrastructure.storageBlocks() + countProjectType(projects, SettlementProjectType.STORAGE) < 1) {
+					projects.add(new SettlementProject(nextProjectId(projects, "storage"), SettlementProjectType.STORAGE, "", 0.0D, 0.7D));
+				}
 
 				if (infrastructure.hasLargeWaterBody() && infrastructure.docks() + infrastructure.incompleteDocks() + countProjectType(projects, SettlementProjectType.DOCK) < 1) {
 					projects.add(new SettlementProject(nextProjectId(projects, "dock"), SettlementProjectType.DOCK, "", 0.0D, 0.85D));
 				}
 
-			if (infrastructure.hasLargeWaterBody()
-				&& infrastructure.docks() > 0
-				&& population >= 6
-				&& infrastructure.lighthouses() + infrastructure.incompleteLighthouses() + countProjectType(projects, SettlementProjectType.LIGHTHOUSE) < 1) {
-				projects.add(new SettlementProject(nextProjectId(projects, "lighthouse"), SettlementProjectType.LIGHTHOUSE, "", 0.0D, 1.1D));
+				if (infrastructure.hasLargeWaterBody()
+					&& infrastructure.docks() > 0
+					&& population >= 6
+					&& infrastructure.lighthouses() + infrastructure.incompleteLighthouses() + countProjectType(projects, SettlementProjectType.LIGHTHOUSE) < 1) {
+					projects.add(new SettlementProject(nextProjectId(projects, "lighthouse"), SettlementProjectType.LIGHTHOUSE, "", 0.0D, 1.1D));
+				}
 			}
 		}
 
-		boolean needsDefenseRecovery = settlement.security() < 0.45D;
-		if (population >= 3 && (settlement.defenseLevel() < desiredDefenseLevel(population) || needsDefenseRecovery) && !hasProjectType(projects, SettlementProjectType.DEFENSE)) {
+		Difficulty difficulty = level == null ? Difficulty.NORMAL : level.getDifficulty();
+		boolean needsDefenseRecovery = settlement.security() < defenseRecoveryThreshold(difficulty);
+		if (population >= minimumDefensePopulation(difficulty)
+			&& (settlement.defenseLevel() < desiredDefenseLevel(population, difficulty) || needsDefenseRecovery)
+			&& !hasProjectType(projects, SettlementProjectType.DEFENSE)) {
 			projects.add(new SettlementProject(nextProjectId(projects, "defense"), SettlementProjectType.DEFENSE, "", 0.0D, 0.8D));
 		}
 
@@ -609,7 +651,7 @@ public final class SettlementEconomySimulator {
 
 		for (SettlementProject project : projects) {
 			boolean wasComplete = project.progress() + 1.0E-6D >= project.requiredProgress();
-			double newProgress = Math.min(project.requiredProgress(), project.progress() + (projectWorkRate(settlement, project.type()) * elapsedDays));
+			double newProgress = Math.min(project.requiredProgress(), project.progress() + (projectWorkRate(level, settlement, project.type()) * elapsedDays));
 			SettlementProject progressed = project.withProgress(newProgress);
 
 			if (newProgress + 1.0E-6D < project.requiredProgress()) {
@@ -635,6 +677,12 @@ public final class SettlementEconomySimulator {
 				}
 				case HOUSING -> {
 					if (useWorldConstruction) {
+						if (infrastructure.incompleteHousingCapacity() <= 0
+							&& LiveVillagesSavedData.get(level.getServer()).shouldPreferDualUseWorkshopHousing(level, settlement)) {
+							remainingProjects.add(progressed);
+							continue;
+						}
+
 						if (infrastructure.incompleteHousingCapacity() > 0) {
 							int effectiveHousing = Math.max(settlement.housingCapacity(), infrastructure.housingCapacity())
 								+ infrastructure.incompleteHousingCapacity();
@@ -1036,7 +1084,43 @@ public final class SettlementEconomySimulator {
 		return Math.max(1, (int) Math.ceil(population / 6.0D));
 	}
 
-	private static double projectWorkRate(SettlementState settlement, SettlementProjectType type) {
+	public static int desiredDefenseLevel(int population, Difficulty difficulty) {
+		int peoplePerDefenseLevel = switch (difficulty) {
+			case PEACEFUL -> 12;
+			case EASY -> 8;
+			case HARD -> 5;
+			default -> 6;
+		};
+		return Math.max(1, (int) Math.ceil(Math.max(0, population) / (double) peoplePerDefenseLevel));
+	}
+
+	public static int minimumDefensePopulation(Difficulty difficulty) {
+		return switch (difficulty) {
+			case PEACEFUL -> 8;
+			case EASY -> 5;
+			default -> 3;
+		};
+	}
+
+	private static double defenseRecoveryThreshold(Difficulty difficulty) {
+		return switch (difficulty) {
+			case PEACEFUL -> 0.25D;
+			case EASY -> 0.35D;
+			case HARD -> 0.55D;
+			default -> 0.45D;
+		};
+	}
+
+	public static int desiredGrowthHousingCapacity(SettlementState settlement) {
+		int population = settlement.totalPopulation();
+		if (settlement.kind() == SettlementKind.OUTPOST || population <= 0) {
+			return Math.max(0, settlement.housingCapacity());
+		}
+
+		return Math.min(SettlementTiers.nextPopulationGoal(settlement), population + 4);
+	}
+
+	private static double projectWorkRate(ServerLevel level, SettlementState settlement, SettlementProjectType type) {
 		int carpenters = roleCount(settlement, SettlementRoleKeys.CARPENTER);
 		int masons = roleCount(settlement, SettlementRoleKeys.MASON);
 		int constructionSupport = roleCount(settlement, SettlementRoleKeys.CONSTRUCTION_SUPPORT);
@@ -1048,7 +1132,7 @@ public final class SettlementEconomySimulator {
 		double woodConstruction = carpenters * 1.5D + constructionSupport * 1.3D;
 		double stoneConstruction = masons * 1.4D + constructionSupport * 1.0D;
 
-		return SettlementEconomyRules.scaledWorkerDailyRate(switch (type) {
+		return SettlementEconomyRules.scaledWorkerDailyRate(level, switch (type) {
 			case TRADING_POST -> Math.max(0.8D, baseLabor + woodConstruction + stoneConstruction * 0.35D + unemployed * 0.8D + trademasters * 1.2D);
 			case HOUSING -> Math.max(0.6D, baseLabor + woodConstruction + stoneConstruction * 0.8D + unemployed * 0.7D + trademasters * 0.8D);
 			case CARPENTER_WORKSHOP, COMPOSTER, STORAGE, DOCK -> Math.max(0.5D, baseLabor + woodConstruction + stoneConstruction * 0.45D + unemployed * 0.5D + trademasters * 0.6D);

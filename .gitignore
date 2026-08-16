@@ -43,3 +43,8 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# python
+
+__pycache__/
+*.py[cod]

@@ -100,7 +100,6 @@ public final class VillageAutodetector {
 
 	private static void registerVillageFromChunk(ServerLevel level, ChunkPos chunkPos, long currentTick) {
 		PoiManager poiManager = level.getPoiManager();
-		poiManager.ensureLoadedAndValid(level, chunkPos.getMiddleBlockPosition(64), VILLAGE_SCAN_RADIUS_BLOCKS);
 		List<BlockPos> meetingPoints = poiManager.getInChunk(MEETING_POI, chunkPos, PoiManager.Occupancy.ANY)
 			.map(PoiRecord::getPos)
 			.toList();

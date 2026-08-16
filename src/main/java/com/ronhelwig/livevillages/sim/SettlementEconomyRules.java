@@ -5,12 +5,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.IntUnaryOperator;
 
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+
+import com.ronhelwig.livevillages.LiveVillagesGameRules;
+
 public final class SettlementEconomyRules {
 	public static final double TICKS_PER_DAY = 24_000.0D;
 	public static final long MIN_SIMULATION_TICKS = 6_000L;
 	public static final double MAX_CATCH_UP_DAYS = 5.0D;
-	// Temporary playtest tuning: keep visible worker loops moving faster until major systems settle down.
-	public static final double WORKER_PRODUCTIVITY_MULTIPLIER = 2.0D;
+	public static final double DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER = 2.0D;
+	public static final double MIN_WORKER_PRODUCTIVITY_MULTIPLIER = 0.25D;
+	public static final double MAX_WORKER_PRODUCTIVITY_MULTIPLIER = 50.0D;
 	private static final List<String> FOOD_GOODS = List.of(
 		"bread",
 		"baked_potato",
@@ -144,20 +150,44 @@ public final class SettlementEconomyRules {
 		return TARGET_RULES;
 	}
 
+	public static double sanitizeWorkerProductivityMultiplier(double multiplier) {
+		if (!Double.isFinite(multiplier) || multiplier <= 0.0D) {
+			return DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER;
+		}
+
+		return Math.min(MAX_WORKER_PRODUCTIVITY_MULTIPLIER, Math.max(MIN_WORKER_PRODUCTIVITY_MULTIPLIER, multiplier));
+	}
+
 	public static int scaledWorkerTickInterval(int baseTicks) {
+		return scaledWorkerTickInterval(baseTicks, DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER);
+	}
+
+	public static int scaledWorkerTickInterval(MinecraftServer server, int baseTicks) {
+		return scaledWorkerTickInterval(baseTicks, LiveVillagesGameRules.workerProductivityMultiplier(server));
+	}
+
+	public static int scaledWorkerTickInterval(int baseTicks, double multiplier) {
 		if (baseTicks <= 0) {
 			return 1;
 		}
 
-		return Math.max(20, (int) Math.round(baseTicks / WORKER_PRODUCTIVITY_MULTIPLIER));
+		return Math.max(4, (int) Math.round(baseTicks / sanitizeWorkerProductivityMultiplier(multiplier)));
 	}
 
 	public static int scaledWorkerDailyUnits(int baseUnits) {
+		return scaledWorkerDailyUnits(baseUnits, DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER);
+	}
+
+	public static int scaledWorkerDailyUnits(ServerLevel level, int baseUnits) {
+		return scaledWorkerDailyUnits(baseUnits, LiveVillagesGameRules.workerProductivityMultiplier(level));
+	}
+
+	public static int scaledWorkerDailyUnits(int baseUnits, double multiplier) {
 		if (baseUnits <= 0) {
 			return 0;
 		}
 
-		return Math.max(1, (int) Math.round(baseUnits * WORKER_PRODUCTIVITY_MULTIPLIER));
+		return Math.max(1, (int) Math.round(baseUnits * sanitizeWorkerProductivityMultiplier(multiplier)));
 	}
 
 	public static int scaledPeriodicAmount(String key, double dailyRate, long previousTick, long currentTick) {
@@ -172,7 +202,15 @@ public final class SettlementEconomyRules {
 	}
 
 	public static double scaledWorkerDailyRate(double baseRate) {
-		return baseRate <= 0.0D ? 0.0D : baseRate * WORKER_PRODUCTIVITY_MULTIPLIER;
+		return scaledWorkerDailyRate(baseRate, DEFAULT_WORKER_PRODUCTIVITY_MULTIPLIER);
+	}
+
+	public static double scaledWorkerDailyRate(ServerLevel level, double baseRate) {
+		return scaledWorkerDailyRate(baseRate, LiveVillagesGameRules.workerProductivityMultiplier(level));
+	}
+
+	public static double scaledWorkerDailyRate(double baseRate, double multiplier) {
+		return baseRate <= 0.0D ? 0.0D : baseRate * sanitizeWorkerProductivityMultiplier(multiplier);
 	}
 
 	private static double stableUnitPhase(String key) {
@@ -569,20 +607,37 @@ public final class SettlementEconomyRules {
 		return demand;
 	}
 
-	private static boolean needsHousingProject(SettlementState settlement) {
-		return settlement.totalPopulation() > 0 && settlement.housingCapacity() < settlement.totalPopulation() + 1;
-	}
-
-	private static int housingReserveForGoods(SettlementState settlement, String goodsKey) {
-		if (!goodsKey.equals("bed") || settlement.kind() == SettlementKind.OUTPOST || settlement.totalPopulation() <= 0) {
+	public static int housingPressure(SettlementState settlement) {
+		if (settlement.kind() == SettlementKind.OUTPOST || settlement.totalPopulation() <= 0) {
 			return 0;
 		}
 
 		return Math.max(0, settlement.totalPopulation() + 1 - settlement.housingCapacity());
 	}
 
+	private static boolean needsHousingProject(SettlementState settlement) {
+		return housingPressure(settlement) > 0;
+	}
+
+	private static int housingReserveForGoods(SettlementState settlement, String goodsKey) {
+		if (!goodsKey.equals("bed")) {
+			return 0;
+		}
+
+		return housingPressure(settlement);
+	}
+
 	private static boolean needsComposterProject(SettlementState settlement) {
-		return settlement.population().getOrDefault("farmer", 0) > 0 && settlement.housingCapacity() >= settlement.totalPopulation() + 1;
+		if (settlement.totalPopulation() <= 0) {
+			return false;
+		}
+
+		int farmers = settlement.population().getOrDefault(SettlementRoleKeys.FARMER, 0);
+		if (farmers <= 0) {
+			return true;
+		}
+
+		return settlement.housingCapacity() >= settlement.totalPopulation();
 	}
 
 	private static boolean needsStorageProject(SettlementState settlement) {

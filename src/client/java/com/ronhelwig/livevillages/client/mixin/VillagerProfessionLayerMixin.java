@@ -16,8 +16,7 @@ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.resources.Identifier;
 
 import com.ronhelwig.livevillages.client.render.CivicTierRenderState;
-import com.ronhelwig.livevillages.client.render.ProfessionOverlayTextures;
-import com.ronhelwig.livevillages.sim.SettlementProfessionUniforms;
+import com.ronhelwig.livevillages.client.render.VillagerTextureScaleClient;
 import com.ronhelwig.livevillages.sim.SettlementTiers;
 
 @Mixin(VillagerProfessionLayer.class)
@@ -64,10 +63,27 @@ public abstract class VillagerProfessionLayerMixin {
 			return;
 		}
 
-		cir.setReturnValue(SettlementProfessionUniforms.resolveOverlay(
+		cir.setReturnValue(VillagerTextureScaleClient.resolve(
 			cir.getReturnValue(),
-			LIVE_VILLAGES$CIVIC_TIER.get(),
-			ProfessionOverlayTextures::exists
+			LIVE_VILLAGES$CIVIC_TIER.get()
 		));
+	}
+
+	@Inject(
+		method = "getIdentifier(Ljava/lang/String;Lnet/minecraft/core/Holder;)Lnet/minecraft/resources/Identifier;",
+		at = @At("RETURN"),
+		cancellable = true
+	)
+	private void livevillages$useScaledProfessionOverlay(
+		String folder,
+		net.minecraft.core.Holder<?> holder,
+		CallbackInfoReturnable<Identifier> cir
+	) {
+		if (cir.getReturnValue() == null) {
+			return;
+		}
+
+		int tier = "profession".equals(folder) ? LIVE_VILLAGES$CIVIC_TIER.get() : SettlementTiers.MIN_TIER;
+		cir.setReturnValue(VillagerTextureScaleClient.resolve(cir.getReturnValue(), tier));
 	}
 }

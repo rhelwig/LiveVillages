@@ -392,16 +392,16 @@ public final class SettlementFarmerWork {
 			return pickupTask;
 		}
 
-		GardenTask leafLitterBlockTask = nearestLeafLitterBlockTask(level, garden, farmerPos);
-
-		if (leafLitterBlockTask != null) {
-			return leafLitterBlockTask;
-		}
-
 		GardenTask plantTask = nearestPlantTask(level, settlement, stock, garden, farmerPos);
 
 		if (plantTask != null) {
 			return plantTask;
+		}
+
+		GardenTask leafLitterBlockTask = nearestLeafLitterBlockTask(level, garden, farmerPos);
+
+		if (leafLitterBlockTask != null) {
+			return leafLitterBlockTask;
 		}
 
 		GardenTask composterOutputTask = readyComposterTask(level, garden);
@@ -946,7 +946,7 @@ public final class SettlementFarmerWork {
 
 	private static boolean plantCrop(ServerLevel level, Map<String, Integer> stock, BlockPos cropPos, String cropKey) {
 		if (cropKey.equals("wheat")) {
-			if (!consumeGoods(stock, "wheat_seeds", 1)) {
+			if (!consumeGoods(stock, "wheat_seeds", 1) && !consumeGoods(stock, "wheat", 1)) {
 				return false;
 			}
 
@@ -1016,7 +1016,7 @@ public final class SettlementFarmerWork {
 
 	private static int availablePlantingStock(Map<String, Integer> stock, String cropKey) {
 		if (cropKey.equals("wheat")) {
-			return stock.getOrDefault("wheat_seeds", 0);
+			return stock.getOrDefault("wheat_seeds", 0) + stock.getOrDefault("wheat", 0);
 		}
 
 		if (cropKey.equals("beetroot")) {

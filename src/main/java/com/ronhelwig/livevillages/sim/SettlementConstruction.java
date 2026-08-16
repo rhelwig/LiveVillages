@@ -20,6 +20,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
@@ -62,6 +64,7 @@ import com.ronhelwig.livevillages.block.PortmasterAnchorBlock;
 import com.ronhelwig.livevillages.block.ScribeDeskBlock;
 import com.ronhelwig.livevillages.block.TradeBoardBlock;
 import com.ronhelwig.livevillages.block.ShelterAnchorBlock;
+import com.ronhelwig.livevillages.LiveVillages;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 
 public final class SettlementConstruction {
@@ -69,9 +72,9 @@ public final class SettlementConstruction {
 	private static final int VILLAGE_BUILD_RADIUS_BLOCKS = 28;
 	private static final int SCAN_DEPTH_BLOCKS = 12;
 	private static final int SCAN_HEIGHT_BLOCKS = 20;
-	private static final int MAX_TERRAIN_CUT_BLOCKS = 3;
-	private static final int MAX_TERRAIN_FILL_BLOCKS = 3;
-	private static final int MAX_STRUCTURE_FOUNDATION_BLOCKS = 5;
+	private static final int MAX_TERRAIN_CUT_BLOCKS = 5;
+	private static final int MAX_TERRAIN_FILL_BLOCKS = 5;
+	private static final int MAX_STRUCTURE_FOUNDATION_BLOCKS = 7;
 	private static final int MAX_SITE_LANDSCAPING_BLOCKS = 40;
 	private static final int MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS = 72;
 	private static final int MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS = 140;
@@ -114,8 +117,11 @@ public final class SettlementConstruction {
 	private static final int MIN_HARBOR_WATER_SURFACE_COLUMNS = 32;
 	private static final int MIN_HARBOR_DEEP_WATER_COLUMNS = 12;
 	private static final int BLOCK_UPDATE_FLAGS = 3;
+	private static final long EMERGENCY_BED_COOLDOWN_TICKS = 1_200L;
+	private static final int OUTDOOR_EMERGENCY_BED_SPACING_BLOCKS = 4;
 	private static final String STRUCTURE_MARGIN_GROUND_BACKFILL_KEY = "__margin_ground_backfill__";
 	private static final ThreadLocal<Boolean> SUPPRESS_BLOCKED_STRUCTURE_SIGNS = ThreadLocal.withInitial(() -> false);
+	private static final Map<String, Long> LAST_EMERGENCY_BED_TICKS = new LinkedHashMap<>();
 	/*
 	 * Blueprint legend:
 	 *
@@ -940,7 +946,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"LPDPL",
 				"GAAAG",
-				"FPPPF",
+				"FAAAF",
 				"LFWFL"
 			},
 			{
@@ -1018,7 +1024,7 @@ public final class SettlementConstruction {
 				"PAAAP",
 				"LPDPL",
 				"FAAAF",
-				"FAPAG",
+				"FAAAG",
 				"LAWAL"
 			},
 			{
@@ -1027,8 +1033,8 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"FAYAF",
-				"FAZAG",
+				"FAAAF",
+				"FAAAG",
 				"LAAAL"
 			},
 			{
@@ -1384,11 +1390,11 @@ public final class SettlementConstruction {
 			},
 			{
 				"LVVVL",
-				"PAAAP",
+				"PAUAP",
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"AXAXA",
+				"AAAAA",
 				"AAAAA",
 				"LAAAL"
 			},
@@ -1528,7 +1534,7 @@ public final class SettlementConstruction {
 				"MAAAM",
 				"LMDML",
 				"GAAAG",
-				"QOPOQ",
+				"QAAAQ",
 				"LQWQL"
 			},
 			{
@@ -1537,7 +1543,7 @@ public final class SettlementConstruction {
 				"VAAAV",
 				"PAAAP",
 				"LVDVL",
-				"AXAXA",
+				"AAAAA",
 				"AAAAA",
 				"LAAAL"
 			},
@@ -4788,10 +4794,7 @@ public final class SettlementConstruction {
 	private static CompletionResult tryBuildHousingShelter(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		Map<String, Integer> cost = SettlementProjectType.HOUSING.stockCost();
 
-		if (!canAfford(stock, cost)) {
-			return CompletionResult.notCompleted();
-		}
-
+		if (canAfford(stock, cost)) {
 		for (int radius = 5; radius <= buildRadius(settlement); radius++) {
 			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
 				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
@@ -4829,7 +4832,396 @@ public final class SettlementConstruction {
 			return CompletionResult.completed(0);
 		}
 
+			LiveVillages.LOGGER.info(
+				"Housing shelter site search failed for settlement {} with affordable materials; trying an emergency bed",
+				settlement.id()
+			);
+		}
+
+		if (tryPlaceEmergencyBed(level, settlement, stock)) {
+			return CompletionResult.completed(1);
+		}
+
 		return CompletionResult.notCompleted();
+	}
+
+	public static boolean tryPlaceEmergencyBed(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		List<SettlementBuildSite> buildSites = LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id());
+		int liveHousingCapacity = liveHousingCapacity(level, settlement);
+		boolean incompleteHousing = hasIncompleteHousingBuildSite(buildSites);
+		long currentTick = level.getServer().getTickCount();
+		long lastPlacementTick = LAST_EMERGENCY_BED_TICKS.getOrDefault(settlement.id(), Long.MIN_VALUE);
+		boolean cooldownElapsed = lastPlacementTick == Long.MIN_VALUE || currentTick - lastPlacementTick >= EMERGENCY_BED_COOLDOWN_TICKS;
+		EmergencyHousingAction action = emergencyHousingAction(
+			settlement.totalPopulation(),
+			liveHousingCapacity,
+			incompleteHousing,
+			cooldownElapsed
+		);
+
+		if (action == EmergencyHousingAction.NONE) {
+			return false;
+		}
+
+		if (!ensureEmergencyBedMaterials(stock)) {
+			return false;
+		}
+
+		if (tryPlacePlannedBuildSiteBed(level, settlement, stock, buildSites)) {
+			LAST_EMERGENCY_BED_TICKS.put(settlement.id(), currentTick);
+			return true;
+		}
+
+		if (action != EmergencyHousingAction.OUTDOOR_ALLOWED) {
+			return false;
+		}
+
+		boolean placed = tryPlaceOutdoorEmergencyBed(level, settlement, stock, buildSites);
+		if (placed) {
+			LAST_EMERGENCY_BED_TICKS.put(settlement.id(), currentTick);
+		}
+		return placed;
+	}
+
+	static EmergencyHousingAction emergencyHousingAction(
+		int population,
+		int liveHousingCapacity,
+		boolean incompleteHousing,
+		boolean cooldownElapsed
+	) {
+		if (population <= 0 || liveHousingCapacity >= population || !cooldownElapsed) {
+			return EmergencyHousingAction.NONE;
+		}
+
+		return incompleteHousing ? EmergencyHousingAction.PLANNED_ONLY : EmergencyHousingAction.OUTDOOR_ALLOWED;
+	}
+
+	private static int liveHousingCapacity(ServerLevel level, SettlementState settlement) {
+		return Math.toIntExact(level.getPoiManager().getCountInRange(
+			poiType -> poiType.is(PoiTypes.HOME),
+			settlement.center(),
+			buildRadius(settlement),
+			PoiManager.Occupancy.ANY
+		));
+	}
+
+	private static boolean hasIncompleteHousingBuildSite(List<SettlementBuildSite> buildSites) {
+		return buildSites.stream().anyMatch(buildSite -> !buildSite.complete()
+			&& (buildSite.blueprintId() == SettlementBuildSiteType.HOUSING_SHELTER
+				|| buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER));
+	}
+
+	private static boolean ensureEmergencyBedMaterials(Map<String, Integer> stock) {
+		if (stock.getOrDefault("planks", 0) < 3 && stock.getOrDefault("logs", 0) >= 1) {
+			if (!SettlementGoods.consumeGoods(stock, "logs", 1)) {
+				return false;
+			}
+
+			SettlementGoods.addGoods(stock, "planks", 4);
+		}
+
+		return stock.getOrDefault("wool", 0) >= 3 && stock.getOrDefault("planks", 0) >= 3;
+	}
+
+	private static boolean tryPlacePlannedBuildSiteBed(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> buildSites
+	) {
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+					continue;
+				}
+
+				BlockState plannedState = plannedBuildSiteBlockState(buildSite, block);
+				Optional<BlockPos> footPos = buildSiteBlockPos(buildSite, block);
+				if (plannedState == null
+					|| footPos.isEmpty()
+					|| !(plannedState.getBlock() instanceof BedBlock)
+					|| plannedState.getValue(BedBlock.PART) != BedPart.FOOT) {
+					continue;
+				}
+
+				Direction bedFacing = plannedState.getValue(BedBlock.FACING);
+				BlockPos headPos = footPos.get().relative(bedFacing);
+				if (alreadyHasBed(level, footPos.get(), headPos)) {
+					continue;
+				}
+
+				if (!preparePlannedBedSupport(level, stock, buildSite, footPos.get(), headPos)) {
+					continue;
+				}
+
+				if (!canPlaceEmergencyBed(level, footPos.get(), headPos) || !ensureEmergencyBedMaterials(stock)) {
+					continue;
+				}
+
+				if (!SettlementGoods.consumeGoods(stock, "wool", 3) || !SettlementGoods.consumeGoods(stock, "planks", 3)) {
+					return false;
+				}
+
+				placeBed(level, headPos, footPos.get(), bedFacing);
+				markBuildSiteWorldBlocksPlaced(level, buildSite, Set.of(footPos.get(), headPos, footPos.get().below(), headPos.below()));
+				LiveVillages.LOGGER.info(
+					"Placed planned bed for settlement {} in {} at {}",
+					settlement.id(),
+					buildSite.blueprintId().getSerializedName(),
+					footPos.get().toShortString()
+				);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean alreadyHasBed(ServerLevel level, BlockPos footPos, BlockPos headPos) {
+		return level.getBlockState(footPos).getBlock() instanceof BedBlock
+			|| level.getBlockState(headPos).getBlock() instanceof BedBlock;
+	}
+
+	private static boolean preparePlannedBedSupport(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		SettlementBuildSite buildSite,
+		BlockPos footPos,
+		BlockPos headPos
+	) {
+		return ensureBedSupportBlock(level, stock, buildSite, footPos.below())
+			&& ensureBedSupportBlock(level, stock, buildSite, headPos.below());
+	}
+
+	private static boolean ensureBedSupportBlock(
+		ServerLevel level,
+		Map<String, Integer> stock,
+		SettlementBuildSite buildSite,
+		BlockPos supportPos
+	) {
+		if (!level.isLoaded(supportPos)) {
+			return false;
+		}
+
+		BlockState supportState = level.getBlockState(supportPos);
+		if (supportState.isFaceSturdy(level, supportPos, Direction.UP) && !(supportState.getBlock() instanceof BedBlock)) {
+			return true;
+		}
+
+		if (!isReplaceable(supportState) && !tryClearBuildSiteBlock(level, supportPos, stock)) {
+			return false;
+		}
+
+		SettlementBuildBlockState plannedSupport = plannedBlockAt(buildSite, supportPos);
+		BlockState plannedState = plannedSupport == null ? null : plannedBuildSiteBlockState(buildSite, plannedSupport);
+		if (plannedState != null && plannedSupport != null && !plannedSupport.expectedMaterialKey().isBlank()) {
+			Map<String, Integer> siteMaterials = new LinkedHashMap<>(buildSite.siteMaterials());
+			SettlementConstructionMaterials.ConstructionMaterialResult materialResult =
+				SettlementConstructionMaterials.consumeForBlock(stock, siteMaterials, plannedSupport);
+			if (!materialResult.supplied()) {
+				return false;
+			}
+
+			level.setBlock(supportPos, plannedState, BLOCK_UPDATE_FLAGS);
+			if (!siteMaterials.equals(buildSite.siteMaterials())) {
+				LiveVillagesSavedData.get(level.getServer()).putBuildSite(
+					buildSite.withSiteMaterials(siteMaterials, level.getServer().getTickCount())
+				);
+			}
+			return true;
+		}
+
+		if (stock.getOrDefault("planks", 0) < 1 && stock.getOrDefault("logs", 0) >= 1) {
+			if (!SettlementGoods.consumeGoods(stock, "logs", 1)) {
+				return false;
+			}
+
+			SettlementGoods.addGoods(stock, "planks", 4);
+		}
+
+		if (!SettlementGoods.consumeGoods(stock, "planks", 1)) {
+			return false;
+		}
+
+		level.setBlock(supportPos, woodPlankBlock(buildSite.woodFamily()).defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		return true;
+	}
+
+	private static SettlementBuildBlockState plannedBlockAt(SettlementBuildSite buildSite, BlockPos worldPos) {
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			if (blockPos.isPresent() && blockPos.get().equals(worldPos)) {
+				return block;
+			}
+		}
+
+		return null;
+	}
+
+	private static void markBuildSiteWorldBlocksPlaced(ServerLevel level, SettlementBuildSite buildSite, Set<BlockPos> placedPositions) {
+		SettlementBuildSite latestBuildSite = LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(buildSite.settlementId())
+			.stream()
+			.filter(site -> site.id().equals(buildSite.id()))
+			.findFirst()
+			.orElse(buildSite);
+		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>();
+		boolean changed = false;
+
+		for (SettlementBuildBlockState block : latestBuildSite.blocks()) {
+			Optional<BlockPos> blockPos = buildSiteBlockPos(buildSite, block);
+			if (blockPos.isPresent()
+				&& placedPositions.contains(blockPos.get())
+				&& block.status() != SettlementBuildBlockStatus.PLACED
+				&& block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+				updatedBlocks.add(block.withStatus(SettlementBuildBlockStatus.PLACED, ""));
+				changed = true;
+			} else {
+				updatedBlocks.add(block);
+			}
+		}
+
+		if (!changed) {
+			return;
+		}
+
+		long tick = level.getServer().getTickCount();
+		LiveVillagesSavedData.get(level.getServer()).putBuildSite(
+			latestBuildSite.withBlocks(updatedBlocks, buildSiteComplete(latestBuildSite, updatedBlocks), tick)
+		);
+	}
+
+	private static boolean tryPlaceOutdoorEmergencyBed(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		List<SettlementBuildSite> buildSites
+	) {
+		int maxRadius = Math.max(12, Math.min(buildRadius(settlement), 16));
+		for (int radius = 3; radius <= maxRadius; radius++) {
+			for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+				for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
+					if (Math.max(Math.abs(offsetX), Math.abs(offsetZ)) != radius) {
+						continue;
+					}
+
+					BlockPos candidateFoot = topPlacementPos(level, settlement.center().offset(offsetX, 0, offsetZ));
+					if (candidateFoot == null) {
+						continue;
+					}
+
+					for (Direction facing : Direction.Plane.HORIZONTAL) {
+						BlockPos headPos = candidateFoot.relative(facing);
+						if (!canPlaceEmergencyBed(level, candidateFoot, headPos)
+							|| !isOutdoorEmergencyBedSpaced(level, candidateFoot)
+							|| !hasOutdoorEmergencyBedAccess(level, candidateFoot, headPos)
+							|| occupiesActiveBuildSite(buildSites, candidateFoot, headPos)) {
+							continue;
+						}
+
+						if (!SettlementGoods.consumeGoods(stock, "wool", 3) || !SettlementGoods.consumeGoods(stock, "planks", 3)) {
+							return false;
+						}
+
+						placeBed(level, headPos, candidateFoot, facing);
+						LiveVillages.LOGGER.info(
+							"Placed outdoor emergency bed for settlement {} at {}",
+							settlement.id(),
+							candidateFoot.toShortString()
+						);
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isOutdoorEmergencyBedSpaced(ServerLevel level, BlockPos footPos) {
+		return level.getPoiManager().getCountInRange(
+			poiType -> poiType.is(PoiTypes.HOME),
+			footPos,
+			OUTDOOR_EMERGENCY_BED_SPACING_BLOCKS,
+			PoiManager.Occupancy.ANY
+		) == 0;
+	}
+
+	private static boolean hasOutdoorEmergencyBedAccess(ServerLevel level, BlockPos footPos, BlockPos headPos) {
+		Set<BlockPos> accessCandidates = new LinkedHashSet<>();
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			accessCandidates.add(footPos.relative(direction));
+			accessCandidates.add(headPos.relative(direction));
+		}
+		accessCandidates.remove(footPos);
+		accessCandidates.remove(headPos);
+
+		int accessibleCells = 0;
+		for (BlockPos accessPos : accessCandidates) {
+			if (!level.isLoaded(accessPos)
+				|| !level.getBlockState(accessPos).isAir()
+				|| !level.getBlockState(accessPos.above()).isAir()
+				|| !level.getBlockState(accessPos.below()).isFaceSturdy(level, accessPos.below(), Direction.UP)) {
+				continue;
+			}
+
+			accessibleCells++;
+			if (accessibleCells >= 2) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean occupiesActiveBuildSite(List<SettlementBuildSite> buildSites, BlockPos footPos, BlockPos headPos) {
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			if (isNearBuildSiteCell(buildSite, footPos) || isNearBuildSiteCell(buildSite, headPos)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isNearBuildSiteCell(SettlementBuildSite buildSite, BlockPos pos) {
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			Optional<BlockPos> plannedPos = buildSiteBlockPos(buildSite, block);
+			if (plannedPos.isEmpty()) {
+				continue;
+			}
+
+			BlockPos planned = plannedPos.get();
+			if (Math.abs(planned.getX() - pos.getX()) <= 1
+				&& Math.abs(planned.getZ() - pos.getZ()) <= 1
+				&& Math.abs(planned.getY() - pos.getY()) <= 2) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean canPlaceEmergencyBed(ServerLevel level, BlockPos footPos, BlockPos headPos) {
+		if (!level.isLoaded(footPos) || !level.isLoaded(headPos) || !level.isLoaded(footPos.below()) || !level.isLoaded(headPos.below())) {
+			return false;
+		}
+
+		BlockState footState = level.getBlockState(footPos);
+		BlockState headState = level.getBlockState(headPos);
+		return (footState.isAir() || footState.canBeReplaced())
+			&& (headState.isAir() || headState.canBeReplaced())
+			&& level.getBlockState(footPos.below()).isFaceSturdy(level, footPos.below(), Direction.UP)
+			&& level.getBlockState(headPos.below()).isFaceSturdy(level, headPos.below(), Direction.UP)
+			&& !(level.getBlockState(footPos.below()).getBlock() instanceof BedBlock)
+			&& !(level.getBlockState(headPos.below()).getBlock() instanceof BedBlock);
 	}
 
 	private static void startAutonomousHousingBuildSite(
@@ -5329,21 +5721,42 @@ public final class SettlementConstruction {
 
 		Map<String, Integer> cost = SettlementProjectType.COMPOSTER.stockCost();
 
-		if (!canAfford(stock, cost)) {
+		if (!SettlementConstructionMaterials.tryConsumeCost(new LinkedHashMap<>(stock), cost)) {
+			LiveVillages.LOGGER.info(
+				"[live-villages] {} cannot start a farm: need {} planks, have {} planks and {} logs",
+				settlement.name(),
+				cost.getOrDefault("planks", 0),
+				stock.getOrDefault("planks", 0),
+				stock.getOrDefault("logs", 0)
+			);
 			return CompletionResult.notCompleted();
 		}
 
 		ComposterSite site = findComposterSite(level, settlement);
 
 		if (site == null) {
+			LiveVillages.LOGGER.info(
+				"[live-villages] {} wants a starter farm but no 8x8 site fit inside the build radius",
+				settlement.name()
+			);
 			return CompletionResult.notCompleted();
 		}
 
-		consumeCost(stock, cost);
+		SettlementConstructionMaterials.tryConsumeCost(stock, cost);
 		if (site.farmStarterSite() != null) {
 			placeFarmStarter(level, settlement, site.farmStarterSite(), stock);
+			LiveVillages.LOGGER.info(
+				"[live-villages] {} placed a starter farm at {}",
+				settlement.name(),
+				site.farmStarterSite().origin().toShortString()
+			);
 		} else {
 			placeStandaloneComposter(level, site, stock);
+			LiveVillages.LOGGER.info(
+				"[live-villages] {} placed a farm composter at {}",
+				settlement.name(),
+				site.composterPos().toShortString()
+			);
 		}
 		LiveVillagesSavedData.get(level.getServer()).surveyCache.remove(settlement.id());
 		return CompletionResult.completed(0);
@@ -5367,9 +5780,12 @@ public final class SettlementConstruction {
 
 	public static int desiredFarmSites(SettlementState settlement, int farmAreas) {
 		int farmers = Math.max(0, settlement.population().getOrDefault(SettlementRoleKeys.FARMER, 0));
+		int population = settlement.totalPopulation();
 
+		// A populated village with no farmers still wants one starter farm so a
+		// composter can exist and recruit the first Farmer.
 		if (farmers <= 0) {
-			return 0;
+			return population > 0 ? 1 : 0;
 		}
 
 		int farmerDrivenSites = Math.max(1, (farmers + FARMERS_PER_FARM_SITE - 1) / FARMERS_PER_FARM_SITE);
@@ -6454,7 +6870,7 @@ public final class SettlementConstruction {
 		String anchorPosition = relativeBlueprintPositionFromWorld(origin, facing, anchorPos);
 		boolean anchorMappedInBlueprint = false;
 
-		addStructureFoundationBlocks(level, blueprint, origin, facing, blocks, plannedPositions);
+		addStructureFoundationBlocks(level, structureKind, blueprint, origin, facing, blocks, plannedPositions);
 
 		for (int layerIndex = 0; layerIndex < blueprint.layers().length; layerIndex++) {
 			int up = blueprint.minUp() + layerIndex;
@@ -6533,6 +6949,7 @@ public final class SettlementConstruction {
 
 	private static void addStructureFoundationBlocks(
 		ServerLevel level,
+		StructureKind structureKind,
 		StructureBlueprint blueprint,
 		BlockPos origin,
 		Direction facing,
@@ -6555,6 +6972,11 @@ public final class SettlementConstruction {
 
 				for (int y = groundPos.getY() + 1; y < origin.getY(); y++) {
 					int up = y - origin.getY();
+
+					if (!blueprintAllowsFoundationAt(structureKind, blueprint, right, forward, up)) {
+						continue;
+					}
+
 					String position = relativeBlueprintPosition(right, forward, up);
 
 					if (plannedPositions.add(position)) {
@@ -6563,6 +6985,57 @@ public final class SettlementConstruction {
 				}
 			}
 		}
+	}
+
+	private static boolean blueprintAllowsFoundationAt(
+		StructureKind structureKind,
+		StructureBlueprint blueprint,
+		int right,
+		int forward,
+		int up
+	) {
+		char symbol = blueprintSymbolAt(blueprint, right, forward, up);
+		if (symbol != 'A') {
+			return false;
+		}
+
+		if (structureKind != StructureKind.MINE_ENTRANCE) {
+			return true;
+		}
+
+		// A mine column containing authored excavation or ladders at or below
+		// this level is an intentional shaft, never a foundation void to fill.
+		for (int checkUp = blueprint.minUp(); checkUp <= Math.min(0, up); checkUp++) {
+			char checkSymbol = blueprintSymbolAt(blueprint, right, forward, checkUp);
+			if (checkSymbol == 'E' || checkSymbol == 'R') {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static boolean isObsoleteFoundationOverAuthoredBlueprint(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		if (!isStructureFoundationBlock(block)
+			|| buildSite.blueprintId() == SettlementBuildSiteType.DOCK
+			|| buildSite.blueprintId() == SettlementBuildSiteType.PALISADE_WALL) {
+			return false;
+		}
+
+		BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(block.position());
+		if (relativePos == null) {
+			return false;
+		}
+
+		StructureKind structureKind = structureKindFor(buildSite.blueprintId());
+		StructureBlueprint blueprint = blueprintFor(structureKind);
+		return !blueprintAllowsFoundationAt(
+			structureKind,
+			blueprint,
+			relativePos.right(),
+			relativePos.forward(),
+			relativePos.up()
+		);
 	}
 
 	private static void addPlacementClearanceBlocks(
@@ -8630,6 +9103,10 @@ public final class SettlementConstruction {
 		return farmAreaCoverage(farmPlots, composterPositions);
 	}
 
+	public static List<BlockPos> findPlacedComposters(ServerLevel level, SettlementState settlement) {
+		return scanComposterPositions(level, settlement);
+	}
+
 	private static List<BlockPos> scanComposterPositions(ServerLevel level, SettlementState settlement) {
 		BlockPos center = settlement.center();
 		int radiusBlocks = buildRadius(settlement);
@@ -10053,6 +10530,10 @@ public final class SettlementConstruction {
 		return isNaturalLandscapeBlock(state);
 	}
 
+	public static boolean canClearBlockingConstructionBlock(ServerLevel level, BlockPos pos, BlockState state) {
+		return canClearForConstruction(level, pos, state);
+	}
+
 	private static boolean canClearForConstruction(ServerLevel level, BlockPos pos, BlockState state) {
 		if (isShovelPathSurface(state)) {
 			return true;
@@ -10064,6 +10545,10 @@ public final class SettlementConstruction {
 	private static boolean canRecoverConstructionBlock(ServerLevel level, BlockPos pos, BlockState state) {
 		if (state.isAir() || state.liquid()) {
 			return false;
+		}
+
+		if (state.getBlock() instanceof BedBlock) {
+			return true;
 		}
 
 		if (isDisposableConstructionAnchorBlock(state)) {
@@ -10082,6 +10567,11 @@ public final class SettlementConstruction {
 		BlockState state = level.getBlockState(pos);
 
 		if (state.isAir()) {
+			return;
+		}
+
+		if (state.getBlock() instanceof BedBlock) {
+			clearBedToWarehouse(level, pos, state, stock);
 			return;
 		}
 
@@ -10180,7 +10670,23 @@ public final class SettlementConstruction {
 		return false;
 	}
 
+	private static void clearBedToWarehouse(ServerLevel level, BlockPos pos, BlockState state, Map<String, Integer> stock) {
+		Direction facing = state.getValue(BedBlock.FACING);
+		BlockPos otherPos = state.getValue(BedBlock.PART) == BedPart.FOOT
+			? pos.relative(facing)
+			: pos.relative(facing.getOpposite());
+		stock.merge("bed", 1, Integer::sum);
+		level.setBlock(pos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		if (level.getBlockState(otherPos).getBlock() instanceof BedBlock) {
+			level.setBlock(otherPos, Blocks.AIR.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		}
+	}
+
 	private static String recoveredGoodsKey(BlockState state) {
+		if (state.getBlock() instanceof BedBlock) {
+			return "bed";
+		}
+
 		if (state.is(Blocks.CAMPFIRE)) {
 			return "campfire";
 		}
@@ -10794,6 +11300,12 @@ public final class SettlementConstruction {
 		public static CompletionResult notCompleted() {
 			return new CompletionResult(false, 0);
 		}
+	}
+
+	enum EmergencyHousingAction {
+		NONE,
+		PLANNED_ONLY,
+		OUTDOOR_ALLOWED
 	}
 
 	private record ComposterSite(BlockPos composterPos, BlockPos supportPos, FarmStarterSite farmStarterSite) {

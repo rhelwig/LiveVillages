@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 from PIL import Image
 
@@ -89,28 +90,28 @@ class JobLook:
 JOBS: dict[str, JobLook] = {
 	"baker": JobLook(WHITE, rgb(130, 176, 214), hat=WHITE, hat_style="chef", sash_row=None, apron=True),
 	"beekeeper": JobLook(WHITE, rgb(188, 190, 186), hat=VEIL, hat_style="hood", sash_row=None),
-	"carpenter": JobLook(rgb(176, 128, 72), LEATHER, apron=True, sash_row=None),
-	"forester": JobLook(rgb(92, 60, 34), rgb(68, 112, 48), sash_row=10),
-	"gardener": JobLook(rgb(78, 122, 68), rgb(186, 86, 110), sash_row=12),
-	"guard": JobLook(rgb(38, 86, 52), rgb(70, 58, 40), sash_row=10),
+	"carpenter": JobLook(rgb(176, 128, 72), LEATHER, hat=rgb(120, 78, 42), hat_style="beanie", apron=True, sash_row=None),
+	"forester": JobLook(rgb(118, 82, 48), rgb(68, 112, 48), hat=None, hat_style="none", sash_row=10),
+	"gardener": JobLook(rgb(86, 132, 64), rgb(186, 86, 110), hat=None, hat_style="none", sash_row=12),
+	"guard": JobLook(rgb(38, 86, 52), LEATHER, hat=None, hat_style="none", sash_row=11),
 	"miner": JobLook(rgb(72, 78, 84), COPPER, hat=rgb(64, 68, 74), hat_style="helmet", sash_row=12),
 	"portmaster": JobLook(NAVY, BRASS, hat=NAVY, hat_style="brim", sash_row=12),
-	"roadwright": JobLook(rgb(156, 140, 96), rgb(92, 82, 62), sash_row=11),
-	"scribe": JobLook(rgb(222, 210, 184), rgb(48, 70, 122), sash_row=11),
-	"trademaster": JobLook(rgb(28, 112, 70), GOLD, sash_row=11),
+	"roadwright": JobLook(rgb(156, 140, 96), rgb(92, 82, 62), hat=rgb(92, 82, 62), hat_style="beanie", sash_row=11),
+	"scribe": JobLook(rgb(222, 210, 184), rgb(48, 70, 122), hat=rgb(48, 70, 122), hat_style="beanie", sash_row=11),
+	"trademaster": JobLook(rgb(28, 118, 72), GOLD, hat=None, hat_style="none", sash_row=11),
 	"farmer": JobLook(rgb(118, 82, 52), STRAW, hat=STRAW, hat_style="brim", sash_row=12, namespace="minecraft"),
-	"butcher": JobLook(rgb(92, 58, 42), rgb(140, 42, 48), apron=True, sash_row=None, apron_until=2, namespace="minecraft"),
+	"butcher": JobLook(rgb(92, 58, 42), rgb(140, 42, 48), hat=rgb(92, 58, 42), hat_style="beanie", apron=True, sash_row=None, apron_until=2, namespace="minecraft"),
 	"fisherman": JobLook(rgb(46, 122, 132), rgb(164, 140, 96), hat=rgb(46, 48, 50), hat_style="beanie", sash_row=13, namespace="minecraft"),
-	"shepherd": JobLook(rgb(214, 204, 176), rgb(118, 84, 52), sash_row=11, namespace="minecraft"),
-	"mason": JobLook(rgb(126, 122, 116), rgb(88, 86, 82), sash_row=12, namespace="minecraft"),
-	"fletcher": JobLook(rgb(92, 88, 48), rgb(120, 74, 40), sash_row=12, namespace="minecraft"),
-	"leatherworker": JobLook(rgb(164, 116, 70), LEATHER, apron=True, sash_row=None, namespace="minecraft"),
-	"armorer": JobLook(rgb(72, 72, 76), rgb(48, 48, 50), sash_row=12, namespace="minecraft"),
-	"toolsmith": JobLook(rgb(90, 90, 96), rgb(124, 82, 42), sash_row=11, namespace="minecraft"),
-	"weaponsmith": JobLook(rgb(64, 70, 76), rgb(148, 40, 40), sash_row=11, namespace="minecraft"),
-	"cleric": JobLook(rgb(112, 58, 142), GOLD, sash_row=13, namespace="minecraft"),
-	"librarian": JobLook(rgb(116, 40, 52), rgb(92, 58, 36), sash_row=12, namespace="minecraft"),
-	"cartographer": JobLook(rgb(188, 166, 124), rgb(92, 70, 42), sash_row=12, namespace="minecraft"),
+	"shepherd": JobLook(rgb(214, 204, 176), rgb(118, 84, 52), hat=rgb(214, 204, 176), hat_style="brim", sash_row=11, namespace="minecraft"),
+	"mason": JobLook(rgb(126, 122, 116), rgb(88, 86, 82), hat=rgb(126, 122, 116), hat_style="helmet", sash_row=12, namespace="minecraft"),
+	"fletcher": JobLook(rgb(92, 88, 48), rgb(120, 74, 40), hat=rgb(92, 88, 48), hat_style="pointed", sash_row=12, namespace="minecraft"),
+	"leatherworker": JobLook(rgb(164, 116, 70), LEATHER, hat=LEATHER, hat_style="beanie", apron=True, sash_row=None, namespace="minecraft"),
+	"armorer": JobLook(rgb(72, 72, 76), rgb(48, 48, 50), hat=rgb(72, 72, 76), hat_style="helmet", sash_row=12, namespace="minecraft"),
+	"toolsmith": JobLook(rgb(90, 90, 96), rgb(124, 82, 42), hat=rgb(90, 90, 96), hat_style="beanie", sash_row=11, namespace="minecraft"),
+	"weaponsmith": JobLook(rgb(64, 70, 76), rgb(148, 40, 40), hat=rgb(64, 70, 76), hat_style="helmet", sash_row=11, namespace="minecraft"),
+	"cleric": JobLook(rgb(112, 58, 142), GOLD, hat=rgb(80, 40, 110), hat_style="hood", sash_row=13, namespace="minecraft"),
+	"librarian": JobLook(rgb(132, 46, 62), rgb(188, 166, 110), hat=None, hat_style="none", sash_row=12, namespace="minecraft"),
+	"cartographer": JobLook(rgb(188, 166, 124), rgb(92, 70, 42), hat=rgb(188, 166, 124), hat_style="brim", sash_row=12, namespace="minecraft"),
 }
 
 HAT_MCMETA = '{"villager":{"hat":"full"}}\n'
@@ -183,6 +184,22 @@ def paint_brim(im: Image.Image, color: RGBA) -> None:
 				put(im, x, y, dark if edge else color)
 
 
+def paint_pointed_cap(im: Image.Image, color: RGBA, tier: int) -> None:
+	"""Suggest a forward-pointed cap and red feather on the fixed villager hat UV."""
+	paint_crown(im, color, CROWN_ROWS, SILVER if tier == 3 else GOLD if tier == 4 else None)
+	fx, fy = HAT_FRONT
+	# A descending highlight makes the front read as a folded point.
+	for offset, width in enumerate((6, 4, 2)):
+		fill_rect(im, fx + 1, fy + offset, width, 1, shade(color, 18))
+	# The model cannot add feather geometry, so paint a bold feather across
+	# the side/back crown faces where it remains visible in normal views.
+	red = rgb(176, 46, 42) if tier < 4 else rgb(204, 54, 46)
+	for x, y in ((35, 9), (36, 8), (37, 7), (38, 6), (39, 5), (55, 9), (54, 8), (53, 7)):
+		put(im, x, y, red)
+		if y + 1 < EYE_ROW0:
+			put(im, x, y + 1, shade(red, -28))
+
+
 def paint_hood(im: Image.Image, color: RGBA, frame: RGBA) -> None:
 	"""Wrap the head on top/sides/back; leave a face window for eyes."""
 	dark = shade(color, -20)
@@ -220,6 +237,9 @@ def paint_hat_for_job(im: Image.Image, job: JobLook, tier: int) -> None:
 		if tier >= 3:
 			frame = SILVER if tier == 3 else mix(SILVER, GOLD, 0.45)
 		paint_hood(im, color, frame)
+		return
+	if job.hat_style == "pointed":
+		paint_pointed_cap(im, color, tier)
 		return
 	band = None
 	if job.hat_style == "brim" and job == JOBS["farmer"]:
@@ -347,6 +367,8 @@ def paint_jacket(im: Image.Image, job: JobLook, tier: int) -> None:
 			put(im, fx + 3, sy + 1, shade(buckle, -30))
 			put(im, fx + 4, sy + 1, buckle)
 
+	paint_concept_marks(im, job, tier, fx, fy, fw, fh)
+
 	if tier == 2:
 		for y in range(fy, fy + fh):
 			put(im, fx, y, trim)
@@ -364,6 +386,96 @@ def paint_jacket(im: Image.Image, job: JobLook, tier: int) -> None:
 		fill_rect(im, side_x, fy, side_w, collar_h, collar)
 		if tier >= 2:
 			fill_rect(im, side_x, fy, side_w, 1, trim)
+
+
+def job_name(job: JobLook) -> str:
+	for name, look in JOBS.items():
+		if look is job:
+			return name
+	return ""
+
+
+def paint_concept_marks(im: Image.Image, job: JobLook, tier: int, fx: int, fy: int, fw: int, fh: int) -> None:
+	"""Large, job-readable marks that survive in-game viewing distance."""
+	name = job_name(job)
+	if name == "trademaster":
+		fill_rect(im, fx, fy, fw, 3, COBBLE)
+		fill_rect(im, fx + 1, fy + 4, 6, 4, GOLD)
+		fill_rect(im, fx + 2, fy + 5, 4, 2, shade(GOLD, -40))
+		put(im, fx + 3, fy + 6, shade(GOLD, 20))
+		put(im, fx + 4, fy + 6, shade(GOLD, 20))
+	elif name == "gardener":
+		put(im, fx + 1, fy + 14, rgb(220, 52, 58))
+		put(im, fx + 2, fy + 15, rgb(236, 196, 48))
+		put(im, fx + 1, fy + 16, rgb(186, 70, 168))
+		put(im, fx + 5, fy + 14, rgb(236, 196, 48))
+		put(im, fx + 6, fy + 15, rgb(220, 52, 58))
+		put(im, fx + 5, fy + 16, rgb(90, 176, 72))
+	elif name == "beekeeper":
+		for y in (fy + 5, fy + 8, fy + 11):
+			put(im, fx + 2, y, GOLD)
+			put(im, fx + 5, y, GOLD)
+	elif name == "guard":
+		fill_rect(im, fx + 1, fy + 3, fw - 2, 7, LEATHER)
+		put(im, fx + 3, fy + 6, GOLD)
+		put(im, fx + 4, fy + 6, shade(GOLD, -30))
+		fill_rect(im, fx, fy, fw, 1, COBBLE)
+	elif name == "librarian":
+		fill_rect(im, fx, fy, fw, 3, rgb(188, 166, 110))
+		fill_rect(im, fx + 2, fy + 8, 4, 4, GOLD)
+		put(im, fx + 3, fy + 9, shade(GOLD, -40))
+		put(im, fx + 4, fy + 10, shade(GOLD, -40))
+	elif name == "forester":
+		put(im, fx + 2, fy + 4, GOLD)
+		put(im, fx + 5, fy + 4, GOLD)
+		put(im, fx + 2, fy + 6, GOLD)
+		put(im, fx + 5, fy + 6, GOLD)
+	elif name == "farmer":
+		put(im, fx + 3, fy + job.sash_row, GOLD)
+		put(im, fx + 4, fy + job.sash_row, shade(GOLD, -30))
+	elif name == "portmaster":
+		fill_rect(im, fx, fy, fw, 2, NAVY)
+		put(im, fx + 2, fy + 6, BRASS)
+		put(im, fx + 5, fy + 6, BRASS)
+	elif name == "baker":
+		fill_rect(im, fx, fy, fw, 2, rgb(90, 168, 210))
+	elif name == "miner":
+		put(im, fx + 2, fy + 8, COPPER)
+		put(im, fx + 5, fy + 8, COPPER)
+		put(im, fx + 3, fy + 10, COPPER)
+		put(im, fx + 4, fy + 10, COPPER)
+	elif name in {"carpenter", "fletcher"}:
+		fill_rect(im, fx + 3, fy + 6, 2, 6, LEATHER)
+		fill_rect(im, fx + 1, fy + 6, 6, 1, accent_for_mark(job, tier))
+	elif name in {"armorer", "toolsmith", "weaponsmith"}:
+		fill_rect(im, fx + 1, fy + 8, 6, 1, accent_for_mark(job, tier))
+		fill_rect(im, fx + 3, fy + 6, 2, 5, accent_for_mark(job, tier))
+	elif name == "roadwright":
+		fill_rect(im, fx + 1, fy + 9, 6, 1, shade(job.accent, 12))
+		fill_rect(im, fx + 2, fy + 8, 4, 1, job.accent)
+	elif name == "scribe":
+		fill_rect(im, fx + 2, fy + 7, 4, 4, CREAM)
+		put(im, fx + 3, fy + 8, job.accent)
+		put(im, fx + 4, fy + 9, job.accent)
+	elif name == "cartographer":
+		fill_rect(im, fx + 2, fy + 7, 4, 4, CREAM)
+		put(im, fx + 2, fy + 8, job.accent)
+		put(im, fx + 5, fy + 9, job.accent)
+	elif name in {"butcher", "leatherworker"}:
+		fill_rect(im, fx + 2, fy + 8, 4, 3, LEATHER)
+		put(im, fx + 2, fy + 8, shade(LEATHER, 30))
+		put(im, fx + 5, fy + 10, shade(LEATHER, 30))
+	elif name == "cleric":
+		fill_rect(im, fx + 3, fy + 7, 2, 5, GOLD)
+		fill_rect(im, fx + 2, fy + 9, 4, 1, GOLD)
+
+
+def accent_for_mark(job: JobLook, tier: int) -> RGBA:
+	if tier == 3:
+		return SILVER
+	if tier == 4:
+		return GOLD
+	return job.accent
 
 
 def paint_arms(im: Image.Image, job: JobLook, tier: int) -> None:
@@ -392,6 +504,53 @@ def paint_arms(im: Image.Image, job: JobLook, tier: int) -> None:
 		fill_rect(im, 44, 44, 8, 1, trim)
 
 
+def paint_tier_one_wear(im: Image.Image, job: JobLook) -> None:
+	"""Visible founding-tier repairs, scuffs, and missing hem pixels."""
+	name = job_name(job)
+	patch = shade(job.robe, -38)
+	thread = shade(job.accent, 30)
+	# Front-body patch with two bright repair stitches.
+	fill_rect(im, 7, 56, 3, 3, patch)
+	put(im, 7, 56, thread)
+	put(im, 9, 58, thread)
+	# Abraded sleeve and asymmetric frayed lower hem.
+	put(im, 49, 27, shade(job.robe, -48))
+	put(im, 50, 28, thread)
+	for x, y in ((6, 63), (8, 62), (11, 63), (13, 62)):
+		put(im, x, y, (0, 0, 0, 0))
+	# Forester gets an earth-stained hem; portmaster salt wear; Trademaster
+	# a second repaired tear beside the trade-board plaque.
+	if name in {"baker"}:
+		stain = rgb(174, 158, 126)
+	elif name in {"farmer", "forester", "gardener", "shepherd"}:
+		stain = rgb(82, 68, 42)
+	elif name in {"miner", "mason", "armorer", "toolsmith", "weaponsmith"}:
+		stain = rgb(58, 58, 56)
+	elif name in {"fisherman", "portmaster"}:
+		stain = rgb(108, 116, 118)
+	elif name in {"butcher", "leatherworker"}:
+		stain = rgb(92, 48, 38)
+	else:
+		stain = shade(job.robe, -46)
+	put(im, 10, 60, stain)
+	put(im, 12, 59, stain)
+	if name == "trademaster":
+		put(im, 12, 53, patch)
+		put(im, 13, 54, thread)
+	if uses_apron(job, 1):
+		put(im, 8, 52, stain)
+		put(im, 11, 55, shade(stain, 12))
+
+
+def paint_tier_one_hat_wear(im: Image.Image, job: JobLook) -> None:
+	if not job.hat or job.hat_style in {"none", "", "hood"}:
+		return
+	# Tiny repaired seam and abrasion on the crown, clear of the face window.
+	put(im, 42, 9, shade(job.hat, 28))
+	put(im, 43, 10, shade(job.hat, -36))
+	put(im, 44, 9, shade(job.hat, 28))
+
+
 def paint_body(im: Image.Image, job: JobLook, tier: int) -> None:
 	robe, accent, _, _ = jacket_colors(job, tier)
 	fill_cube_faces(
@@ -414,6 +573,9 @@ def paint_job(job: JobLook, tier: int) -> Image.Image:
 	paint_arms(im, job, tier)
 	paint_body(im, job, tier)
 	paint_hat_for_job(im, job, tier)
+	if tier == 1:
+		paint_tier_one_wear(im, job)
+		paint_tier_one_hat_wear(im, job)
 	if job == JOBS["miner"] and tier >= 2:
 		put(im, 9, 54, COPPER)
 		put(im, 10, 54, COPPER)
@@ -458,12 +620,20 @@ def write_job(name: str, job: JobLook) -> None:
 		if job.hat_style not in ("none", ""):
 			meta_path.write_text(HAT_MCMETA)
 			zmeta_path.write_text(HAT_MCMETA)
+		else:
+			meta_path.unlink(missing_ok=True)
+			zmeta_path.unlink(missing_ok=True)
 
 
 def main() -> None:
-	for name, job in JOBS.items():
+	names = sys.argv[1:] or list(JOBS)
+	unknown = [name for name in names if name not in JOBS]
+	if unknown:
+		raise SystemExit(f"unknown jobs: {', '.join(unknown)}")
+	for name in names:
+		job = JOBS[name]
 		write_job(name, job)
-	print(f"wrote {len(JOBS)} jobs x 4 tiers x 2 entity kinds")
+	print(f"wrote {len(names)} jobs x 4 tiers x 2 entity kinds")
 
 
 if __name__ == "__main__":

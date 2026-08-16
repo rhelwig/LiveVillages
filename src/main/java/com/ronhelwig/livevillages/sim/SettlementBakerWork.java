@@ -41,7 +41,7 @@ public final class SettlementBakerWork {
 	private static final double BAKING_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 80L;
 	private static final long BAKING_DECIDE_INTERVAL_TICKS = 400L;
-	private static final double BATCHES_PER_BAKER_PER_DAY = SettlementEconomyRules.scaledWorkerDailyRate(6.0D);
+	private static final double BASE_BATCHES_PER_BAKER_PER_DAY = 6.0D;
 	private static final String DISPLAY_NAME_PREFIX = "livevillages_bakery_display_";
 	private static final String DISPLAY_SLOT_MARKER = "_slot_";
 	private static final List<String> DISPLAYABLE_GOODS = List.of("golden_apple", "cake", "pumpkin_pie", "cookie", "baked_potato", "bread");
@@ -307,7 +307,7 @@ public final class SettlementBakerWork {
 		}
 
 		int settlementTier = SettlementTiers.unlockedTier(settlement);
-		int batches = scaledAmount(BATCHES_PER_BAKER_PER_DAY * bakerCount, elapsedDays);
+		int batches = scaledAmount(SettlementEconomyRules.scaledWorkerDailyRate(level, BASE_BATCHES_PER_BAKER_PER_DAY) * bakerCount, elapsedDays);
 
 		for (int i = 0; i < batches; i++) {
 			BakeryRecipe recipe = chooseRecipe(settlement, stock, settlementTier);

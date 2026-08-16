@@ -18,12 +18,15 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.trading.MerchantOffers;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
@@ -58,6 +61,7 @@ public final class SettlementVillagers {
 	private static final double REST_NAVIGATION_CLOSE_DISTANCE_SQUARED = 2.25D;
 	private static final double REST_HOME_WALK_SPEED = 1.0D;
 	private static final Map<String, Long> RETURN_DIAGNOSTIC_TICKS = new HashMap<>();
+	private static final Map<String, CachedColdTerrain> COLD_TERRAIN_CACHE = new HashMap<>();
 
 	private SettlementVillagers() {
 	}
@@ -392,6 +396,18 @@ public final class SettlementVillagers {
 		List<Villager> villagers = settlementVillagers(level, settlement, settlementMemberRadiusBlocks(settlement));
 		boolean changed = recruitPriorityWorkforce(level, settlement, villagers);
 		changed |= maintainAssignedWorkforce(level, settlement, villagers);
+		if (hasPowderSnowTerrain(level, settlement.center(), 48)) {
+			int bootsEquipped = 0;
+			for (Villager villager : villagers) {
+				if (equipColdWeatherBoots(villager)) {
+					bootsEquipped++;
+					changed = true;
+				}
+			}
+			if (bootsEquipped > 0) {
+				LiveVillages.LOGGER.info("Equipped {} residents for powder-snow safety in settlement {}", bootsEquipped, settlement.id());
+			}
+		}
 		return changed;
 	}
 
@@ -889,8 +905,16 @@ public final class SettlementVillagers {
 		ProfessionDemandType targetType
 	) {
 		ProfessionDemandType currentType = currentProfessionType(villager);
-		if (currentType == null || currentType == targetType || currentType == ProfessionDemandType.TRADEMASTER) {
+		if (currentType == null || currentType == targetType) {
 			return false;
+		}
+
+		if (currentType == ProfessionDemandType.TRADEMASTER) {
+			return owningSettlementFor(level, villager)
+				.filter(owner -> owner.id().equals(settlement.id()))
+				.isPresent()
+				&& currentProfessionCounts(level, settlement, nearbyAdultVillagers(level, settlement))
+					.getOrDefault(ProfessionDemandType.TRADEMASTER, 0) > 1;
 		}
 
 		if (isCustomProfession(currentType)) {
@@ -1414,16 +1438,73 @@ public final class SettlementVillagers {
 	}
 
 	public static boolean spawnVillager(ServerLevel level, BlockPos spawnPos) {
+		return spawnPersistentVillager(level, spawnPos, null).isPresent();
+	}
+
+	public static Optional<Villager> spawnPersistentVillager(ServerLevel level, BlockPos spawnPos, String settlementId) {
 		Villager villager = EntityType.VILLAGER.create(level, EntitySpawnReason.EVENT);
 
 		if (villager == null) {
-			return false;
+			return Optional.empty();
 		}
 
 		villager.setPos(spawnPos.getX() + 0.5D, spawnPos.getY(), spawnPos.getZ() + 0.5D);
 		villager.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), EntitySpawnReason.EVENT, null);
 		villager.setPersistenceRequired();
-		return level.addFreshEntity(villager);
+		if (hasPowderSnowTerrain(level, spawnPos, 16)) {
+			equipColdWeatherBoots(villager);
+		}
+
+		if (!level.addFreshEntity(villager)) {
+			return Optional.empty();
+		}
+
+		if (settlementId != null && !settlementId.isBlank()) {
+			LiveVillagesSavedData.get(level.getServer()).setVillagerSettlement(villager.getUUID(), settlementId);
+		}
+
+		return Optional.of(villager);
+	}
+
+	private static boolean equipColdWeatherBoots(Villager villager) {
+		if (!villager.getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
+			return false;
+		}
+
+		villager.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+		return true;
+	}
+
+	private static boolean hasPowderSnowTerrain(ServerLevel level, BlockPos center, int radius) {
+		long tick = level.getServer().getTickCount();
+		String key = level.dimension().identifier() + "|" + center.getX() + "|" + center.getZ() + "|" + radius;
+		CachedColdTerrain cached = COLD_TERRAIN_CACHE.get(key);
+		if (cached != null && tick - cached.tick() <= 600L) {
+			return cached.hasPowderSnow();
+		}
+
+		boolean found = false;
+		for (int x = center.getX() - radius; x <= center.getX() + radius && !found; x += 4) {
+			for (int z = center.getZ() - radius; z <= center.getZ() + radius; z += 4) {
+				BlockPos probe = new BlockPos(x, center.getY(), z);
+				if (!level.hasChunkAt(probe)) {
+					continue;
+				}
+				int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
+				for (int y = surfaceY; y >= surfaceY - 2; y--) {
+					if (level.getBlockState(new BlockPos(x, y, z)).is(Blocks.POWDER_SNOW)) {
+						found = true;
+						break;
+					}
+				}
+				if (found) {
+					break;
+				}
+			}
+		}
+
+		COLD_TERRAIN_CACHE.put(key, new CachedColdTerrain(found, tick));
+		return found;
 	}
 
 	private static List<Villager> nearbyVillagers(ServerLevel level, BlockPos center, int radiusBlocks) {
@@ -2212,13 +2293,21 @@ public final class SettlementVillagers {
 
 	private static Optional<BlockPos> findReachableVanillaBedLinkedJobSite(ServerLevel level, Villager villager, ProfessionDemandType type) {
 		return owningSettlementFor(level, villager)
-			.flatMap(settlement -> findReachableBedLinkedJobSite(
-				level,
-				villager,
-				settlement,
-				type,
-				jobSitePoiPredicate(type)
-			));
+			.flatMap(settlement -> {
+				Optional<BlockPos> poiSite = findReachableBedLinkedJobSite(
+					level,
+					villager,
+					settlement,
+					type,
+					jobSitePoiPredicate(type)
+				);
+				if (poiSite.isPresent() || type != ProfessionDemandType.FARMER) {
+					return poiSite;
+				}
+
+				List<BlockPos> composters = SettlementConstruction.findPlacedComposters(level, settlement);
+				return composters.isEmpty() ? Optional.empty() : Optional.of(composters.get(0));
+			});
 	}
 
 	private static Optional<BlockPos> findReachableHome(ServerLevel level, Villager villager, Set<BlockPos> claimedHomes) {
@@ -2478,13 +2567,22 @@ public final class SettlementVillagers {
 
 	private static Optional<BlockPos> findReachableBeekeeperJobSite(ServerLevel level, Villager villager) {
 		return owningSettlementFor(level, villager)
-			.flatMap(settlement -> findReachableBedLinkedJobSite(
-				level,
-				villager,
-				settlement,
-				ProfessionDemandType.BEEKEEPER,
-				poiType -> poiType.is(LiveVillagesVillagerProfessions.BEEKEEPER_POI)
-			));
+			.flatMap(settlement -> {
+				Optional<BlockPos> poiSite = findReachableBedLinkedJobSite(
+					level,
+					villager,
+					settlement,
+					ProfessionDemandType.BEEKEEPER,
+					poiType -> poiType.is(LiveVillagesVillagerProfessions.BEEKEEPER_POI)
+				);
+
+				if (poiSite.isPresent()) {
+					return poiSite;
+				}
+
+				List<BlockPos> separators = SettlementConstruction.findPlacedHoneySeparators(level, settlement);
+				return separators.isEmpty() ? Optional.empty() : Optional.of(separators.get(0));
+			});
 	}
 
 	private static Optional<BlockPos> findReachableBakerJobSite(ServerLevel level, Villager villager) {
@@ -3806,8 +3904,16 @@ public final class SettlementVillagers {
 		demands.sort(Comparator
 			.<ProfessionDemand>comparingInt(ProfessionDemand::unmetDemand)
 			.reversed()
-			.thenComparing(Comparator.comparingInt((ProfessionDemand demand) -> demand.type().priority()).reversed()));
+			.thenComparing(Comparator.comparingInt((ProfessionDemand demand) -> professionDemandPriority(level, settlement, demand.type())).reversed()));
 		return demands;
+	}
+
+	private static int professionDemandPriority(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
+		if (type != ProfessionDemandType.ROADWRIGHT) {
+			return type.priority();
+		}
+
+		return type.priority() + SettlementTerrainAssessment.assess(level, settlement).roadwrightPriorityBonus();
 	}
 
 	private static int desiredProfessionCount(ServerLevel level, SettlementState settlement, ProfessionDemandType type) {
@@ -3817,7 +3923,10 @@ public final class SettlementVillagers {
 			case SCRIBE -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.SCRIBE);
 			case GUARD -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.GUARD);
 			case GARDENER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.GARDENER);
-			case BEEKEEPER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BEEKEEPER);
+			case BEEKEEPER -> Math.max(
+				desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BEEKEEPER),
+				SettlementConstruction.findPlacedHoneySeparators(level, settlement).isEmpty() ? 0 : 1
+			);
 			case BAKER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.BAKER);
 			case ROADWRIGHT -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.ROADWRIGHT);
 			case FORESTER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FORESTER);
@@ -3826,7 +3935,10 @@ public final class SettlementVillagers {
 			case FLETCHER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FLETCHER);
 			case FISHERMAN -> desiredFishermanCount(level, settlement);
 			case BUTCHER -> desiredButcherCount(level, settlement);
-			case FARMER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FARMER);
+			case FARMER -> Math.max(
+				desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.FARMER),
+				SettlementConstruction.findPlacedComposters(level, settlement).isEmpty() ? 0 : 1
+			);
 			case MASON -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.MASON);
 			case CARTOGRAPHER -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.CARTOGRAPHER);
 			case CLERIC -> desiredBedLinkedProfessionCount(level, settlement, ProfessionDemandType.CLERIC);
@@ -4090,6 +4202,10 @@ public final class SettlementVillagers {
 			return type == ProfessionDemandType.BEEKEEPER ? Math.min(1, beds) : beds;
 		}
 
+		if (isConstructionSupportBootstrapProfession(level, type, workstationPos)) {
+			return 1;
+		}
+
 		if (!SettlementConstruction.isPositionInExistingShelteredStructure(level, workstationPos)) {
 			return 0;
 		}
@@ -4111,6 +4227,7 @@ public final class SettlementVillagers {
 		return switch (type) {
 			case CARPENTER -> level.getBlockState(workstationPos).is(LiveVillagesBlocks.CARPENTER_BENCH);
 			case FORESTER -> level.getBlockState(workstationPos).is(LiveVillagesBlocks.FORESTER_TABLE);
+			case BEEKEEPER -> level.getBlockState(workstationPos).is(LiveVillagesBlocks.HONEY_SEPARATOR);
 			default -> false;
 		};
 	}
@@ -4672,6 +4789,7 @@ public final class SettlementVillagers {
 			case "seeking_bed" -> "seeking bed";
 			case "sleeping" -> "sleeping";
 			case "sleeping_in_bed" -> "sleeping in bed";
+			case "placing_bed" -> "placing a bed";
 			case "placing_bedrock_safety_ladders" -> "placing bedrock safety ladders";
 			case "placing_managed_hive" -> "placing managed hive";
 			case "placing_shaft_ladders" -> "placing shaft ladders";
@@ -4796,6 +4914,9 @@ public final class SettlementVillagers {
 	}
 
 	private record ProfessionDemand(ProfessionDemandType type, int unmetDemand) {
+	}
+
+	private record CachedColdTerrain(boolean hasPowderSnow, long tick) {
 	}
 
 	public record VillagerDebugView(

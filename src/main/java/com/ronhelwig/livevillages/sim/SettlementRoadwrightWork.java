@@ -65,8 +65,8 @@ public final class SettlementRoadwrightWork {
 	private static final long MAX_CATCHUP_WALL_TIME_NANOS = 150_000_000L;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_PLANNED_WORK = 1;
 	private static final int ROADWORK_FORECAST_DAYS_FOR_ROUTE_TRACE = 21;
-	private static final int ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT = SettlementEconomyRules.scaledWorkerDailyUnits(18);
-	private static final int ROADWORK_DAILY_WORK_UNITS_PER_HELPER = SettlementEconomyRules.scaledWorkerDailyUnits(9);
+	private static final int BASE_ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT = 18;
+	private static final int BASE_ROADWORK_DAILY_WORK_UNITS_PER_HELPER = 9;
 	private static final long ROADWORK_TASK_CACHE_TICKS = 1_200L; // Keep expensive path searches from repeating while the same task remains useful.
 	private static final long ROADWORK_PATH_CACHE_TICKS = 1_200L;
 	private static final long ROADWORK_VISUAL_MEMORY_TICKS = 12_000L;
@@ -269,7 +269,7 @@ public final class SettlementRoadwrightWork {
 
 		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights);
 		int helperCount = Math.max(0, roadWorkers.size() - roadwrights.size());
-		int dailyWorkUnits = forecastDailyWorkUnits(roadwrights.size(), helperCount);
+		int dailyWorkUnits = forecastDailyWorkUnits(level, roadwrights.size(), helperCount);
 		int taskBudget = Math.min(
 			MAX_CATCHUP_TASKS_PER_MAINTENANCE,
 			Math.max(0, (int) Math.round(dailyWorkUnits * Math.min(MAX_CATCHUP_DAYS, elapsedDays)))
@@ -401,7 +401,7 @@ public final class SettlementRoadwrightWork {
 		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
 		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights);
 		int helperCount = Math.max(0, roadWorkers.size() - roadwrights.size());
-		int dailyWorkUnits = forecastDailyWorkUnits(roadwrights.size(), helperCount);
+		int dailyWorkUnits = forecastDailyWorkUnits(level, roadwrights.size(), helperCount);
 		int plannedWorkBudget = Math.max(1, dailyWorkUnits * ROADWORK_FORECAST_DAYS_FOR_PLANNED_WORK);
 		int routeTraceBudget = Math.max(plannedWorkBudget, dailyWorkUnits * ROADWORK_FORECAST_DAYS_FOR_ROUTE_TRACE);
 		LinkedHashSet<BlockPos> routeTraceBlocks = new LinkedHashSet<>();
@@ -581,8 +581,9 @@ public final class SettlementRoadwrightWork {
 		return 1;
 	}
 
-	private static int forecastDailyWorkUnits(int roadwrightCount, int helperCount) {
-		return (roadwrightCount * ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT) + (helperCount * ROADWORK_DAILY_WORK_UNITS_PER_HELPER);
+	private static int forecastDailyWorkUnits(ServerLevel level, int roadwrightCount, int helperCount) {
+		return (roadwrightCount * SettlementEconomyRules.scaledWorkerDailyUnits(level, BASE_ROADWORK_DAILY_WORK_UNITS_PER_ROADWRIGHT))
+			+ (helperCount * SettlementEconomyRules.scaledWorkerDailyUnits(level, BASE_ROADWORK_DAILY_WORK_UNITS_PER_HELPER));
 	}
 
 	private static void appendRouteTraceBlocks(Set<BlockPos> routeTraceBlocks, List<BlockPos> routeTrace) {

@@ -4,14 +4,13 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.network.LiveVillagesNetworking;
 
 public final class LiveVillagesScheduler {
 	private static final int BASE_TICKS_BETWEEN_FARMER_MAINTENANCE = 160;
 	private static final int BASE_TICKS_BETWEEN_RESOURCE_MAINTENANCE = 80;
+	private static final int BASE_TICKS_BETWEEN_DEFENSE_MAINTENANCE = 80;
 	private static final int BASE_TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE = 160;
-	public static final int TICKS_BETWEEN_FARMER_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_FARMER_MAINTENANCE);
-	public static final int TICKS_BETWEEN_RESOURCE_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_RESOURCE_MAINTENANCE);
-	public static final int TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE = SettlementEconomyRules.scaledWorkerTickInterval(BASE_TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
 	public static final int TICKS_BETWEEN_CYCLES = 200;
 	public static final int LOADED_MAINTENANCE_CHECK_INTERVAL = 20;
 	public static final int REGIONS_PER_CYCLE = 3;
@@ -34,6 +33,10 @@ public final class LiveVillagesScheduler {
 
 		if (sessionTick <= 0) {
 			return;
+		}
+
+		if (sessionTick % 40 == 0) {
+			LiveVillagesNetworking.syncVillagerTextureScaleToAll(server);
 		}
 
 		LiveVillagesSavedData savedData = LiveVillagesSavedData.get(server);
@@ -66,7 +69,7 @@ public final class LiveVillagesScheduler {
 
 		if (isLoadedMaintenancePhase(sessionTick, FARMER_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
-			savedData.maintainLoadedFarmerState(server, TICKS_BETWEEN_FARMER_MAINTENANCE);
+			savedData.maintainLoadedFarmerState(server, ticksBetweenFarmerMaintenance(server));
 			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) { // Log if > 10ms
 				LiveVillages.LOGGER.warn("Farmer maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
@@ -75,7 +78,7 @@ public final class LiveVillagesScheduler {
 
 		if (isLoadedMaintenancePhase(sessionTick, RESOURCE_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
-			savedData.maintainLoadedResourceState(server, TICKS_BETWEEN_RESOURCE_MAINTENANCE);
+			savedData.maintainLoadedResourceState(server, ticksBetweenResourceMaintenance(server));
 			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Resource maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
@@ -84,7 +87,7 @@ public final class LiveVillagesScheduler {
 
 		if (isLoadedMaintenancePhase(sessionTick, DEFENSE_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
-			savedData.maintainLoadedDefenseState(server);
+			savedData.maintainLoadedDefenseState(server, ticksBetweenDefenseMaintenance(server));
 			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Defense maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
@@ -93,7 +96,7 @@ public final class LiveVillagesScheduler {
 
 		if (isLoadedMaintenancePhase(sessionTick, CONSTRUCTION_MAINTENANCE_OFFSET)) {
 			long start = System.nanoTime();
-			savedData.maintainLoadedConstructionState(server, TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
+			savedData.maintainLoadedConstructionState(server, ticksBetweenConstructionMaintenance(server));
 			long elapsed = System.nanoTime() - start;
 			if (elapsed > 10_000_000) {
 				LiveVillages.LOGGER.warn("Construction maintenance took {} ms", Math.round(elapsed / 1_000_000.0D));
@@ -125,5 +128,21 @@ public final class LiveVillagesScheduler {
 
 	private static boolean isLoadedMaintenancePhase(int currentTick, int offset) {
 		return Math.floorMod(currentTick - offset, LOADED_MAINTENANCE_CHECK_INTERVAL) == 0;
+	}
+
+	public static int ticksBetweenFarmerMaintenance(MinecraftServer server) {
+		return SettlementEconomyRules.scaledWorkerTickInterval(server, BASE_TICKS_BETWEEN_FARMER_MAINTENANCE);
+	}
+
+	public static int ticksBetweenResourceMaintenance(MinecraftServer server) {
+		return SettlementEconomyRules.scaledWorkerTickInterval(server, BASE_TICKS_BETWEEN_RESOURCE_MAINTENANCE);
+	}
+
+	public static int ticksBetweenConstructionMaintenance(MinecraftServer server) {
+		return SettlementEconomyRules.scaledWorkerTickInterval(server, BASE_TICKS_BETWEEN_CONSTRUCTION_MAINTENANCE);
+	}
+
+	public static int ticksBetweenDefenseMaintenance(MinecraftServer server) {
+		return SettlementEconomyRules.scaledWorkerTickInterval(server, BASE_TICKS_BETWEEN_DEFENSE_MAINTENANCE);
 	}
 }

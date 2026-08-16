@@ -24,6 +24,32 @@ public final class SettlementConstructionMaterials {
 		return consumeMaterial(settlementStock, villagerGoods, block.expectedMaterialKey());
 	}
 
+	public static boolean tryConsumeCost(Map<String, Integer> settlementStock, Map<String, Integer> cost) {
+		if (cost == null || cost.isEmpty()) {
+			return true;
+		}
+
+		Map<String, Integer> workingStock = new LinkedHashMap<>(settlementStock);
+
+		for (Map.Entry<String, Integer> entry : cost.entrySet()) {
+			int required = Math.max(0, entry.getValue());
+
+			for (int consumed = 0; consumed < required; consumed++) {
+				if (!consumeMaterial(workingStock, new LinkedHashMap<>(), entry.getKey()).supplied()) {
+					return false;
+				}
+			}
+		}
+
+		settlementStock.clear();
+		settlementStock.putAll(workingStock);
+		return true;
+	}
+
+	public static boolean canCraftFromStock(Map<String, Integer> settlementStock, String materialKey) {
+		return consumeMaterial(new LinkedHashMap<>(settlementStock), new LinkedHashMap<>(), materialKey).supplied();
+	}
+
 	public static ConstructionMaterialResult consumeMaterial(
 		Map<String, Integer> settlementStock,
 		Map<String, Integer> villagerGoods,
@@ -387,7 +413,9 @@ public final class SettlementConstructionMaterials {
 			return ConstructionMaterialResult.missing("stick");
 		}
 
-		if (!consumeDirect(workingGoods, "coal", 1)) {
+		if (!consumeDirect(workingGoods, "coal", 1)
+			&& !consumeDirect(workingGoods, "charcoal", 1)
+			&& !consumeDirect(workingGoods, "logs", 1)) {
 			return ConstructionMaterialResult.missing("coal");
 		}
 

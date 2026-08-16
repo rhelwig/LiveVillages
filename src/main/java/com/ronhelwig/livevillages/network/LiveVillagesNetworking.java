@@ -10,11 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Comparator;
 
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BiomeTags;
@@ -79,10 +81,12 @@ public final class LiveVillagesNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(BuildSitePreviewRequestPayload.TYPE, BuildSitePreviewRequestPayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(StructureCaptureRequestPayload.TYPE, StructureCaptureRequestPayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(TradeBoardActionPayload.TYPE, TradeBoardActionPayload.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(VillagerTextureScaleUpdatePayload.TYPE, VillagerTextureScaleUpdatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BuildSitePreviewStatePayload.TYPE, BuildSitePreviewStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(TradeBoardRefreshPayload.TYPE, TradeBoardRefreshPayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(SurveyorMapStatePayload.TYPE, SurveyorMapStatePayload.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(PortmasterMapStatePayload.TYPE, PortmasterMapStatePayload.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(VillagerTextureScalePayload.TYPE, VillagerTextureScalePayload.STREAM_CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(SettlementOverlayRequestPayload.TYPE, (payload, context) -> {
 			SettlementOverlaySnapshot snapshot = buildNearestSettlementSnapshot(context.player());
@@ -104,6 +108,51 @@ public final class LiveVillagesNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(TradeBoardActionPayload.TYPE, (payload, context) ->
 			TradeBoardTrading.handleTradeAction(context.player(), payload)
 		);
+		ServerPlayNetworking.registerGlobalReceiver(VillagerTextureScaleUpdatePayload.TYPE, (payload, context) -> {
+			if (!Commands.LEVEL_GAMEMASTERS.check(context.player().permissions())) {
+				return;
+			}
+
+			var option = switch (payload.scale()) {
+				case 64 -> com.ronhelwig.livevillages.sim.SettlementVillagerTextureScale.Option.PIXELS_64;
+				case 128 -> com.ronhelwig.livevillages.sim.SettlementVillagerTextureScale.Option.PIXELS_128;
+				case 256 -> com.ronhelwig.livevillages.sim.SettlementVillagerTextureScale.Option.PIXELS_256;
+				default -> null;
+			};
+			if (option == null) {
+				return;
+			}
+
+			var server = context.player().level().getServer();
+			server.getGameRules().set(LiveVillagesGameRules.VILLAGER_TEXTURE_SCALE, option, server);
+			syncVillagerTextureScaleToAll(server);
+		});
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+			syncVillagerTextureScale(handler.player)
+		);
+	}
+
+	public static void syncVillagerTextureScale(ServerPlayer player) {
+		if (player == null || player.level() == null || player.level().getServer() == null) {
+			return;
+		}
+
+		ServerPlayNetworking.send(
+			player,
+			new VillagerTextureScalePayload(LiveVillagesGameRules.villagerTextureScale(player.level().getServer()))
+		);
+	}
+
+	public static void syncVillagerTextureScaleToAll(net.minecraft.server.MinecraftServer server) {
+		if (server == null) {
+			return;
+		}
+
+		int scale = LiveVillagesGameRules.villagerTextureScale(server);
+		VillagerTextureScalePayload payload = new VillagerTextureScalePayload(scale);
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			ServerPlayNetworking.send(player, payload);
+		}
 	}
 
 	public static boolean isBuildSitePreviewActive(ServerPlayer player) {

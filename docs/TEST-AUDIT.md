@@ -4,7 +4,7 @@ This audit covers the implementation present in July 2026. It checks current beh
 
 ## Automated coverage
 
-The plain-JUnit suite contains 69 tests in 18 test classes and covers:
+The plain-JUnit suite contains 81 tests in 21 test classes and covers:
 
 - persistent codecs, defaults, immutable state updates, region math, and overflow boundaries
 - settlement tiers, Scribe persistence, economy scaling, refining atomicity, trade range, and Trade Board valuation

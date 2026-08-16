@@ -1,9 +1,9 @@
 package com.ronhelwig.livevillages.client;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 
 import com.ronhelwig.livevillages.client.hud.SettlementInventoryOverlay;
@@ -11,6 +11,7 @@ import com.ronhelwig.livevillages.client.render.BuildSiteWireframePreview;
 import com.ronhelwig.livevillages.client.render.MilepostBlockEntityRenderer;
 import com.ronhelwig.livevillages.client.render.StructureCaptureHotkey;
 import com.ronhelwig.livevillages.client.render.TradeBoardBlockEntityRenderer;
+import com.ronhelwig.livevillages.client.render.VillagerTextureScaleClient;
 import com.ronhelwig.livevillages.client.screen.CarpenterBenchScreen;
 import com.ronhelwig.livevillages.client.screen.FletchingTableScreen;
 import com.ronhelwig.livevillages.client.screen.GlassDisplayCaseScreen;
@@ -30,14 +31,15 @@ public class LiveVillagesClient implements ClientModInitializer {
 		MenuScreens.register(LiveVillagesMenus.GLASS_DISPLAY_CASE, GlassDisplayCaseScreen::new);
 		MenuScreens.register(LiveVillagesMenus.SCRIBE_DESK, ScribeDeskScreen::new);
 		MenuScreens.register(LiveVillagesMenus.TRADE_BOARD, TradeBoardScreen::new);
-		EntityRendererRegistry.register(LiveVillagesEntityTypes.SLING_STONE, ThrownItemRenderer::new);
-		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.MILEPOST, MilepostBlockEntityRenderer::new);
-		BlockEntityRendererRegistry.register(LiveVillagesBlockEntities.TRADE_BOARD, TradeBoardBlockEntityRenderer::new);
+		EntityRenderers.register(LiveVillagesEntityTypes.SLING_STONE, ThrownItemRenderer::new);
+		BlockEntityRenderers.register(LiveVillagesBlockEntities.MILEPOST, MilepostBlockEntityRenderer::new);
+		BlockEntityRenderers.register(LiveVillagesBlockEntities.TRADE_BOARD, TradeBoardBlockEntityRenderer::new);
 		TradeBoardScreen.registerNetworking();
 		SurveyorMapScreen.registerNetworking();
 		PortmasterMapScreen.registerNetworking();
 		SettlementInventoryOverlay.register();
 		BuildSiteWireframePreview.register();
 		StructureCaptureHotkey.register();
+		VillagerTextureScaleClient.register();
 	}
 }

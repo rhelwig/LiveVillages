@@ -63,6 +63,15 @@ public final class SettlementTiers {
 		return Math.max(MIN_TIER, Math.min(MAX_TIER, tier));
 	}
 
+	public static int nextPopulationGoal(SettlementState settlement) {
+		return switch (unlockedTier(settlement)) {
+			case 1 -> TIER_TWO_POPULATION;
+			case 2 -> TIER_THREE_POPULATION;
+			case 3 -> TIER_FOUR_POPULATION;
+			default -> 64;
+		};
+	}
+
 	private static boolean hasScribeSupport(Map<String, Integer> population) {
 		return population.getOrDefault(SettlementRoleKeys.SCRIBE, 0) > 0;
 	}

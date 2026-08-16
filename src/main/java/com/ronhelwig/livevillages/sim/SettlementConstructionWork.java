@@ -49,7 +49,7 @@ public final class SettlementConstructionWork {
 	private static final int STOCK_ACCESS_SCAN_Y_RANGE_BLOCKS = 24;
 	private static final int MAX_CONSTRUCTION_WORKERS_PER_PASS = 8;
 	private static final long MAX_CONSTRUCTION_WORK_NANOS_PER_PASS = 25_000_000L;
-	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE = 4;
+	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE = 12;
 	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_WORKER = 24;
 	private static final int MAX_UNREACHABLE_TASK_RETRIES = 3;
 	private static final int CONSTRUCTION_DELIVERY_BATCH_SIZE = 32;
@@ -285,6 +285,7 @@ public final class SettlementConstructionWork {
 				SettlementConstructionDelivery delivery = deliveries.get(worker.getUUID().toString());
 				return delivery == null || !delivery.settlementId().equals(settlement.id());
 			})
+			.sorted(java.util.Comparator.comparingInt(worker -> worker.getVillagerData().profession().is(VillagerProfession.NONE) ? 0 : 1))
 			.toList();
 
 		if (idleWorkers.isEmpty()) {
@@ -427,6 +428,11 @@ public final class SettlementConstructionWork {
 		boolean changed = false;
 
 		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (SettlementConstruction.isObsoleteFoundationOverAuthoredBlueprint(buildSite, block)) {
+				changed = true;
+				continue;
+			}
+
 			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
 			BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
@@ -1250,6 +1256,13 @@ public final class SettlementConstructionWork {
 					continue;
 				}
 
+				if (block.status() == SettlementBuildBlockStatus.BLOCKED
+					&& !statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)
+					&& !SettlementConstruction.isBuildSiteReplaceable(currentState)
+					&& !SettlementConstruction.canClearBlockingConstructionBlock(level, targetPos.get(), currentState)) {
+					continue;
+				}
+
 				Optional<PairedBlock> pairedBlock = pairedRootBlock(buildSite, block);
 				if (pairedBlock.isPresent()) {
 					if (!hasPairedConstructionPlacementSupport(level, buildSite, block, targetPos.get(), plannedState, pairedBlock.get())) {
@@ -1352,6 +1365,14 @@ public final class SettlementConstructionWork {
 				}
 
 				if (isUnsupportedWallTorch(level, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				BlockState currentState = level.getBlockState(targetPos.get());
+				if (block.status() == SettlementBuildBlockStatus.BLOCKED
+					&& !statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)
+					&& !SettlementConstruction.isBuildSiteReplaceable(currentState)
+					&& !SettlementConstruction.canClearBlockingConstructionBlock(level, targetPos.get(), currentState)) {
 					continue;
 				}
 
@@ -2350,6 +2371,10 @@ public final class SettlementConstructionWork {
 		BlockState currentState,
 		BlockState plannedState
 	) {
+		if (isEquivalentMineEntranceUtilityBlock(buildSite, currentState, plannedState)) {
+			return true;
+		}
+
 		if (currentState.getBlock() instanceof DoorBlock && plannedState.getBlock() instanceof DoorBlock) {
 			return doorStatesMatchIntent(currentState, plannedState);
 		}
@@ -2387,6 +2412,10 @@ public final class SettlementConstructionWork {
 		BlockState currentState,
 		BlockState plannedState
 	) {
+		if (isEquivalentMineEntranceUtilityBlock(buildSite, currentState, plannedState)) {
+			return false;
+		}
+
 		if (currentState.getBlock() instanceof DoorBlock
 			&& plannedState.getBlock() instanceof DoorBlock
 			&& doorStatesMatchIntent(currentState, plannedState)) {
@@ -2410,6 +2439,18 @@ public final class SettlementConstructionWork {
 			&& !SettlementConstruction.isTierUpgradeMaterialMismatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !SettlementConstruction.isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())
 			&& !isIntegratedMineEntranceStone(buildSite, block, currentState, plannedState);
+	}
+
+	static boolean isEquivalentMineEntranceUtilityBlock(
+		SettlementBuildSite buildSite,
+		BlockState currentState,
+		BlockState plannedState
+	) {
+		if (buildSite.blueprintId() != SettlementBuildSiteType.MINE_ENTRANCE || !currentState.is(plannedState.getBlock())) {
+			return false;
+		}
+
+		return currentState.getBlock() instanceof LadderBlock || currentState.getBlock() instanceof RotatedPillarBlock;
 	}
 
 	private static boolean doorStatesMatchIntent(BlockState currentState, BlockState plannedState) {

@@ -24,15 +24,21 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.phys.AABB;
 
+import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.HoneySeparatorBlock;
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+
 public final class SettlementBeekeeperWork {
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final long DAY_TICKS = 24_000L;
 	private static final double SEPARATOR_REACH_DISTANCE_SQUARED = 6.25D;
+	private static final double HIVE_REACH_DISTANCE_SQUARED = 20.25D;
 	private static final double BEEKEEPER_WALK_SPEED = 0.75D;
 	private static final long TASK_MEMORY_TICKS = 80L;
 	private static final long BEEKEEPER_DECIDE_INTERVAL_TICKS = 600L;
 	private static final long BEEKEEPER_WORK_INTERVAL_TICKS = 1_600L;
 	private static final int APIARY_SCAN_RADIUS = 8;
+	private static final int NATURAL_HIVE_SCAN_RADIUS = 48;
 	private static final int BEE_SCAN_RADIUS = 16;
 	private static final int HIVE_RESTORATION_SCAN_RADIUS = BEE_SCAN_RADIUS;
 	private static final int MAX_MANAGED_HIVES_PER_SEPARATOR = 3;
@@ -45,23 +51,37 @@ public final class SettlementBeekeeperWork {
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 	private static final Map<String, Long> LAST_WORK_TICKS = new HashMap<>();
 	private static final Map<String, Long> BEE_RESTORATION_START_TICKS = new HashMap<>();
+	private static final Map<String, Long> LAST_STAFFING_SPAWN_TICKS = new HashMap<>();
+	private static final long STAFFING_SPAWN_RETRY_TICKS = 6_000L;
+	private static final int STAFFING_SPAWN_SEARCH_RADIUS = 6;
 
 	private SettlementBeekeeperWork() {
 	}
 
 	public static boolean maintainLoadedBeekeeping(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
 		List<Villager> beekeepers = SettlementVillagers.nearbyBeekeepers(level, settlement);
-
-		if (beekeepers.isEmpty()) {
-			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.BEEKEEPER, "no_beekeepers", "");
-			return false;
-		}
-
 		List<BlockPos> separators = SettlementConstruction.findPlacedHoneySeparators(level, settlement);
 
+		if (separators.isEmpty() && placeSeparatorNearNaturalHive(level, settlement, stock)) {
+			LiveVillages.LOGGER.info("[live-villages] {} placed a Honey Separator beside a natural hive", settlement.name());
+			return true;
+		}
+
+		if (beekeepers.isEmpty()) {
+			boolean spawnedRecruit = !separators.isEmpty() && maybeSpawnBeekeeperRecruit(level, settlement);
+			SettlementProfessionDiagnostics.log(
+				level,
+				settlement,
+				SettlementRoleKeys.BEEKEEPER,
+				spawnedRecruit ? "spawned_separator_recruit" : "no_beekeepers",
+				"separators=" + separators.size()
+			);
+			return spawnedRecruit;
+		}
+
 		if (separators.isEmpty()) {
-			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.BEEKEEPER, "no_honey_separators", "");
-			return false;
+			separators = List.of(settlement.center());
+			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.BEEKEEPER, "using_settlement_center_for_natural_hives", "");
 		}
 
 		boolean stockChanged = false;
@@ -86,8 +106,21 @@ public final class SettlementBeekeeperWork {
 			BlockPos workPos = workPlan.workPos();
 			ACTIVE_TASKS.put(beekeeper.getUUID().toString(), new TimedTask(taskKey, tick));
 
-			if (beekeeper.blockPosition().distSqr(workPos) > SEPARATOR_REACH_DISTANCE_SQUARED) {
-				SettlementNavigation.moveToRoutineTarget(level, settlement, beekeeper, workPos, BEEKEEPER_WALK_SPEED);
+			boolean hiveTask = taskKey.startsWith("harvesting")
+				|| taskKey.equals("smoking_natural_hive")
+				|| taskKey.equals("maintaining_hive_smoke");
+			double reach = hiveTask ? HIVE_REACH_DISTANCE_SQUARED : SEPARATOR_REACH_DISTANCE_SQUARED;
+			if (beekeeper.blockPosition().distSqr(workPos) > reach) {
+				if (hiveTask) {
+					beekeeper.getNavigation().moveTo(
+						workPos.getX() + 0.5D,
+						workPos.getY(),
+						workPos.getZ() + 0.5D,
+						BEEKEEPER_WALK_SPEED
+					);
+				} else {
+					SettlementNavigation.moveToRoutineTarget(level, settlement, beekeeper, workPos, BEEKEEPER_WALK_SPEED);
+				}
 				continue;
 			}
 
@@ -145,6 +178,10 @@ public final class SettlementBeekeeperWork {
 			return maintainManagedHiveSmoke(level, settlement, stock, beekeeper, separator);
 		}
 
+		if (taskKey.equals("smoking_natural_hive")) {
+			return placeSmokeNearNaturalHive(level, settlement, stock, beekeeper, separator);
+		}
+
 		if (taskKey.equals("harvesting_real_honey")) {
 			return harvestFullHive(level, settlement, stock, beekeeper, separator, true);
 		}
@@ -189,13 +226,34 @@ public final class SettlementBeekeeperWork {
 			return new BeekeeperWorkPlan("maintaining_hive_smoke", unlitCampfire.orElseGet(missingSmoke::get));
 		}
 
-		Optional<BlockPos> fullHive = fullHarvestableHive(level, separator);
+		Optional<BlockPos> fullHive = fullHarvestableHive(level, separator, APIARY_SCAN_RADIUS);
+		if (fullHive.isEmpty()) {
+			fullHive = fullHarvestableHive(level, settlement.center(), Math.max(APIARY_SCAN_RADIUS, 24));
+		}
+
+		Optional<BlockPos> unsokedHive = hiveNeedingSmoke(level, settlement, separator);
+		if (unsokedHive.isPresent() && (stock.getOrDefault("campfire", 0) > 0 || canCraftCampfire(stock))) {
+			return new BeekeeperWorkPlan("smoking_natural_hive", smokeStandNearHive(level, unsokedHive.get()).orElse(unsokedHive.get()));
+		}
+
+		if (unsokedHive.isPresent()) {
+			SettlementProfessionDiagnostics.log(
+				level,
+				settlement,
+				SettlementRoleKeys.BEEKEEPER,
+				"cannot_craft_hive_smoke",
+				"campfire=" + stock.getOrDefault("campfire", 0)
+					+ " logs=" + stock.getOrDefault("logs", 0)
+					+ " stick=" + stock.getOrDefault("stick", 0)
+					+ " coal=" + stock.getOrDefault("coal", 0)
+			);
+		}
 
 		if (fullHive.isPresent() && stock.getOrDefault("glass_bottle", 0) > 0) {
 			return new BeekeeperWorkPlan("harvesting_real_honey", fullHive.get());
 		}
 
-		if (fullHive.isPresent() && stock.getOrDefault("shears", 0) > 0) {
+		if (fullHive.isPresent()) {
 			return new BeekeeperWorkPlan("harvesting_real_honeycomb", fullHive.get());
 		}
 
@@ -403,7 +461,10 @@ public final class SettlementBeekeeperWork {
 		BlockPos separator,
 		boolean bottledHoney
 	) {
-		Optional<BlockPos> hivePos = fullHarvestableHive(level, separator);
+		Optional<BlockPos> hivePos = fullHarvestableHive(level, separator, APIARY_SCAN_RADIUS);
+		if (hivePos.isEmpty()) {
+			hivePos = fullHarvestableHive(level, settlement.center(), Math.max(APIARY_SCAN_RADIUS, 24));
+		}
 
 		if (hivePos.isEmpty()) {
 			return false;
@@ -424,14 +485,12 @@ public final class SettlementBeekeeperWork {
 			SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "glass_bottle", 1);
 			SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "honey_bottle", 1);
 			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "harvested full hive honey");
+			LiveVillages.LOGGER.info("[live-villages] {} harvested honey from a full hive at {}", settlement.name(), hivePos.get().toShortString());
 		} else {
-			if (stock.getOrDefault("shears", 0) <= 0) {
-				return false;
-			}
-
 			SettlementGoods.addGoods(stock, "honeycomb", 3);
 			SettlementProfessionReports.recordProduced(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "honeycomb", 3);
 			SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "sheared full hive honeycomb");
+			LiveVillages.LOGGER.info("[live-villages] {} harvested honeycomb from a full hive at {}", settlement.name(), hivePos.get().toShortString());
 		}
 
 		level.setBlock(hivePos.get(), hiveState.setValue(BeehiveBlock.HONEY_LEVEL, 0), BLOCK_UPDATE_FLAGS);
@@ -873,11 +932,16 @@ public final class SettlementBeekeeperWork {
 		return count;
 	}
 
-	private static Optional<BlockPos> fullHarvestableHive(ServerLevel level, BlockPos separator) {
-		for (int dx = -APIARY_SCAN_RADIUS; dx <= APIARY_SCAN_RADIUS; dx++) {
-			for (int dz = -APIARY_SCAN_RADIUS; dz <= APIARY_SCAN_RADIUS; dz++) {
-				for (int dy = -2; dy <= 4; dy++) {
-					BlockPos hivePos = separator.offset(dx, dy, dz);
+	private static Optional<BlockPos> fullHarvestableHive(ServerLevel level, BlockPos origin, int radius) {
+		int scanRadius = Math.max(1, radius);
+		for (int dx = -scanRadius; dx <= scanRadius; dx++) {
+			for (int dz = -scanRadius; dz <= scanRadius; dz++) {
+				for (int dy = -4; dy <= 8; dy++) {
+					BlockPos hivePos = origin.offset(dx, dy, dz);
+					if (!level.hasChunkAt(hivePos)) {
+						continue;
+					}
+
 					BlockState hiveState = level.getBlockState(hivePos);
 
 					if (!isHiveOrNest(hiveState)
@@ -991,7 +1055,28 @@ public final class SettlementBeekeeperWork {
 	}
 
 	private static boolean hasSafeSmoke(ServerLevel level, BlockPos hivePos) {
-		BlockState campfireState = level.getBlockState(hivePos.below());
+		for (int dy = 1; dy <= 6; dy++) {
+			BlockPos below = hivePos.below(dy);
+			if (isLitCampfire(level, below)) {
+				return true;
+			}
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				if (isLitCampfire(level, below.relative(direction))) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean isLitCampfire(ServerLevel level, BlockPos pos) {
+		if (!level.hasChunkAt(pos)) {
+			return false;
+		}
+
+		BlockState campfireState = level.getBlockState(pos);
 		return campfireState.is(Blocks.CAMPFIRE)
 			&& (!campfireState.hasProperty(CampfireBlock.LIT) || campfireState.getValue(CampfireBlock.LIT));
 	}
@@ -1042,6 +1127,189 @@ public final class SettlementBeekeeperWork {
 		if (beekeeper.getMainHandItem().isEmpty()) {
 			beekeeper.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.SHEARS));
 		}
+	}
+
+	private static boolean placeSeparatorNearNaturalHive(ServerLevel level, SettlementState settlement, Map<String, Integer> stock) {
+		Optional<BlockPos> hivePos = nearbyHiveOrNest(level, settlement.center(), NATURAL_HIVE_SCAN_RADIUS);
+		if (hivePos.isEmpty()) {
+			return false;
+		}
+
+		boolean fromStock = stock.getOrDefault("honey_separator", 0) > 0;
+		boolean canBootstrap = stock.getOrDefault("planks", 0) >= 4 && stock.getOrDefault("stick", 0) >= 2;
+		if (!fromStock && !canBootstrap) {
+			return false;
+		}
+
+		Optional<BlockPos> stand = separatorStandNearHive(level, hivePos.get());
+		if (stand.isEmpty()) {
+			return false;
+		}
+
+		Direction facing = hiveFacing(stand.get(), hivePos.get());
+		BlockState separatorState = LiveVillagesBlocks.HONEY_SEPARATOR.defaultBlockState().setValue(HoneySeparatorBlock.FACING, facing);
+		if (!separatorState.canSurvive(level, stand.get())) {
+			return false;
+		}
+
+		level.setBlock(stand.get(), separatorState, BLOCK_UPDATE_FLAGS);
+		if (fromStock) {
+			SettlementGoods.consumeGoods(stock, "honey_separator", 1);
+		} else {
+			SettlementGoods.consumeGoods(stock, "planks", 4);
+			SettlementGoods.consumeGoods(stock, "stick", 2);
+		}
+		return true;
+	}
+
+	private static Optional<BlockPos> hiveNeedingSmoke(ServerLevel level, SettlementState settlement, BlockPos origin) {
+		Optional<BlockPos> hive = nearbyHiveOrNest(level, origin, APIARY_SCAN_RADIUS);
+		if (hive.isEmpty()) {
+			hive = nearbyHiveOrNest(level, settlement.center(), NATURAL_HIVE_SCAN_RADIUS);
+		}
+		if (hive.isEmpty() || hasSafeSmoke(level, hive.get())) {
+			return Optional.empty();
+		}
+		return hive;
+	}
+
+	private static boolean placeSmokeNearNaturalHive(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		Villager beekeeper,
+		BlockPos origin
+	) {
+		Optional<BlockPos> hivePos = hiveNeedingSmoke(level, settlement, origin);
+		if (hivePos.isEmpty()) {
+			return false;
+		}
+
+		Optional<BlockPos> campfirePos = smokeStandNearHive(level, hivePos.get());
+		if (campfirePos.isEmpty()) {
+			return false;
+		}
+
+		if (stock.getOrDefault("campfire", 0) <= 0 && !consumeCraftedCampfire(stock)) {
+			return false;
+		}
+
+		if (stock.getOrDefault("campfire", 0) > 0) {
+			SettlementGoods.consumeGoods(stock, "campfire", 1);
+		}
+
+		level.setBlock(campfirePos.get(), Blocks.CAMPFIRE.defaultBlockState(), BLOCK_UPDATE_FLAGS);
+		SettlementProfessionReports.recordConsumed(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "campfire", 1);
+		SettlementProfessionReports.recordAccomplished(level, settlement, SettlementRoleKeys.BEEKEEPER, beekeeper, "placed smoke under natural hive");
+		return true;
+	}
+
+	private static boolean maybeSpawnBeekeeperRecruit(ServerLevel level, SettlementState settlement) {
+		int nearbyAdults = SettlementVillagers.nearbyAdultVillagers(level, settlement).size();
+		if (nearbyAdults >= settlement.housingCapacity()) {
+			return false;
+		}
+
+		boolean hasUnemployed = SettlementVillagers.nearbyAdultVillagers(level, settlement).stream()
+			.anyMatch(villager -> villager.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.NONE));
+		if (hasUnemployed) {
+			return false;
+		}
+
+		long tick = level.getServer().getTickCount();
+		Long lastSpawnTick = LAST_STAFFING_SPAWN_TICKS.get(settlement.id());
+		if (lastSpawnTick != null && tick - lastSpawnTick < STAFFING_SPAWN_RETRY_TICKS) {
+			return false;
+		}
+
+		Optional<BlockPos> spawnPos = SettlementVillagers.findSpawnPos(level, settlement.center(), STAFFING_SPAWN_SEARCH_RADIUS);
+		if (spawnPos.isEmpty() || SettlementVillagers.spawnPersistentVillager(level, spawnPos.get(), settlement.id()).isEmpty()) {
+			return false;
+		}
+
+		LAST_STAFFING_SPAWN_TICKS.put(settlement.id(), tick);
+		SettlementVillagers.ensureWorkforce(level, settlement);
+		LiveVillages.LOGGER.info(
+			"[live-villages] {} spawned a villager to staff a Honey Separator at {}",
+			settlement.name(),
+			spawnPos.get().toShortString()
+		);
+		return true;
+	}
+
+	private static boolean canCraftCampfire(Map<String, Integer> stock) {
+		return SettlementConstructionMaterials.canCraftFromStock(stock, "campfire");
+	}
+
+	private static boolean consumeCraftedCampfire(Map<String, Integer> stock) {
+		return SettlementConstructionMaterials.consumeMaterial(stock, new HashMap<>(), "campfire").supplied();
+	}
+
+	private static Optional<BlockPos> nearbyHiveOrNest(ServerLevel level, BlockPos origin, int radius) {
+		int scanRadius = Math.max(1, radius);
+		for (int dx = -scanRadius; dx <= scanRadius; dx++) {
+			for (int dz = -scanRadius; dz <= scanRadius; dz++) {
+				for (int dy = -6; dy <= 12; dy++) {
+					BlockPos hivePos = origin.offset(dx, dy, dz);
+					if (level.hasChunkAt(hivePos) && isHiveOrNest(level.getBlockState(hivePos))) {
+						return Optional.of(hivePos);
+					}
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BlockPos> separatorStandNearHive(ServerLevel level, BlockPos hivePos) {
+		for (int dy = 0; dy <= 8; dy++) {
+			BlockPos ground = hivePos.below(dy);
+			if (!level.hasChunkAt(ground)) {
+				continue;
+			}
+
+			BlockState groundState = level.getBlockState(ground);
+			if (!groundState.isSolid()) {
+				continue;
+			}
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos stand = ground.relative(direction).above();
+				if (level.hasChunkAt(stand)
+					&& level.getBlockState(stand).isAir()
+					&& level.getBlockState(stand.above()).isAir()
+					&& !isHiveOrNest(level.getBlockState(stand))) {
+					return Optional.of(stand);
+				}
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	private static Optional<BlockPos> smokeStandNearHive(ServerLevel level, BlockPos hivePos) {
+		for (int dy = 1; dy <= 6; dy++) {
+			BlockPos below = hivePos.below(dy);
+			if (!level.hasChunkAt(below)) {
+				continue;
+			}
+
+			BlockState existing = level.getBlockState(below);
+			if (existing.isAir() && level.getBlockState(below.below()).isSolid()) {
+				return Optional.of(below);
+			}
+
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos side = below.relative(direction);
+				if (level.hasChunkAt(side)
+					&& level.getBlockState(side).isAir()
+					&& level.getBlockState(side.below()).isSolid()) {
+					return Optional.of(side);
+				}
+			}
+		}
+
+		return Optional.empty();
 	}
 
 	private record TimedTask(String taskKey, long tick) {

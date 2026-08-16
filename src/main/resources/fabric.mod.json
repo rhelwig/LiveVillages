@@ -16,7 +16,10 @@
 	"environment": "*",
 	"mixins": [
 		"live-villages.mixins.json",
-		"live-villages.client.mixins.json"
+		{
+			"config": "live-villages.client.mixins.json",
+			"environment": "client"
+		}
 	],
 	"entrypoints": {
 		"main": [

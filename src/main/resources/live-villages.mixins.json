@@ -8,6 +8,7 @@
     "LookAtPlayerGoalMixin",
     "MobTargetMixin",
     "PillagerMixin",
+    "RaiderCivicTierMixin",
     "ServerPlayerMixin",
     "VillagerMixin",
     "ZombieVillagerMixin"
