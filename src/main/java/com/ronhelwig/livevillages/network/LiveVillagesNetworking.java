@@ -978,6 +978,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.GUARD_POST_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
+			|| item == LiveVillagesBlocks.ALTAR_ITEM
 			|| item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM
 			|| item == LiveVillagesBlocks.PALISADE_GATEHOUSE_ITEM
 			|| item == LiveVillagesBlocks.COPPER_PALISADE_GATEHOUSE_ITEM
@@ -1009,6 +1010,7 @@ public final class LiveVillagesNetworking {
 			|| item == LiveVillagesBlocks.GUARD_POST_ITEM
 			|| item == LiveVillagesBlocks.FORESTER_TABLE_ITEM
 			|| item == LiveVillagesBlocks.TRADE_BOARD_ITEM
+			|| item == LiveVillagesBlocks.ALTAR_ITEM
 			|| item == Items.COMPOSTER
 			|| item == Items.CARTOGRAPHY_TABLE
 			|| item == Items.SMOKER
@@ -1075,6 +1077,10 @@ public final class LiveVillagesNetworking {
 
 		if (item == LiveVillagesBlocks.TRADE_BOARD_ITEM) {
 			return SettlementConstruction.previewTradingPostAtWorkstation(level, settlement.id(), placementPos, placementFacing);
+		}
+
+		if (item == LiveVillagesBlocks.ALTAR_ITEM) {
+			return SettlementConstruction.previewClericShrineAtWorkstation(level, settlement.id(), placementPos, placementFacing);
 		}
 
 		if (item == LiveVillagesBlocks.PORTMASTER_ANCHOR_ITEM) {
@@ -1247,25 +1253,7 @@ public final class LiveVillagesNetworking {
 	}
 
 	private static boolean isBuildSiteCompleteForDisplay(SettlementBuildSite buildSite) {
-		if (buildSite.complete()) {
-			return true;
-		}
-
-		boolean hasRequiredBlocks = false;
-
-		for (SettlementBuildBlockState block : buildSite.blocks()) {
-			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
-				continue;
-			}
-
-			hasRequiredBlocks = true;
-
-			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
-				return false;
-			}
-		}
-
-		return hasRequiredBlocks;
+		return SettlementConstruction.isBuildSiteComplete(buildSite);
 	}
 
 	private static List<BlockPos> activeBuildSiteBlockers(ServerLevel level, SettlementBuildSite buildSite) {
@@ -1403,8 +1391,9 @@ public final class LiveVillagesNetworking {
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
-			case CLERIC_SHRINE -> "Cleric Shrine";
+			case CLERIC_SHRINE -> "Chapel";
 			case DOCK -> "Dock";
+			case DUPLEX -> "Duplex";
 			case LIGHTHOUSE -> "Lighthouse";
 			case LEATHERWORKER_WORKSHOP -> "Leatherworker's Workshop";
 			case LIBRARY -> "Library";

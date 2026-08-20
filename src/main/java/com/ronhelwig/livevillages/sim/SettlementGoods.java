@@ -8,6 +8,9 @@ import com.ronhelwig.livevillages.content.LiveVillagesItems;
 import com.ronhelwig.livevillages.menu.TradeBoardTradeRules;
 
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -26,8 +29,42 @@ public final class SettlementGoods {
 		"pale_oak_sapling",
 		"mangrove_propagule"
 	);
+	public static final List<String> DYE_GOODS = List.of(
+		"white_dye",
+		"orange_dye",
+		"magenta_dye",
+		"light_blue_dye",
+		"yellow_dye",
+		"lime_dye",
+		"pink_dye",
+		"gray_dye",
+		"light_gray_dye",
+		"cyan_dye",
+		"purple_dye",
+		"blue_dye",
+		"brown_dye",
+		"green_dye",
+		"red_dye",
+		"black_dye"
+	);
 
 	private SettlementGoods() {
+	}
+
+	public static boolean isDyeGoods(String goodsKey) {
+		return goodsKey != null && DYE_GOODS.contains(goodsKey);
+	}
+
+	public static boolean isDyeItem(ItemStack stack) {
+		return !stack.isEmpty() && stack.is(ItemTags.DYES);
+	}
+
+	public static Item dyeItemFor(String goodsKey) {
+		if (!isDyeGoods(goodsKey)) {
+			return Items.AIR;
+		}
+
+		return BuiltInRegistries.ITEM.getOptional(Identifier.withDefaultNamespace(goodsKey)).orElse(Items.AIR);
 	}
 
 	public static String goodsKeyForItem(ItemStack stack) {
@@ -327,6 +364,17 @@ public final class SettlementGoods {
 			return "iron_nugget";
 		}
 
+		if (stack.is(Items.GOLD_NUGGET)) {
+			return "gold_nugget";
+		}
+
+		if (isDyeItem(stack)) {
+			Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+			if (itemId.getNamespace().equals("minecraft") && DYE_GOODS.contains(itemId.getPath())) {
+				return itemId.getPath();
+			}
+		}
+
 		if (stack.is(Items.OAK_SAPLING)) {
 			return "oak_sapling";
 		}
@@ -453,6 +501,30 @@ public final class SettlementGoods {
 
 		if (stack.is(LiveVillagesBlocks.HONEY_SEPARATOR_ITEM)) {
 			return "honey_separator";
+		}
+
+		if (stack.is(LiveVillagesBlocks.ALTAR_ITEM)) {
+			return "altar";
+		}
+
+		if (stack.is(LiveVillagesBlocks.PULPIT_ITEM)) {
+			return "pulpit";
+		}
+
+		if (stack.is(LiveVillagesBlocks.COPPER_BELL_ITEM)) {
+			return "copper_bell";
+		}
+
+		if (stack.is(LiveVillagesBlocks.WAXED_COPPER_STAIRS_ITEM)) {
+			return "waxed_copper_stairs";
+		}
+
+		if (stack.is(LiveVillagesBlocks.COPPER_STAIRS_ITEM)) {
+			return "copper_stairs";
+		}
+
+		if (stack.is(Items.BREWING_STAND)) {
+			return "brewing_stand";
 		}
 
 		if (stack.is(Items.DIRT) || stack.is(Items.COARSE_DIRT) || stack.is(Items.ROOTED_DIRT)) {

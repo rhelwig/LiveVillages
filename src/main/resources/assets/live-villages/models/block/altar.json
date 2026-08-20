@@ -1,0 +1,58 @@
+{
+  "textures": {
+    "gold": "minecraft:block/gold_block",
+    "particle": "minecraft:block/stone",
+    "stone": "minecraft:block/stone",
+    "tapestry": "live-villages:block/heart_tapestry"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 1],
+      "to": [16, 12, 16],
+      "faces": {
+        "down": {"texture": "#stone"},
+        "east": {"texture": "#stone"},
+        "north": {"texture": "#stone"},
+        "south": {"texture": "#stone"},
+        "up": {"texture": "#stone"},
+        "west": {"texture": "#stone"}
+      }
+    },
+    {
+      "from": [0, 11, 0],
+      "to": [16, 13, 16],
+      "faces": {
+        "down": {"texture": "#tapestry", "uv": [0, 0, 16, 16]},
+        "east": {"texture": "#tapestry", "uv": [0, 0, 16, 2]},
+        "north": {"texture": "#tapestry", "uv": [0, 0, 16, 2]},
+        "south": {"texture": "#tapestry", "uv": [0, 0, 16, 2]},
+        "up": {"texture": "#tapestry", "uv": [0, 0, 16, 16]},
+        "west": {"texture": "#tapestry", "uv": [0, 0, 16, 2]}
+      }
+    },
+    {
+      "from": [1, 1, -0.5],
+      "to": [15, 13, 1],
+      "faces": {
+        "down": {"texture": "#tapestry", "uv": [1, 14, 15, 16]},
+        "east": {"texture": "#tapestry", "uv": [14, 3, 16, 15]},
+        "north": {"texture": "#tapestry", "uv": [1, 2, 15, 14]},
+        "south": {"texture": "#tapestry", "uv": [1, 2, 15, 14]},
+        "up": {"texture": "#tapestry", "uv": [1, 0, 15, 2]},
+        "west": {"texture": "#tapestry", "uv": [0, 3, 2, 15]}
+      }
+    },
+    {
+      "from": [1, 12.5, 1],
+      "to": [15, 13.5, 3],
+      "faces": {
+        "down": {"texture": "#gold"},
+        "east": {"texture": "#gold"},
+        "north": {"texture": "#gold"},
+        "south": {"texture": "#gold"},
+        "up": {"texture": "#gold"},
+        "west": {"texture": "#gold"}
+      }
+    }
+  ]
+}

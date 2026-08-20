@@ -879,6 +879,8 @@ public final class SettlementProfessionReports {
 			case "logs" -> "logs";
 			case "planks" -> "planks";
 			case "stairs" -> "stairs";
+			case "copper_stairs" -> "copper stairs";
+			case "waxed_copper_stairs" -> "waxed copper stairs";
 			case "slab" -> "slabs";
 			case "stick" -> "sticks";
 			case "flint" -> "flint";

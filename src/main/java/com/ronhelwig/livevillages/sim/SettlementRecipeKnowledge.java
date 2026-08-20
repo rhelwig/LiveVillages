@@ -12,6 +12,11 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 
 public final class SettlementRecipeKnowledge {
+	private static final List<String> STARTER_CUSTOM_RECIPE_IDS = List.of(
+		"live-villages:string_from_wool",
+		"live-villages:altar",
+		"live-villages:pulpit"
+	);
 	private static final List<String> STARTER_RECIPE_PATHS = List.of(
 		"oak_boat",
 		"oak_chest_boat",
@@ -30,7 +35,41 @@ public final class SettlementRecipeKnowledge {
 		"lectern",
 		"cartography_table",
 		"fletching_table",
-		"loom"
+		"loom",
+		"white_dye",
+		"white_dye_from_bone_meal",
+		"white_dye_from_lily_of_the_valley",
+		"orange_dye",
+		"orange_dye_from_orange_tulip",
+		"orange_dye_from_torchflower",
+		"magenta_dye",
+		"magenta_dye_from_allium",
+		"magenta_dye_from_lilac",
+		"light_blue_dye",
+		"light_blue_dye_from_blue_orchid",
+		"yellow_dye",
+		"yellow_dye_from_dandelion",
+		"yellow_dye_from_sunflower",
+		"lime_dye",
+		"pink_dye",
+		"pink_dye_from_peony",
+		"pink_dye_from_pink_tulip",
+		"pink_dye_from_pink_petals",
+		"gray_dye",
+		"light_gray_dye",
+		"light_gray_dye_from_azure_bluet",
+		"light_gray_dye_from_oxeye_daisy",
+		"light_gray_dye_from_white_tulip",
+		"cyan_dye",
+		"purple_dye",
+		"blue_dye",
+		"blue_dye_from_cornflower",
+		"brown_dye",
+		"red_dye",
+		"red_dye_from_beetroot",
+		"red_dye_from_poppy",
+		"red_dye_from_rose_bush",
+		"red_dye_from_tulip"
 	);
 	private static final List<String> TIER_TWO_RECIPE_PATHS = List.of(
 		"cobblestone_stairs",
@@ -41,14 +80,22 @@ public final class SettlementRecipeKnowledge {
 		"glowstone",
 		"sea_lantern"
 	);
+	private static final List<String> TIER_THREE_CUSTOM_RECIPE_IDS = List.of(
+		"live-villages:copper_bell",
+		"live-villages:copper_stairs",
+		"live-villages:waxed_copper_stairs",
+		"live-villages:waxed_copper_stairs_from_honeycomb"
+	);
 
 	private SettlementRecipeKnowledge() {
 	}
 
 	public static List<String> starterRecipeIds() {
-		return STARTER_RECIPE_PATHS.stream()
+		List<String> recipes = new ArrayList<>(STARTER_RECIPE_PATHS.stream()
 			.map(path -> Identifier.withDefaultNamespace(path).toString())
-			.toList();
+			.toList());
+		recipes.addAll(STARTER_CUSTOM_RECIPE_IDS);
+		return List.copyOf(recipes);
 	}
 
 	public static List<String> recipeIdsForTier(int tier) {
@@ -64,6 +111,7 @@ public final class SettlementRecipeKnowledge {
 			TIER_THREE_RECIPE_PATHS.stream()
 				.map(path -> Identifier.withDefaultNamespace(path).toString())
 				.forEach(recipes::add);
+			recipes.addAll(TIER_THREE_CUSTOM_RECIPE_IDS);
 		}
 
 		return List.copyOf(recipes);

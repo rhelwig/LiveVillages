@@ -9,6 +9,15 @@ import org.junit.jupiter.api.Test;
 
 class SettlementEconomyRulesTest extends MinecraftBootstrapTestSupport {
 	@Test
+	void flowersAndDyesHaveTradeReserves() {
+		assertTrue(SettlementEconomyRules.targetForGoods("flower", 6) >= 8);
+		assertTrue(SettlementEconomyRules.targetForGoods("red_dye", 6) >= 4);
+		assertTrue(SettlementEconomyRules.targetForGoods("yellow_dye", 6) >= 2);
+		assertTrue(SettlementGoods.DYE_GOODS.contains("red_dye"));
+		assertEquals(16, SettlementGoods.DYE_GOODS.size());
+	}
+
+	@Test
 	void bakeryGoodsFollowTheSpecifiedTierProgression() {
 		assertTier("bread", 1);
 		assertTier("baked_potato", 1);

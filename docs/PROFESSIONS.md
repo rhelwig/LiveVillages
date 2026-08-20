@@ -26,6 +26,55 @@ Ordered implementation work is tracked in [IMPLEMENTATION-PLAN.md](IMPLEMENTATIO
 - Loaded settlement navigation should prefer established roads, paths, bridges, and gate approaches when the detour is reasonable, especially for routine work, gathering, patrols, and route traffic. First-pass routine worker and Guard escort/patrol movement now biases toward nearby established road/path/bridge waypoints that still make progress toward the target.
 - Villagers and settlement-owned illagers may open doors or gates in palisades and other defensive walls only for their own settlement, and should close those doors after passing through. First-pass loaded maintenance opens and recloses completed palisade gatehouse access blocks for nearby own-settlement members.
 
+## How A Village Gets A Profession
+
+A settlement can only staff a profession when it has a reachable matching workstation. Vanilla generated villages keep whatever job sites they spawned with.
+
+An unattended village must still be able to found every profession structure it needs. The player can help, but help must not be required. Today that is only true for a short list: starter farms / composters, trading posts, housing, docks, lighthouses, storage, defense, and the four support workshops (`Forester`, `Carpenter`, `Miner`, `Roadwright`). Beekeepers can also bootstrap a `Honey Separator` from a nearby natural hive. Everything else still waits for a generated vanilla job site or a player-placed station.
+
+Most professions should have a public building that is also their bed source. Three field/harbor roles are exceptions: `Farmer`, `Fisherman`, and `Portmaster` sleep in ordinary village housing. They still need worksites (`Composter` / farm, `Barrel` / dock, `Portmaster's Anchor` / lighthouse), just not a private house.
+
+### Introduction Inventory
+
+| Profession | Workstation | Building | Housing | How an unattended village should get it | Blueprint today |
+| --- | --- | --- | --- | --- | --- |
+| Farmer | Composter | Optional later barn, not a house | Shared village housing | Village already starts a farm / composter | Farm plots only; barn planned |
+| Baker | Baker's Counter | Bakery | Bakery beds | Must become autonomous | Unique bakery |
+| Butcher | Smoker | Butcher Shop | Shop beds | Must become autonomous | Generic 2-bed hut |
+| Fisherman | Barrel | None. Docks raise catch | Shared village housing | Village already starts a dock on large water; barrel can sit on that dock | No fisherman house, by design |
+| Shepherd | Loom | Shepherd's Hut | Hut beds | Must become autonomous; wool-to-string bootstraps the loom | Generic 2-bed hut |
+| Beekeeper | Honey Separator | Beekeeper's Apiary | Apiary beds | Natural hive can already bootstrap a separator | Unique fenced apiary |
+| Gardener | Gardener Workstation | Gardener's Shed | Shed beds | Must become autonomous | Unique fenced shed |
+| Forester | Forester's Table | Forester's Workshop | Workshop beds | Already autonomous when wood is short | Unique workshop |
+| Carpenter | Carpenter's Bench | Carpenter's Workshop | Workshop beds | Already autonomous when woodwork is short | Unique workshop |
+| Mason | Stonecutter | Mason's Workshop | Workshop beds | Must become autonomous | Unique compact workshop |
+| Miner | Mine Entrance | Mine Entrance (worksite) | Shared village housing | Already autonomous when stone/ore/fuel is short | Unique shaft portal |
+| Roadwright | Surveyor's Table | Roadwright's Workshop | Workshop beds | Already autonomous at population 4+ | Unique workshop |
+| Fletcher | Fletching Table | Fletcher's Hut | Hut beds | Must become autonomous | Generic 2-bed hut |
+| Leatherworker | Cauldron | Leatherworker's Workshop | Workshop beds | Must become autonomous | Generic 2-bed hut |
+| Armorer | Blast Furnace | Shared Smithy | Smithy beds | Must become autonomous | Generic 2-bed hut |
+| Toolsmith | Smithing Table | Shared Smithy | Smithy beds | Must become autonomous | Generic 2-bed hut |
+| Weaponsmith | Grindstone | Shared Smithy | Smithy beds | Must become autonomous | Generic 2-bed hut |
+| Guard | Guard Post | Guard Post | Post beds, then other housing | Must become autonomous | Unique fenced post |
+| Trademaster | Trade Board | Trading Post | Post beds | Village already starts a trading post | Unique trading post |
+| Scribe | Scribe Desk | Scribe Office | Office beds | Must become autonomous | Unique office |
+| Librarian | Lectern | Library | Library beds | Must become autonomous | Generic 2-bed hut |
+| Cleric | Altar (founding); Brewing Stand (strongly wanted) | Church → Cathedral | Vestry beds | Must found a church from an overworld `Altar`; then want a brewing stand | Generic shrine hut today |
+| Cartographer | Cartography Table | Cartographer's House | House beds | Must become autonomous | Unique house |
+| Portmaster | Portmaster's Anchor | Harbor kit: dock + growing lighthouse | Shared housing; T3+ lighthouse may add a ground-floor bedroom | Village already starts dock + lighthouse on large water | Lighthouse upgrade ladder planned |
+
+### Hard Gaps
+
+- **Cleric founding.** A brewing stand needs a blaze rod, so Peaceful and overworld-only villages cannot create clergy. Found churches on a craftable `Altar` that includes a gold nugget, wool, and red dye so the front can show a heart tapestry (a pulpit can come later as furniture). When the village chooses the plot, prefer the opposite side of town from the dock. Clerics should still **strongly want** a `Brewing Stand` as soon as blaze rods, nether wart, or trade make one possible, and should install it at the authored altar-adjacent work point.
+- **Autonomous coverage.** Unattended villages cannot yet start bakeries, butcher shops, shepherd huts, gardener sheds, mason workshops, fletcher huts, leather shops, smithies, guard posts, scribe offices, libraries, churches, or cartographer houses. That is the main “player had to help” hole.
+- **Shepherd materials.** A loom needs string. Wool-to-string is the Peaceful bootstrap once sheep exist.
+
+### Planned Extra Worksites, Not Houses
+
+- `Farmer`: a barn for tools, seed, hay, and a sheltered composter. Farmers still sleep in ordinary housing. See [FARMER-BARN-GUIDE.md](FARMER-BARN-GUIDE.md).
+- `Portmaster` / harbor: the lighthouse grows with civic tier and gains a ground-floor bedroom at Tier 3. That room is optional lodging, not a required Portmaster house. See [LIGHTHOUSE-DESIGN.md](LIGHTHOUSE-DESIGN.md).
+- Unique replacements for the generic hut still used by Butcher, Shepherd, Leatherworker, Librarian, and Smithy. The Cleric now has authored Tier 1 and Tier 2 chapels.
+
 ## Vanilla Baseline
 
 The vanilla profession list is still the starting point. Live Villages should not throw it away; it should reinterpret and expand it.
@@ -100,7 +149,9 @@ These roles already exist in vanilla and should be expanded before adding unnece
 
 - Workstation: `Composter`
 - Equipment: carries hoes and scythes
-- Tier 1 staffing note: reachable composters provide first-pass Farmer recruitment and job-site maintenance; no special Farmer housing structure is required in this pass
+- Housing: Farmers sleep in ordinary village housing. They do not need a farmhouse.
+- Optional worksite: a later `Barn` can shelter the composter, seed, hay, and tools. See [FARMER-BARN-GUIDE.md](FARMER-BARN-GUIDE.md).
+- Tier 1 staffing note: reachable composters provide first-pass Farmer recruitment and job-site maintenance; no special Farmer housing structure is required
 - Loaded-world behavior: manages a composter-anchored farm territory, prioritizes ripe crops first, harvests mature crops into settlement stock, replants empty farmland from available seed stock based on current shortages before leaf-litter chores, may mill surplus wheat into wheat seeds when seed stock is empty so a new farm is not left bare, collects loose crop and seed drops, collects composter or loose `bone_meal` and applies it to the least-ready high-need crops, gathers both floating and flat ground `leaf_litter`, treats wheat harvest as a small virtual litter source for composting, and trims short or tall grass for cleanup and compost input
 - Settlement behavior: turns accessible farm territory, seed availability, compost output, and labor into stable food output; requests or trades for missing seed stock such as potatoes or beetroot seeds, then folds those crops into rotation when under-supplied
 - Farm-territory definition: the default territory can start as the raised-bed footprint around the composter, but the system should treat nearby farmland, dropped farm goods, loose leaf litter, and natural grass around that composter as part of the same managed work area so the player can extend it naturally
@@ -122,18 +173,22 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Status: first-pass `Mason's Workshop` structure and loaded masonry-support loop are in place
 - Associated structure: `Mason's Workshop`, using a compact live-build footprint with a visible stonecutter work area, bed, and stone-material storage; a closer vanilla-house adaptation can still replace or refine this later
 - Tier 1 staffing note: completed workshop beds or sheltered vanilla stonecutters with nearby beds provide first-pass Mason recruitment and job-site maintenance
-- Loaded-world behavior: builds foundations, walls, chimneys, bridges, defensive works, masonry-heavy repairs, and stone `Mileposts`; first-pass task selection should prefer stone-heavy staged construction blocks over wood-heavy ones, idle `Mason`s should gravitate toward the `Stonecutter` to top up low `Tier 1` cobblestone reserves, and surplus stone can be cut there into finished `milepost` stock for `Roadwright` placement
+- Loaded-world behavior: builds foundations, walls, chimneys, bridges, defensive works, masonry-heavy repairs, and stone `Mileposts`; first-pass task selection should prefer stone-heavy staged construction blocks over wood-heavy ones, idle `Mason`s should gravitate toward the `Stonecutter` to top up low `Tier 1` cobblestone reserves, surplus stone can be cut there into finished `milepost` stock for `Roadwright` placement, and a Mason can cast a `Copper Bell` from six copper ingots, a stick, and a plank when a Tier 3+ church wants one, or cut `Copper Stairs` from a copper block for a church tower roof
 - Settlement behavior: acts as shared construction labor alongside the custom `Carpenter`, with a focus on stone durability, defensive value, route-marker construction, and structural upgrades
 - Player-use behavior: right-clicking a settlement-linked `Stonecutter` with `8` cobblestone, granite, diorite, or andesite trades those rough stone-family blocks into settlement stone stock for one stocked `Milepost`; sneak-use passes through to normal `Stonecutter` behavior
 - Notes: `Mason` should be a first-class settlement construction worker, not just a background vanilla crafter; completed staged structures should reopen as repairs when damaged, and future autonomous masonry upgrades must stay within the settlement's currently allowed tier materials until the fuller later-tier upgrade ladder is authored
 
 ### Cleric
 
-- Workstation: `Brewing Stand`
-- Associated structure: `Cleric Shrine`, using the first-pass bedded hut structure family anchored by the placed `Brewing Stand`
-- Loaded-world behavior: brews and maintains healing potions when materials allow, produces at least one healing potion per day when ingredients are available, runs from hostiles by default, and uses stored healing-potion stock to briefly rush in and heal injured priority defenders before retreating again
+- Founding workstation: `Altar`, an overworld-legal church block that recruits a `Cleric` and starts the chapel. Recipe: stone + gold nugget + wool + red dye. The block is slightly shorter than a full cube, with a tapestry draped over the top and down the front showing a red heart.
+- Sanctuary furniture: `Pulpit`. Recipe: four wooden slabs + one plank + wool + red dye. It should look like a lectern with a slightly wider pedestal and the same red-heart tapestry hanging down the front. It is not the founding lock. It is a second cleric job site, one villager.
+- Production workstation: `Brewing Stand`. A church with a cleric should strongly want one and reserve the altar-adjacent work tile for it. Potion work and player brewing-stand trades stay on the stand, not the altar.
+- Associated structure today: the authored `Chapel`, anchored by a placed `Altar` or a brewing-stand shortcut. The nave has the altar in the center with a pulpit on one side and a reserved brewing-stand tile on the other. Both the altar and the pulpit are cleric job sites. Civic Tier 1 uses the 9×9 nave-only chapel and clerics sleep in village housing. Civic Tier 2 uses the 9×15 vestry chapel. Civic Tier 3 adds a front bell tower, stained glass panes, and a waxed copper-stair roof on the tower. Civic Tier 4 turns the outer walls to stone and adds a rear spire as well. A staffed church holds a full-moon morning service every eight days, then a rest day in the gardens. Completed church interiors are sanctuary: intentional harm against anyone inside does no damage.
+- Planned structure: a civic `Church` that upgrades in place through civic tiers into a `Cathedral`. Design sizes, materials, gathering capacity, opposite-dock placement, and churchyard rules are in [CLERIC-CHURCH-GUIDE.md](CLERIC-CHURCH-GUIDE.md).
+- Introduction: an unattended village should be able to place an `Altar` from stone, a gold nugget, wool, and red dye and grow a chapel around it. When the village picks the site, prefer the opposite side of the settlement from the dock. A generated temple or a player-placed brewing stand remains a valid shortcut. A well-outfitted chapel should end up with the altar in the center, a pulpit on one side, and a brewing stand on the other.
+- Loaded-world behavior: brews and maintains healing potions when a brewing stand and materials allow, produces at least one healing potion per day when ingredients are available, runs from hostiles by default, and uses stored healing-potion stock to briefly rush in and heal injured priority defenders before retreating again
 - Player-use behavior: right-clicking a settlement-linked `Brewing Stand` with a glass bottle trades one glass bottle, one nether wart, and one glistering melon slice into settlement stock for one stocked healing potion
-- Settlement behavior: converts brewing materials into healing support, rare alchemy, and defender recovery
+- Settlement behavior: converts brewing materials into healing support, rare alchemy, and defender recovery. Completed church buildings should also raise civic pride / comfort, more at later tiers.
 - Notes: `Cleric` is a deskworker profession and should stay unarmed even when healing in danger
 
 ### Fisherman
@@ -142,7 +197,8 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Equipment: carries axes for shore defense and fishing gear such as a rod, spear, or trident for fishing work
 - Loaded-world behavior: works shorelines, rivers, docks, and harbor edges up to `150%` of the owning settlement radius; periodically adds real `cod` to settlement stock while the loaded villager is actually fishing; mounts a docked boat that it pilots for a visible fishing trip when one is available; returns from that boat in time for the village gathering; helps defend against hostile mobs approaching by water with an axe; and carries a fishing rod or spear/trident for fishing work
 - Settlement behavior: adds fish and shoreline food output, especially in water-linked settlements; `Docks` and `Lighthouses` should both improve catch volume
-- Structure note: keep `Fisherman` close to vanilla for now. The `Barrel` remains the workstation, and no special Fisherman housing or bespoke staged workstation structure is required in this pass
+- Housing: Fishermen sleep in ordinary village housing. They do not need a fisherman hut.
+- Structure note: the `Barrel` remains the workstation. A completed `Dock` is the worksite that raises catch volume; do not add a dedicated Fisherman house.
 
 ### Librarian
 
@@ -176,6 +232,7 @@ These roles already exist in vanilla and should be expanded before adding unnece
 - Loaded-world behavior: first-pass code produces wool and beds through the `Loom`, and actual loaded Shepherds now own sheep-specific flock work: they can build or continue fenced sheep pens, herd stray sheep toward those pens, breed sheep with wheat, shear ready sheep, and cull excess adult sheep into mutton and wool when the flock is above target. Fuller combat presentation should defend the flock from wolves or hostile mobs with a sling at range and a crooked staff up close.
 - Player-use behavior: right-clicking a settlement-linked `Loom` with wheat trades one wheat into settlement stock for one stocked wool; right-clicking with wool trades three wool and three planks into settlement stock for one stocked bed
 - Settlement behavior: adds wool, mutton from managed sheep, flock stability, and future textile support while protecting pasture productivity
+- Textile bootstrap: one wool can be spun into `4` string, reversing vanilla's four-string-to-wool craft. Players can craft it from any wool, and settlement construction/stock conversion can spin wool when string is needed for slings, candles, looms, or fishing gear. This is the Peaceful path to string when spiders never spawn.
 - Migration note: sheep-related functionality has moved from `Butcher` to `Shepherd`, leaving `Butcher` focused on cattle, pigs, leather, and food trade
 
 ### Armorer
@@ -254,7 +311,7 @@ These are the professions the mod adds or explicitly plans beyond vanilla's base
 - Loaded settlement maintenance should retry recognized workstation-associated structures that do not yet have a build site, including custom workstation structures, so an initially blocked placement can recover after the player clears space.
 - A workstation structure may move the workstation from the player's original placement block to the blueprint's intended final block, including elevation changes, without canceling the build site. The original anchor block should remain linked to that build until villagers remove or relocate it as part of construction.
 - Worker-profession workstations generally support one or two villagers rather than exactly one; their associated structures should prefer assigning internal beds to matching professionals and can use a second bed when the village needs another worker. Guard Posts are the larger exception and should support up to five Guards.
-- Construction material should come from settlement stock or villager inventories, with basic conversion from adaptable raw materials such as logs into planks, stairs, slabs, fences, gates, or doors.
+- Construction material should come from settlement stock or villager inventories, with basic conversion from adaptable raw materials such as logs into planks, stairs, slabs, fences, gates, or doors, and wool into string.
 - Adult non-Nitwit villagers may help with general construction once higher-priority profession work is satisfied. Unemployed villagers should be available immediately, while specialists can later get faster placement or carry bonuses for matching materials.
 - Professional high-priority work outranks generic construction, except that a villager should finish the current single-block action before switching. Guards and Fletchers may interrupt immediately for imminent hostile threats.
 - Villagers in loaded chunks should visibly visit an adjacent access tile at the `Trade Board` or completed `Trading Post` to deposit collected items or retrieve needed construction materials, especially when their personal inventory is close to full. End-of-day deposits should happen before the evening gathering and can appear as `Depositing into Trading Post`. Villagers should not target the board block itself as a walking destination.
@@ -353,7 +410,8 @@ These roles have first-pass implementation where noted, but still carry richer l
 ### Portmaster
 
 - Workstation: `Portmaster's Anchor`
-- Associated structure note: no dedicated house or office; the anchor is the job-site and shoreline placement signal, and nearby `Dock` construction should prefer that anchor's facing when the harbor allows it
+- Housing: Portmasters sleep in ordinary village housing. They do not need a dedicated office. A Tier 3+ lighthouse bedroom is optional harbor lodging, not a required Portmaster house.
+- Associated structure note: the anchor is the job-site and shoreline placement signal, and nearby `Dock` construction should prefer that anchor's facing when the harbor allows it. The lighthouse grows with civic tier; see [LIGHTHOUSE-DESIGN.md](LIGHTHOUSE-DESIGN.md).
 - Equipment: carries a sword and should be treated as harbor-defense capable
 - Loaded-world behavior: patrols between the anchor, docks, and lighthouses; validates harbors; keeps dock-and-lighthouse infrastructure visibly staffed; defends with a sword against mobs entering the settlement via water; extinguishes lighthouse fires in the morning; relights them shortly before the village gathering period; toggles lighthouse-top campfires from ground level without needing to navigate up the lighthouse; and uses threatened lighthouses as harbor-warning points when nearby hostiles approach
 - Settlement behavior: improves harbor trade value and route throughput where docks or lighthouses already exist, and prepares the settlement-side role needed for later true water-route logic
@@ -411,7 +469,8 @@ Not every important workstation-like block needs to represent a separate village
 - Role: harbor landmark and water-trade amplifier rather than a villager workstation
 - Placement block: players place a dedicated `Lighthouse` marker block; villagers then build the real tower around it with that marker kept at the center of the bottom `3x3` level
 - Primary builders: `Mason` handles the cobblestone tower and `Portmaster` treats it as harbor infrastructure
-- Physical form: the minimal tower is four `3x3` cobblestone levels, then four `1x1` cobblestone levels, with a `Campfire` on top
+- Physical form today: four `3x3` cobblestone levels, then four `1x1` cobblestone levels, with a `Campfire` on top
+- Planned upgrades: the same tower grows with civic tier and should get rounder as it gets larger. Tier 2 is a little larger with cut corners, Tier 3 adds a ground-floor bedroom and a more circular drum, and Tier 4 is larger and roundest. Design sizes are in [LIGHTHOUSE-DESIGN.md](LIGHTHOUSE-DESIGN.md). The cathedral must still read as the tallest *civic* landmark if both exist.
 - Placement rule: should appear near a dock or shoreline vantage point with enough nearby water to justify harbor traffic
 - Use: makes harbor settlements legible, signals the water-facing side of town, widens the `Portmaster's Anchor` map, adds a significant bonus to water-route throughput, quality, and trade distance compared with a dock alone, and contributes a modest harbor-security and raid-warning benefit
 - Daily behavior: the lighthouse fire should be off during the daytime after morning harbor work, then relit shortly before villagers head to the village gathering

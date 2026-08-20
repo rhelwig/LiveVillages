@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.HoneycombItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
@@ -15,9 +16,13 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.block.AltarBlock;
+import com.ronhelwig.livevillages.block.CopperBellBlock;
+import com.ronhelwig.livevillages.block.CopperStairBlock;
 import com.ronhelwig.livevillages.block.BakersCounterBlock;
 import com.ronhelwig.livevillages.block.CarpenterBenchBlock;
 import com.ronhelwig.livevillages.block.ForesterTableBlock;
+import com.ronhelwig.livevillages.block.PulpitBlock;
 import com.ronhelwig.livevillages.block.GardenerWorkstationBlock;
 import com.ronhelwig.livevillages.block.GlassDisplayCaseBlock;
 import com.ronhelwig.livevillages.block.GuardPostBlock;
@@ -336,11 +341,78 @@ public final class LiveVillagesBlocks {
 		"palisade_point",
 		new BlockItem(PALISADE_POINT, new Item.Properties().setId(itemKey("palisade_point")).useBlockDescriptionPrefix())
 	);
+	public static final AltarBlock ALTAR = registerBlock(
+		"altar",
+		new AltarBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.STONE)
+				.setId(blockKey("altar"))
+				.noOcclusion()
+				.strength(2.5F)
+				.sound(SoundType.STONE)
+		)
+	);
+	public static final Item ALTAR_ITEM = registerItem(
+		"altar",
+		new BlockItem(ALTAR, new Item.Properties().setId(itemKey("altar")).useBlockDescriptionPrefix())
+	);
+	public static final PulpitBlock PULPIT = registerBlock(
+		"pulpit",
+		new PulpitBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.LECTERN)
+				.setId(blockKey("pulpit"))
+				.noOcclusion()
+				.strength(2.5F)
+				.sound(SoundType.WOOD)
+		)
+	);
+	public static final Item PULPIT_ITEM = registerItem(
+		"pulpit",
+		new BlockItem(PULPIT, new Item.Properties().setId(itemKey("pulpit")).useBlockDescriptionPrefix())
+	);
+	public static final CopperBellBlock COPPER_BELL = registerBlock(
+		"copper_bell",
+		new CopperBellBlock(
+			BlockBehaviour.Properties.ofFullCopy(Blocks.BELL)
+				.setId(blockKey("copper_bell"))
+				.sound(SoundType.COPPER)
+		)
+	);
+	public static final Item COPPER_BELL_ITEM = registerItem(
+		"copper_bell",
+		new BlockItem(COPPER_BELL, new Item.Properties().setId(itemKey("copper_bell")).useBlockDescriptionPrefix())
+	);
+	public static final CopperStairBlock COPPER_STAIRS = registerBlock(
+		"copper_stairs",
+		new CopperStairBlock(
+			Blocks.COPPER_BLOCK.defaultBlockState(),
+			BlockBehaviour.Properties.ofFullCopy(Blocks.COPPER_BLOCK).setId(blockKey("copper_stairs"))
+		)
+	);
+	public static final Item COPPER_STAIRS_ITEM = registerItem(
+		"copper_stairs",
+		new BlockItem(COPPER_STAIRS, new Item.Properties().setId(itemKey("copper_stairs")).useBlockDescriptionPrefix())
+	);
+	public static final CopperStairBlock WAXED_COPPER_STAIRS = registerBlock(
+		"waxed_copper_stairs",
+		new CopperStairBlock(
+			Blocks.WAXED_COPPER_BLOCK.defaultBlockState(),
+			BlockBehaviour.Properties.ofFullCopy(Blocks.WAXED_COPPER_BLOCK).setId(blockKey("waxed_copper_stairs"))
+		)
+	);
+	public static final Item WAXED_COPPER_STAIRS_ITEM = registerItem(
+		"waxed_copper_stairs",
+		new BlockItem(WAXED_COPPER_STAIRS, new Item.Properties().setId(itemKey("waxed_copper_stairs")).useBlockDescriptionPrefix())
+	);
 
 	private LiveVillagesBlocks() {
 	}
 
 	public static void register() {
+		HoneycombItem.getWaxed(COPPER_STAIRS.defaultBlockState());
+	}
+
+	public static boolean isCopperStairs(BlockState state) {
+		return state.is(COPPER_STAIRS) || state.is(WAXED_COPPER_STAIRS);
 	}
 
 	public static boolean isGlassDisplayCase(BlockState state) {

@@ -1,0 +1,57 @@
+{
+  "textures": {
+    "dark": "minecraft:block/oak_log",
+    "particle": "minecraft:block/oak_planks",
+    "tapestry": "live-villages:block/heart_tapestry",
+    "wood": "minecraft:block/oak_planks"
+  },
+  "elements": [
+    {
+      "from": [3, 0, 3],
+      "to": [13, 2, 13],
+      "faces": {
+        "down": {"texture": "#dark"},
+        "east": {"texture": "#dark"},
+        "north": {"texture": "#dark"},
+        "south": {"texture": "#dark"},
+        "up": {"texture": "#wood"},
+        "west": {"texture": "#dark"}
+      }
+    },
+    {
+      "from": [5, 2, 5],
+      "to": [11, 13, 11],
+      "faces": {
+        "east": {"texture": "#wood"},
+        "north": {"texture": "#wood"},
+        "south": {"texture": "#wood"},
+        "west": {"texture": "#wood"}
+      }
+    },
+    {
+      "from": [2, 12, 4],
+      "to": [14, 16, 16],
+      "rotation": {"angle": -22.5, "axis": "x", "origin": [8, 12, 16]},
+      "faces": {
+        "down": {"texture": "#dark"},
+        "east": {"texture": "#wood"},
+        "north": {"texture": "#wood"},
+        "south": {"texture": "#wood"},
+        "up": {"texture": "#wood"},
+        "west": {"texture": "#wood"}
+      }
+    },
+    {
+      "from": [4, 2, 4],
+      "to": [12, 12, 5],
+      "faces": {
+        "down": {"texture": "#tapestry", "uv": [4, 14, 12, 16]},
+        "east": {"texture": "#tapestry", "uv": [11, 4, 12, 14]},
+        "north": {"texture": "#tapestry", "uv": [2, 2, 14, 14]},
+        "south": {"texture": "#tapestry", "uv": [2, 2, 14, 14]},
+        "up": {"texture": "#tapestry", "uv": [4, 0, 12, 1]},
+        "west": {"texture": "#tapestry", "uv": [4, 4, 5, 14]}
+      }
+    }
+  ]
+}

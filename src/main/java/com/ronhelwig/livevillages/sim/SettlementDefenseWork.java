@@ -140,6 +140,9 @@ public final class SettlementDefenseWork {
 	}
 
 	public static void onBellRung(ServerLevel level, BlockPos bellPos) {
+		if (SettlementChurchWork.isServiceRing()) {
+			return;
+		}
 		long tick = level.getServer().getTickCount();
 		String bellKey = bellKey(level, bellPos);
 		long lastTick = LAST_BELL_RING_TICKS.getOrDefault(bellKey, Long.MIN_VALUE);

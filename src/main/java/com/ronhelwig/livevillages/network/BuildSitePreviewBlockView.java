@@ -75,6 +75,9 @@ public record BuildSitePreviewBlockView(
 			case "iron_bars" -> stack.is(Items.IRON_BARS) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "copper_bars" -> blockItem != null && isCopperBars(blockItem) ? ItemMatch.EXACT : ItemMatch.NONE;
 			case "stairs" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_STAIRS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
+			case "copper_stairs", "waxed_copper_stairs" -> blockItem != null && LiveVillagesBlocks.isCopperStairs(blockItem.getBlock().defaultBlockState())
+				? ItemMatch.COMPATIBLE_MATERIAL
+				: ItemMatch.NONE;
 			case "slab" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_SLABS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "door" -> blockItem != null && blockItem.getBlock() instanceof DoorBlock && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_DOORS) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;
 			case "fence" -> blockItem != null && blockItem.getBlock().defaultBlockState().is(BlockTags.WOODEN_FENCES) ? ItemMatch.COMPATIBLE_MATERIAL : ItemMatch.NONE;

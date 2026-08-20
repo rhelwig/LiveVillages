@@ -23,6 +23,7 @@ public final class SettlementMasonWork {
 	private static final int COBBLESTONE_BATCH_SIZE = 1;
 	private static final int MILEPOST_COBBLESTONE_COST = 8;
 	private static final int MIN_COBBLESTONE_RESERVE_FOR_MILEPOSTS = 16;
+	static final int COPPER_BELL_INGOT_COST = 6;
 	private static final Map<String, TimedTask> ACTIVE_TASKS = new HashMap<>();
 
 	private SettlementMasonWork() {
@@ -63,6 +64,50 @@ public final class SettlementMasonWork {
 				mason.swing(InteractionHand.MAIN_HAND);
 
 				if (assignment.stockGoodsKey().isBlank() || assignment.stockAmount() <= 0) {
+					continue;
+				}
+
+				if ("casting_copper_bell".equals(assignment.taskKey())) {
+					if (!consumeCopperBellIngredients(stock)) {
+						SettlementProfessionDiagnostics.log(level, settlement, "mason", "missing_inputs", "task=casting_copper_bell");
+						continue;
+					}
+
+					stock.merge("copper_bell", 1, Integer::sum);
+					SettlementProfessionReports.recordConversion(
+						level,
+						settlement,
+						SettlementRoleKeys.MASON,
+						mason,
+						"copper_ingot",
+						COPPER_BELL_INGOT_COST,
+						"copper_bell",
+						1,
+						"completed casting copper bell"
+					);
+					stockChanged = true;
+					continue;
+				}
+
+				if ("cutting_copper_stairs".equals(assignment.taskKey())) {
+					if (!consumeCopperStairIngredients(stock, assignment.stockAmount())) {
+						SettlementProfessionDiagnostics.log(level, settlement, "mason", "missing_inputs", "task=cutting_copper_stairs");
+						continue;
+					}
+
+					stock.merge("copper_stairs", assignment.stockAmount(), Integer::sum);
+					SettlementProfessionReports.recordConversion(
+						level,
+						settlement,
+						SettlementRoleKeys.MASON,
+						mason,
+						"copper_block",
+						1,
+						"copper_stairs",
+						assignment.stockAmount(),
+						"completed cutting copper stairs"
+					);
+					stockChanged = true;
 					continue;
 				}
 
@@ -151,6 +196,36 @@ public final class SettlementMasonWork {
 			);
 		}
 
+		if (jobSite.isPresent()
+			&& preferredCopperBellReserve(settlement, buildSites) > stock.getOrDefault("copper_bell", 0)
+			&& stock.getOrDefault("copper_ingot", 0) >= COPPER_BELL_INGOT_COST
+			&& stock.getOrDefault("stick", 0) >= 1
+			&& stock.getOrDefault("planks", 0) >= 1) {
+			return new MasonryAssignment(
+				jobSite.get(),
+				"casting_copper_bell",
+				"copper_bell",
+				1,
+				"",
+				0
+			);
+		}
+
+		int copperStairNeed = preferredCopperStairReserve(buildSites) - stock.getOrDefault("copper_stairs", 0)
+			- stock.getOrDefault("waxed_copper_stairs", 0);
+		if (jobSite.isPresent()
+			&& copperStairNeed > 0
+			&& stock.getOrDefault("copper_block", 0) >= 1) {
+			return new MasonryAssignment(
+				jobSite.get(),
+				"cutting_copper_stairs",
+				"copper_stairs",
+				4,
+				"copper_block",
+				1
+			);
+		}
+
 		if (cobblestoneShortage > 0 && jobSite.isPresent()) {
 			return new MasonryAssignment(
 				jobSite.get(),
@@ -166,6 +241,67 @@ public final class SettlementMasonWork {
 			.or(() -> SettlementStockAccess.findStockAccessPos(level, settlement, buildSites))
 			.orElse(settlement.center());
 		return new MasonryAssignment(fallbackTarget, "stonework", "", 0, "", 0);
+	}
+
+	private static int preferredCopperBellReserve(SettlementState settlement, List<SettlementBuildSite> buildSites) {
+		int churchTier = Math.max(
+			SettlementTiers.unlockedTier(settlement) >= 3 ? SettlementTiers.unlockedTier(settlement) : 0,
+			SettlementChurchWork.highestCompletedChurchTier(buildSites)
+		);
+		if (churchTier < 3) {
+			for (SettlementBuildSite buildSite : buildSites) {
+				if (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
+					&& SettlementConstruction.churchCivicTier(buildSite) >= 3) {
+					churchTier = 3;
+					break;
+				}
+			}
+		}
+
+		return churchTier >= 3 ? 1 : 0;
+	}
+
+	private static int preferredCopperStairReserve(List<SettlementBuildSite> buildSites) {
+		int needed = 0;
+		for (SettlementBuildSite buildSite : buildSites) {
+			if (buildSite.complete() || buildSite.blueprintId() != SettlementBuildSiteType.CLERIC_SHRINE) {
+				continue;
+			}
+
+			for (SettlementBuildBlockState block : buildSite.blocks()) {
+				if ("waxed_copper_stairs".equals(block.expectedMaterialKey())
+					|| "copper_stairs".equals(block.expectedMaterialKey())) {
+					if (block.status() != SettlementBuildBlockStatus.PLACED
+						&& block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+						needed++;
+					}
+				}
+			}
+		}
+
+		return needed;
+	}
+
+	private static boolean consumeCopperStairIngredients(Map<String, Integer> stock, int amount) {
+		if (stock.getOrDefault("copper_block", 0) < 1) {
+			return false;
+		}
+
+		SettlementGoods.consumeGoods(stock, "copper_block", 1);
+		return amount > 0;
+	}
+
+	private static boolean consumeCopperBellIngredients(Map<String, Integer> stock) {
+		if (stock.getOrDefault("copper_ingot", 0) < COPPER_BELL_INGOT_COST
+			|| stock.getOrDefault("stick", 0) < 1
+			|| stock.getOrDefault("planks", 0) < 1) {
+			return false;
+		}
+
+		SettlementGoods.consumeGoods(stock, "copper_ingot", COPPER_BELL_INGOT_COST);
+		SettlementGoods.consumeGoods(stock, "stick", 1);
+		SettlementGoods.consumeGoods(stock, "planks", 1);
+		return true;
 	}
 
 	private static boolean canProduceStockGoods(Map<String, Integer> stock, MasonryAssignment assignment) {

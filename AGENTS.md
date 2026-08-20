@@ -35,6 +35,7 @@ Instructions for future Codex/agent runs:
 - If we add functionality to the code that isn't inlcuded in the specification but should be, and it doesn't conflict with existing specifications, then add it to the spec.
 - Keep track of what you are doing in `docs/IMPLEMENTATION-PLAN.md`.
 - Current priority is MVP tier 1 completion, promotional screenshots/videos, and initial publication.
+- `docs/blog-assets/` is local working material for drafting blog posts. Do not commit it; published writing belongs in the blog, not this repository.
 - When choosing between polish work and core MVP blockers, prefer work that moves the project toward a publishable first release unless the user says otherwise.
 
 ## Project Specific

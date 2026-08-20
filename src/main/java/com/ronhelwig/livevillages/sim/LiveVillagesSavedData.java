@@ -98,6 +98,8 @@ public class LiveVillagesSavedData extends SavedData {
 		"stone_bricks",
 		"iron_ingot",
 		"copper_ingot",
+		"copper_stairs",
+		"waxed_copper_stairs",
 		"coal",
 		"miner_workstation"
 	);
@@ -114,7 +116,8 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, OutpostPlayerStanding.CODEC)).optionalFieldOf("outpost_player_standings", Map.of()).forGetter(SupplementalPersistence::playerStandings),
 		Codec.unboundedMap(Codec.STRING, OutpostRaidState.CODEC).optionalFieldOf("outpost_raids", Map.of()).forGetter(SupplementalPersistence::raids),
 		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_recipe_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeRecipeLedgers),
-		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_resource_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeResourceLedgers)
+		Codec.unboundedMap(Codec.STRING, Codec.STRING.listOf()).optionalFieldOf("scribe_resource_ledgers", Map.of()).forGetter(SupplementalPersistence::scribeResourceLedgers),
+		Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("observed_housing_upgrade_tiers", Map.of()).forGetter(SupplementalPersistence::observedHousingUpgradeTiers)
 	).apply(instance, SupplementalPersistence::new));
 	private static final Codec<LiveVillagesSavedData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.unboundedMap(Codec.STRING, SettlementState.CODEC).optionalFieldOf("settlements", Map.of()).forGetter(data -> data.settlements),
@@ -126,7 +129,7 @@ public class LiveVillagesSavedData extends SavedData {
 		Codec.unboundedMap(Codec.STRING, SettlementLoadedObservation.SurveyorObservation.CODEC).optionalFieldOf("saved_surveyor_observations", Map.of()).forGetter(data -> data.savedSurveyorObservations),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SettlementRoadwrightWork.RoadworkDebugPlan.CODEC)).optionalFieldOf("saved_roadwork_plans", Map.of()).forGetter(data -> data.savedRoadworkPlans),
 		Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT)).optionalFieldOf("bakery_freebies_owed", Map.of()).forGetter(data -> data.bakeryFreebiesOwed),
-		SUPPLEMENTAL_PERSISTENCE_CODEC.forGetter(data -> new SupplementalPersistence(data.outpostPlayerStandings, data.outpostRaidStates, data.scribeRecipeLedgers, data.scribeResourceLedgers)),
+		SUPPLEMENTAL_PERSISTENCE_CODEC.forGetter(data -> new SupplementalPersistence(data.outpostPlayerStandings, data.outpostRaidStates, data.scribeRecipeLedgers, data.scribeResourceLedgers, data.observedHousingUpgradeTiers)),
 		Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("villager_settlements", Map.of()).forGetter(data -> data.villagerSettlements),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("preferred_villager_homes", Map.of()).forGetter(data -> data.preferredVillagerHomes),
 		Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("loaded_roadwork_catchup_ticks", Map.of()).forGetter(data -> data.loadedRoadworkCatchupTicks),
@@ -154,6 +157,7 @@ public class LiveVillagesSavedData extends SavedData {
 	private final LinkedHashMap<String, List<String>> scribeResourceLedgers;
 	private final LinkedHashMap<String, Map<String, OutpostPlayerStanding>> outpostPlayerStandings;
 	private final LinkedHashMap<String, OutpostRaidState> outpostRaidStates;
+	private final LinkedHashMap<String, Integer> observedHousingUpgradeTiers;
 	private final LinkedHashMap<String, String> villagerSettlements;
 	private final LinkedHashMap<String, Long> preferredVillagerHomes;
 	private final LinkedHashMap<String, Long> loadedRoadworkCatchupTicks;
@@ -182,13 +186,15 @@ public class LiveVillagesSavedData extends SavedData {
 		Map<String, Map<String, OutpostPlayerStanding>> playerStandings,
 		Map<String, OutpostRaidState> raids,
 		Map<String, List<String>> scribeRecipeLedgers,
-		Map<String, List<String>> scribeResourceLedgers
+		Map<String, List<String>> scribeResourceLedgers,
+		Map<String, Integer> observedHousingUpgradeTiers
 	) {
 		private SupplementalPersistence {
 			playerStandings = playerStandings == null ? Map.of() : playerStandings;
 			raids = raids == null ? Map.of() : raids;
 			scribeRecipeLedgers = scribeRecipeLedgers == null ? Map.of() : scribeRecipeLedgers;
 			scribeResourceLedgers = scribeResourceLedgers == null ? Map.of() : scribeResourceLedgers;
+			observedHousingUpgradeTiers = observedHousingUpgradeTiers == null ? Map.of() : observedHousingUpgradeTiers;
 		}
 	}
 
@@ -208,7 +214,7 @@ public class LiveVillagesSavedData extends SavedData {
 	}
 
 	public LiveVillagesSavedData() {
-		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new SupplementalPersistence(Map.of(), Map.of(), Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
+		this(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), new SupplementalPersistence(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()), Map.of(), Map.of(), Map.of(), 0, 0L, Optional.empty());
 	}
 
 	private LiveVillagesSavedData(
@@ -249,6 +255,7 @@ public class LiveVillagesSavedData extends SavedData {
 		this.outpostPlayerStandings = new LinkedHashMap<>();
 		supplementalPersistence.playerStandings().forEach((settlementId, playerStandings) -> this.outpostPlayerStandings.put(settlementId, new LinkedHashMap<>(playerStandings)));
 		this.outpostRaidStates = new LinkedHashMap<>(supplementalPersistence.raids());
+		this.observedHousingUpgradeTiers = new LinkedHashMap<>(supplementalPersistence.observedHousingUpgradeTiers());
 		this.villagerSettlements = new LinkedHashMap<>(villagerSettlements);
 		this.preferredVillagerHomes = new LinkedHashMap<>(preferredVillagerHomes);
 		this.loadedRoadworkCatchupTicks = new LinkedHashMap<>(loadedRoadworkCatchupTicks);
@@ -437,6 +444,46 @@ public class LiveVillagesSavedData extends SavedData {
 		return buildSites.values().stream()
 			.filter(buildSite -> buildSite.settlementId().equals(settlementId))
 			.toList();
+	}
+
+	private boolean markHousingUpgradesForTierIncrease(
+		ServerLevel level,
+		SettlementState settlement,
+		Map<String, Integer> stock,
+		long tick
+	) {
+		int currentTier = SettlementTiers.unlockedTier(settlement);
+		int observedTier = observedHousingUpgradeTiers.getOrDefault(settlement.id(), SettlementTiers.MIN_TIER);
+		if (currentTier <= observedTier) {
+			if (currentTier < observedTier || !observedHousingUpgradeTiers.containsKey(settlement.id())) {
+				observedHousingUpgradeTiers.put(settlement.id(), currentTier);
+				return true;
+			}
+			return false;
+		}
+
+		List<SettlementBuildSite> tierStartSites = getBuildSitesForSettlement(settlement.id());
+		for (SettlementBuildSite buildSite : tierStartSites) {
+			Optional<SettlementBuildSite> upgrade = SettlementConstruction.planNextHousingUpgrade(level, buildSite, stock, tick);
+			if (upgrade.isPresent()) {
+				buildSites.put(buildSite.id(), upgrade.get());
+			}
+		}
+
+		observedHousingUpgradeTiers.put(settlement.id(), currentTier);
+		return true;
+	}
+
+	private boolean refreshLegacyDuplexPlans(ServerLevel level, SettlementState settlement, Map<String, Integer> stock, long tick) {
+		boolean changed = false;
+		for (SettlementBuildSite buildSite : getBuildSitesForSettlement(settlement.id())) {
+			Optional<SettlementBuildSite> refreshed = SettlementConstruction.refreshLegacyDuplexPlan(level, buildSite, stock, tick);
+			if (refreshed.isPresent()) {
+				buildSites.put(buildSite.id(), refreshed.get());
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	public Optional<SettlementBuildSite> findBuildSite(String settlementId, SettlementBuildSiteType blueprintId, BlockPos workstationPos) {
@@ -889,6 +936,7 @@ public class LiveVillagesSavedData extends SavedData {
 		removed |= constructionDeliveries.entrySet().removeIf(entry -> entry.getValue().settlementId().equals(settlementId));
 		removed |= scribeRecipeLedgers.remove(settlementId) != null;
 		removed |= scribeResourceLedgers.remove(settlementId) != null;
+		removed |= observedHousingUpgradeTiers.remove(settlementId) != null;
 		removed |= savedSurveyorObservations.remove(settlementId) != null;
 		removed |= savedRoadworkPlans.remove(settlementId) != null;
 		removed |= loadedRoadworkCatchupTicks.remove(settlementId) != null;
@@ -956,6 +1004,10 @@ public class LiveVillagesSavedData extends SavedData {
 
 		if (!buildSite.equals(previous)) {
 			setDirty();
+			if (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
+				|| (previous != null && previous.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE)) {
+				SettlementChurchSanctuary.invalidate();
+			}
 		}
 	}
 
@@ -1028,6 +1080,9 @@ public class LiveVillagesSavedData extends SavedData {
 		}
 
 		setDirty();
+		if (removedBuildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE) {
+			SettlementChurchSanctuary.invalidate();
+		}
 	}
 
 	private boolean retireObsoleteLoadedPalisadeWallBuildSites(ServerLevel level, SettlementState settlement) {
@@ -1346,6 +1401,7 @@ public class LiveVillagesSavedData extends SavedData {
 				.map(SettlementConstructionDelivery::villagerId)
 				.collect(java.util.stream.Collectors.toSet());
 			boolean stockChanged = false;
+			SettlementChurchWork.maintainLoadedChurchMeetings(level, workingSettlement, activeBuildSites);
 			stockChanged |= SettlementTrademasterWork.maintainLoadedTradeManagement(level, workingSettlement, stock, activeBuildSites);
 			stockChanged |= SettlementVillagerItemPickupWork.maintainLoadedItemCollection(
 				level,
@@ -1547,6 +1603,14 @@ public class LiveVillagesSavedData extends SavedData {
 				? settlement
 				: settlement.withPopulation(actualPopulation);
 			Map<String, Integer> stock = new LinkedHashMap<>(workingSettlement.stock());
+			SettlementVanillaVillageRepairWork.MaintenanceResult villageRepairResult = SettlementVanillaVillageRepairWork.maintain(
+				level,
+				workingSettlement,
+				stock
+			);
+			changed |= villageRepairResult.worldChanged();
+			changed |= refreshLegacyDuplexPlans(level, workingSettlement, stock, currentTick);
+			changed |= markHousingUpgradesForTierIncrease(level, workingSettlement, stock, currentTick);
 			List<SettlementBuildSite> activeBuildSites = getBuildSitesForSettlement(settlement.id());
 			boolean discoveryDue = activeBuildSites.isEmpty()
 				|| isThrottledConstructionStepDue(workingSettlement, currentTick, "construction_discovery", discoveryIntervalTicks, intervalTicks);
@@ -1674,7 +1738,12 @@ public class LiveVillagesSavedData extends SavedData {
 				stock,
 				activeBuildSites,
 				constructionDeliveries,
-				roadworkResult.busyRoadwrightIds()
+				villageRepairResult.busyWorkerIds().isEmpty()
+					? roadworkResult.busyRoadwrightIds()
+					: java.util.stream.Stream.concat(
+						roadworkResult.busyRoadwrightIds().stream(),
+						villageRepairResult.busyWorkerIds().stream()
+					).collect(java.util.stream.Collectors.toSet())
 			);
 
 			for (SettlementBuildSite buildSite : constructionResult.buildSites()) {

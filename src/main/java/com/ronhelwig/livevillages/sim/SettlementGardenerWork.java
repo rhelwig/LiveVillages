@@ -26,6 +26,7 @@ import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
+import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
 import com.ronhelwig.livevillages.content.LiveVillagesItems;
 
 public final class SettlementGardenerWork {
@@ -562,10 +563,7 @@ public final class SettlementGardenerWork {
 
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			BlockPos trimPos = bedPos.relative(direction);
-			BlockState trapdoorState = Blocks.OAK_TRAPDOOR.defaultBlockState()
-				.setValue(TrapDoorBlock.FACING, direction.getOpposite())
-				.setValue(TrapDoorBlock.HALF, Half.BOTTOM)
-				.setValue(TrapDoorBlock.OPEN, true);
+			BlockState trapdoorState = flowerBedTrapdoorState(direction);
 
 			if (!canPlaceFlowerBedEdgingAt(level, trimPos, trapdoorState)) {
 				continue;
@@ -586,6 +584,13 @@ public final class SettlementGardenerWork {
 		}
 
 		return placed;
+	}
+
+	static BlockState flowerBedTrapdoorState(Direction outwardDirection) {
+		return Blocks.OAK_TRAPDOOR.defaultBlockState()
+			.setValue(TrapDoorBlock.FACING, outwardDirection)
+			.setValue(TrapDoorBlock.HALF, Half.BOTTOM)
+			.setValue(TrapDoorBlock.OPEN, true);
 	}
 
 	private static boolean canPlaceFlowerBedEdgingAt(ServerLevel level, BlockPos trimPos, BlockState trapdoorState) {
@@ -850,6 +855,8 @@ public final class SettlementGardenerWork {
 	private static boolean isPointOfInterestBlock(BlockState state) {
 		return state.is(Blocks.BELL)
 			|| state.is(Blocks.BREWING_STAND)
+			|| state.is(LiveVillagesBlocks.ALTAR)
+			|| state.is(LiveVillagesBlocks.PULPIT)
 			|| state.is(Blocks.CARTOGRAPHY_TABLE)
 			|| state.is(Blocks.COMPOSTER)
 			|| state.is(Blocks.FLETCHING_TABLE)

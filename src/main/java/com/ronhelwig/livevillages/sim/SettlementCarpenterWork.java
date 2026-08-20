@@ -99,6 +99,7 @@ public final class SettlementCarpenterWork {
 			+ " planks=" + stock.getOrDefault("planks", 0)
 			+ " stairs=" + stock.getOrDefault("stairs", 0)
 			+ " slabs=" + stock.getOrDefault("slab", 0)
+			+ " trapdoors=" + stock.getOrDefault("trapdoor", 0)
 			+ " sticks=" + stock.getOrDefault("stick", 0);
 	}
 
@@ -128,6 +129,16 @@ public final class SettlementCarpenterWork {
 
 		if (needsOutput(stock, demand, "slab", 12)) {
 			return "slab";
+		}
+
+		if (needsOutput(stock, demand, "trapdoor", SettlementEconomyRules.targetForGoods(settlement, "trapdoor"))) {
+			return "trapdoor";
+		}
+
+		for (String demandedOutput : List.of("fence", "fence_gate", "door", "chest", "ladder")) {
+			if (needsOutput(stock, demand, demandedOutput, 0)) {
+				return demandedOutput;
+			}
 		}
 
 		if (needsOutput(stock, demand, "planks", SettlementEconomyRules.targetForGoods(settlement, "planks"))) {
@@ -184,7 +195,7 @@ public final class SettlementCarpenterWork {
 		return stock.getOrDefault(goodsKey, 0) < target;
 	}
 
-	private static boolean craftWoodOutput(Map<String, Integer> stock, String outputKey) {
+	static boolean craftWoodOutput(Map<String, Integer> stock, String outputKey) {
 		return switch (outputKey) {
 			case "planks" -> {
 				if (!SettlementGoods.consumeGoods(stock, "logs", 1)) {
@@ -210,6 +221,19 @@ public final class SettlementCarpenterWork {
 				SettlementGoods.addGoods(stock, "slab", 8);
 				yield true;
 			}
+			case "trapdoor" -> {
+				if (!SettlementGoods.consumeGoods(stock, "logs", 2)) {
+					yield false;
+				}
+
+				SettlementGoods.addGoods(stock, "trapdoor", 2);
+				yield true;
+			}
+			case "fence" -> craftFromLogs(stock, "fence", 1, 3);
+			case "fence_gate" -> craftFromLogs(stock, "fence_gate", 1, 1);
+			case "door" -> craftFromLogs(stock, "door", 2, 3);
+			case "chest" -> craftFromLogs(stock, "chest", 2, 1);
+			case "ladder" -> craftFromLogs(stock, "ladder", 1, 4);
 			case "stick" -> {
 				if (!SettlementGoods.consumeGoods(stock, "logs", 1)) {
 					yield false;
@@ -222,14 +246,30 @@ public final class SettlementCarpenterWork {
 		};
 	}
 
+	private static boolean craftFromLogs(Map<String, Integer> stock, String outputKey, int logs, int outputAmount) {
+		if (!SettlementGoods.consumeGoods(stock, "logs", logs)) {
+			return false;
+		}
+
+		SettlementGoods.addGoods(stock, outputKey, outputAmount);
+		return true;
+	}
+
 	private static int logCost(String outputKey) {
-		return outputKey.equals("stairs") ? 2 : 1;
+		return switch (outputKey) {
+			case "stairs", "trapdoor", "door", "chest" -> 2;
+			default -> 1;
+		};
 	}
 
 	private static int outputAmount(String outputKey) {
 		return switch (outputKey) {
 			case "planks", "stairs" -> 4;
 			case "slab", "stick" -> 8;
+			case "trapdoor" -> 2;
+			case "fence", "door" -> 3;
+			case "fence_gate", "chest" -> 1;
+			case "ladder" -> 4;
 			default -> 0;
 		};
 	}
@@ -239,9 +279,12 @@ public final class SettlementCarpenterWork {
 			|| goodsKey.equals("stairs")
 			|| goodsKey.equals("slab")
 			|| goodsKey.equals("stick")
+			|| goodsKey.equals("trapdoor")
 			|| goodsKey.equals("fence")
 			|| goodsKey.equals("fence_gate")
-			|| goodsKey.equals("door");
+			|| goodsKey.equals("door")
+			|| goodsKey.equals("chest")
+			|| goodsKey.equals("ladder");
 	}
 
 	private static void steerCarpenterTowardWork(ServerLevel level, SettlementState settlement, Villager carpenter, BlockPos workPos) {

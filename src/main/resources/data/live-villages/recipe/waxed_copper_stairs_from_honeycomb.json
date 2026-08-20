@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "waxed_copper_stairs",
+  "ingredients": [
+    "live-villages:copper_stairs",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "live-villages:waxed_copper_stairs"
+  }
+}

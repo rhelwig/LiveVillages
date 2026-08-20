@@ -7,8 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.ronhelwig.livevillages.command.LiveVillagesDebugCommands;
+import com.ronhelwig.livevillages.command.SettlementTeleportCommands;
 import com.ronhelwig.livevillages.content.LiveVillagesBlockEntities;
 import com.ronhelwig.livevillages.content.LiveVillagesBlocks;
+import com.ronhelwig.livevillages.content.LiveVillagesCreativeTabs;
 import com.ronhelwig.livevillages.content.LiveVillagesEntityTypes;
 import com.ronhelwig.livevillages.content.LiveVillagesItems;
 import com.ronhelwig.livevillages.content.LiveVillagesMenus;
@@ -44,6 +46,7 @@ public class LiveVillages implements ModInitializer {
 		LiveVillagesEntityTypes.register();
 		LiveVillagesItems.register();
 		LiveVillagesBlocks.register();
+		LiveVillagesCreativeTabs.register();
 		LiveVillagesVillagerProfessions.register();
 		LiveVillagesBlockEntities.register();
 		LiveVillagesMenus.register();
@@ -57,6 +60,7 @@ public class LiveVillages implements ModInitializer {
 		SettlementDefenseWork.register();
 		SettlementProfessionReports.register();
 		LiveVillagesDebugCommands.register();
+		SettlementTeleportCommands.register();
 		LiveVillagesScheduler.register();
 		VillageAutodetector.register();
 		LOGGER.info("Initialized Live Villages!");

@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": "minecraft:gold_nugget",
+    "R": "minecraft:red_dye",
+    "S": "minecraft:stone",
+    "W": "#minecraft:wool"
+  },
+  "pattern": [
+    " W ",
+    "GSR"
+  ],
+  "result": {
+    "id": "live-villages:altar"
+  }
+}

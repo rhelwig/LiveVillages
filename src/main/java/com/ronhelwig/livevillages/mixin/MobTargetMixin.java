@@ -10,14 +10,30 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.raid.Raider;
 
 import com.ronhelwig.livevillages.sim.OutpostTrust;
+import com.ronhelwig.livevillages.sim.SettlementChurchSanctuary;
 
 @Mixin(Mob.class)
 public abstract class MobTargetMixin {
 	@Inject(method = "setTarget", at = @At("HEAD"), cancellable = true)
 	private void livevillages$respectOutpostTrust(LivingEntity target, CallbackInfo ci) {
-		if ((Object) this instanceof Raider raider
+		Mob self = (Mob) (Object) this;
+		if (self instanceof Raider raider
 			&& OutpostTrust.shouldSuppressTarget(raider, target)) {
 			ci.cancel();
+			return;
+		}
+
+		if (target != null && SettlementChurchSanctuary.shouldSuppressMobTarget(self, target)) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "aiStep", at = @At("TAIL"))
+	private void livevillages$clearSanctuaryTargets(CallbackInfo ci) {
+		Mob self = (Mob) (Object) this;
+		LivingEntity target = self.getTarget();
+		if (target != null && SettlementChurchSanctuary.shouldSuppressMobTarget(self, target)) {
+			self.setTarget(null);
 		}
 	}
 }

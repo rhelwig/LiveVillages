@@ -105,7 +105,23 @@ public final class SettlementEconomyRules {
 		new TargetRule("cocoa_beans", population -> 0),
 		new TargetRule("pumpkin", population -> 0),
 		new TargetRule("carved_pumpkin", population -> 0),
-		new TargetRule("flower", population -> 0),
+		new TargetRule("flower", population -> 8 + population),
+		new TargetRule("white_dye", population -> 2 + population / 8),
+		new TargetRule("orange_dye", population -> 2 + population / 8),
+		new TargetRule("magenta_dye", population -> 2 + population / 8),
+		new TargetRule("light_blue_dye", population -> 2 + population / 8),
+		new TargetRule("yellow_dye", population -> 2 + population / 8),
+		new TargetRule("lime_dye", population -> 2 + population / 8),
+		new TargetRule("pink_dye", population -> 2 + population / 8),
+		new TargetRule("gray_dye", population -> 2 + population / 8),
+		new TargetRule("light_gray_dye", population -> 2 + population / 8),
+		new TargetRule("cyan_dye", population -> 2 + population / 8),
+		new TargetRule("purple_dye", population -> 2 + population / 8),
+		new TargetRule("blue_dye", population -> 2 + population / 8),
+		new TargetRule("brown_dye", population -> 2 + population / 8),
+		new TargetRule("green_dye", population -> 2 + population / 8),
+		new TargetRule("red_dye", population -> 4 + population / 4),
+		new TargetRule("black_dye", population -> 2 + population / 8),
 		new TargetRule("oak_sapling", population -> 0),
 		new TargetRule("spruce_sapling", population -> 0),
 		new TargetRule("birch_sapling", population -> 0),
@@ -416,6 +432,12 @@ public final class SettlementEconomyRules {
 			return 2;
 		}
 
+		if (goodsKey.equals("copper_bell")
+			&& settlement.population().getOrDefault(SettlementRoleKeys.MASON, 0) > 0
+			&& SettlementTiers.unlockedTier(settlement) >= 3) {
+			return 1;
+		}
+
 		if (goodsKey.equals("string") && gardeners + shepherds > 0) {
 			return 8;
 		}
@@ -459,6 +481,14 @@ public final class SettlementEconomyRules {
 		}
 
 		if (settlement.population().getOrDefault(SettlementRoleKeys.GARDENER, 0) > 0) {
+			if (goodsKey.equals("flower")) {
+				return 8;
+			}
+
+			if (SettlementGoods.isDyeGoods(goodsKey)) {
+				return goodsKey.equals("red_dye") ? 4 : 2;
+			}
+
 			if (goodsKey.equals("wheat_seeds")) {
 				return 16;
 			}

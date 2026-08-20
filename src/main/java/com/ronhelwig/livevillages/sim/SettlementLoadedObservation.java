@@ -543,6 +543,7 @@ public final class SettlementLoadedObservation {
 			case BUTCHER_SHOP -> "Butcher";
 			case CLERIC_SHRINE -> "Cleric";
 			case DOCK -> "Dock";
+			case DUPLEX -> "Duplex";
 			case LEATHERWORKER_WORKSHOP -> "Leatherworker";
 			case LIGHTHOUSE -> "Lighthouse";
 			case LIBRARY -> "Library";

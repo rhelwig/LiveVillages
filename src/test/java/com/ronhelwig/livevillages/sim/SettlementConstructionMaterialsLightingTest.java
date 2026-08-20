@@ -7,6 +7,27 @@ import org.junit.jupiter.api.Test;
 
 class SettlementConstructionMaterialsLightingTest {
 	@Test
+	void stringCanBeSpunFromWoolAndPreservesTheBatchRemainder() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("wool", 1));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "string");
+		assertTrue(result.supplied());
+		assertEquals(1, result.craftingSteps());
+		assertEquals(3, stock.get("string"));
+		assertFalse(stock.containsKey("wool"));
+	}
+
+	@Test
+	void candleCanSpinMissingStringFromWool() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("honeycomb", 1, "wool", 1));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "candle");
+		assertTrue(result.supplied());
+		assertEquals(2, result.craftingSteps());
+		assertEquals(3, stock.get("string"));
+		assertFalse(stock.containsKey("honeycomb"));
+		assertFalse(stock.containsKey("wool"));
+	}
+
+	@Test
 	void candleConsumesHoneycombAndString() {
 		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("honeycomb", 1, "string", 1));
 		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "candle");
@@ -21,7 +42,7 @@ class SettlementConstructionMaterialsLightingTest {
 		Map<String, Integer> original = new LinkedHashMap<>(stock);
 		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "candle");
 		assertFalse(result.supplied());
-		assertEquals("string", result.missingMaterialKey());
+		assertEquals("wool", result.missingMaterialKey());
 		assertEquals(original, stock);
 	}
 
@@ -145,6 +166,25 @@ class SettlementConstructionMaterialsLightingTest {
 		Map<String, Integer> original = new LinkedHashMap<>(stock);
 		assertFalse(SettlementConstructionMaterials.tryConsumeCost(stock, Map.of("planks", 7)));
 		assertEquals(original, stock);
+	}
+
+	@Test
+	void waxedCopperStairsCanBeCutFromACopperBlockAndHoneycomb() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("copper_block", 1, "honeycomb", 1));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "waxed_copper_stairs");
+		assertTrue(result.supplied());
+		assertEquals(1, result.craftingSteps());
+		assertEquals(3, stock.getOrDefault("waxed_copper_stairs", 0));
+		assertFalse(stock.containsKey("copper_block"));
+		assertFalse(stock.containsKey("honeycomb"));
+	}
+
+	@Test
+	void copperStairsNeedACopperBlockWhenNoneAreStocked() {
+		Map<String, Integer> stock = new LinkedHashMap<>();
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "copper_stairs");
+		assertFalse(result.supplied());
+		assertEquals("copper_ingot", result.missingMaterialKey());
 	}
 
 	private static Map<String, Integer> stock(String key, int amount) {

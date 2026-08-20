@@ -31,6 +31,7 @@ You can help by checking things like:
 - textures and models
 - whether something is fun, clear, or confusing
 - whether profession uniforms still match the settlement's current civic tier, for example a Forester looking more established after a tier-up
+- worker speed after changing the world `Worker Productivity` game rule
 
 ### Settlement lighting
 
@@ -58,6 +59,28 @@ If you want a generic test routine, try this:
 8. Report anything broken, weird, ugly, unclear, or unexpectedly slow.
 
 This is meant to be broad on purpose. You do not need to follow it exactly.
+
+## Worker Productivity
+
+Settlement villagers work at a per-world speed you can change.
+
+- Default: `2.0` (twice the original design baseline)
+- Allowed range: `0.25` to `50.0`
+- `1.0` is the original slower design speed
+
+How to set it:
+
+1. Open the world game-rules screen (`Esc` → Edit Game Rules, or when creating a world).
+2. Find **Worker Productivity** under Misc.
+3. Enter a number such as `1.0`, `2.0`, or `4.0`.
+
+Or from chat:
+
+```text
+/gamerule live-villages:worker_productivity 2.0
+```
+
+Higher values make loaded work, construction, and abstract project progress faster. Very high values still have a floor so the server does not scan every tick. This is a world setting, not a global config file.
 
 ## Good Things To Notice
 

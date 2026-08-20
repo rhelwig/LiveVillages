@@ -3,6 +3,8 @@
   "package": "com.ronhelwig.livevillages.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+	"BellRendererMixin",
+	"BellRenderStateMixin",
 	"EvokerRendererMixin",
 	"InWorldGameRulesScreenMixin",
     "IllusionerRendererMixin",

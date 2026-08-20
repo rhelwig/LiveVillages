@@ -3304,6 +3304,12 @@ public final class SettlementVillagers {
 			return breakTask.get();
 		}
 
+		Optional<String> churchTask = SettlementChurchWork.loadedChurchTaskKey(level, villager);
+
+		if (churchTask.isPresent()) {
+			return churchTask.get();
+		}
+
 		if (isVillageGatheringTime(level)) {
 			if (isNearBabyVillager(level, villager)) {
 				return "raising_child";
@@ -4721,10 +4727,15 @@ public final class SettlementVillagers {
 			case "assembling_bookshelf" -> "assembling bookshelf";
 			case "carrying_construction_supplies" -> "carrying construction supplies";
 			case "carrying_collected_items" -> "carrying collected items";
+			case "casting_copper_bell" -> "casting a copper bell";
+			case "cutting_copper_stairs" -> "cutting copper stairs";
 			case "cataloging_books" -> "cataloging books";
 			case "cataloging_recipes" -> "cataloging recipes";
 			case "cataloging_starter_recipes" -> "cataloging starter recipes";
+			case "attending_church" -> "attending church";
 			case "community_care" -> "community care";
+			case "enjoying_the_village" -> "enjoying the village";
+			case "leading_service" -> "leading the church service";
 			case "collecting_forest_drops" -> "collecting forest drops";
 			case "collecting_wool" -> "collecting wool";
 			case "closing_monster_tunnel" -> "closing monster tunnel";

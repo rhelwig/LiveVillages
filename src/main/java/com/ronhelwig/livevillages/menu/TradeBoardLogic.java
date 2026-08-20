@@ -611,25 +611,7 @@ public final class TradeBoardLogic {
 	}
 
 	private static boolean isBuildSiteCompleteForDisplay(SettlementBuildSite buildSite) {
-		if (buildSite.complete()) {
-			return true;
-		}
-
-		boolean hasRequiredBlocks = false;
-
-		for (SettlementBuildBlockState block : buildSite.blocks()) {
-			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
-				continue;
-			}
-
-			hasRequiredBlocks = true;
-
-			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
-				return false;
-			}
-		}
-
-		return hasRequiredBlocks;
+		return SettlementConstruction.isBuildSiteComplete(buildSite);
 	}
 
 	private static String buildSiteTypeLabel(SettlementBuildSiteType type) {
@@ -639,8 +621,9 @@ public final class TradeBoardLogic {
 			case BUTCHER_SHOP -> "Butcher Shop";
 			case CARTOGRAPHER_HOUSE -> "Cartographer's House";
 			case CARPENTER_WORKSHOP -> "Carpenter's Workshop";
-			case CLERIC_SHRINE -> "Cleric Shrine";
+			case CLERIC_SHRINE -> "Chapel";
 			case DOCK -> "Dock";
+			case DUPLEX -> "Duplex";
 			case LEATHERWORKER_WORKSHOP -> "Leatherworker's Workshop";
 			case LIBRARY -> "Library";
 			case LIGHTHOUSE -> "Lighthouse";

@@ -15,6 +15,9 @@ Live Villages `1.0.2` focuses on making settlement growth more dependable, visib
 
 ### Construction and settlement fixes
 
+- Active settlements can now reclaim generated vanilla village buildings gradually, with up to six workers renovating at once. Workers remove cobwebs first; when housing is short, they prioritize incomplete doors and restore only beds that belonged to the intact vanilla building, after verifying support, overhead clearance, and walking access. Donated beds are used directly before crafting replacements. Workers then use each abandoned building's intact vanilla template to replace missing safety-related walls, roofs, stairs, slabs, fences, doors, and window panes as materials become available, and retill damaged vanilla farm plots. Renovation never overwrites solid player changes.
+- Finished buildings now keep their completed state on the Info screen. Leftover foundation fill, optional church tiles, and later blueprint edits no longer leave a standing structure stuck at 99%.
+- Copper stairs and waxed copper stairs are now craftable (vanilla only has cut copper stairs). Church tower roofs use the waxed ones.
 - Emergency/simple housing and larger autonomous housing shelters are now built progressively instead of appearing instantly.
 - Structures can build dirt foundations across modest slopes, while still rejecting sites with deep unsupported gaps.
 - Build previews, construction material accounting, and support checks have been improved for the new lighting and foundation plans.
@@ -26,6 +29,7 @@ Live Villages `1.0.2` focuses on making settlement growth more dependable, visib
 - Worker productivity is now a world setting. The default stays `2.0` (twice the original design baseline), and it can be changed in the world game-rules screen or with `/gamerule live-villages:worker_productivity`. The allowed range is now `0.25` to `50.0`.
 - Villager, zombie villager, and illager skins can now use `64`, `128`, or `256` pixel sheets. The world game rule is `live-villages:villager_texture_scale`, with a cycling world-setting button and matching command autocomplete choices. Higher scales keep the Minecraft look while making job marks easier to read, and new worlds default to `256` for the strongest presentation.
 - All founding-tier profession uniforms now show clearer role-specific wear, repairs, grime, and frayed hems: flour for Bakers, soil for field workers, soot and ore dust for heavy trades, salt fading for maritime work, and darker leather repairs for martial and craft roles. Fletchers now wear a forward-pointed green cap with a red feather across all civic tiers.
+- One wool can now be crafted into four string. Settlement stock can spin wool the same way when string is needed for slings, candles, or loom work, which helps Peaceful worlds that never see spiders.
 - Settlements now keep stairs, slabs, and other parts needed by unfinished buildings instead of offering them as Trade Board surplus.
 - Emergency beds prefer a planned indoor bed spot, including finishing the floor under that spot when materials allow, instead of dropping beds on an unfinished trade-post floor or porch.
 - Beekeepers only produce hive goods after a real successful harvest.

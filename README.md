@@ -52,6 +52,7 @@ Current custom blocks and structure anchors include:
 - `Lighthouse`: harbor infrastructure that extends water trade and navigation support
 - `Milepost`: route infrastructure marker
 - `Gardener Workstation`, `Honey Separator`, `Scribe Desk`, and `Guard Post`
+- `Altar` and `Pulpit`: church founding block and sanctuary furniture, both with a red-heart tapestry
 - `Simple Housing Shelter` and `Housing Shelter`: placeable settlement housing anchors that start or resume staged shelter construction
 
 Custom and expanded professions include:
@@ -99,6 +100,9 @@ Server/debug utilities:
 - [docs/GIT-GITHUB-FOR-NEWBS.md](docs/GIT-GITHUB-FOR-NEWBS.md): beginner-friendly guide to commits, syncing, branches, and pull requests
 - [docs/ART-ASSET-GUIDE.md](docs/ART-ASSET-GUIDE.md): where textures, models, and Blockbench source files should live
 - [docs/STRUCTURE-BLUEPRINT-GUIDE.md](docs/STRUCTURE-BLUEPRINT-GUIDE.md): human-friendly guide for designing importable structure blueprints
+- [docs/CLERIC-CHURCH-GUIDE.md](docs/CLERIC-CHURCH-GUIDE.md): size, materials, altar founding, and civic-pride brief for the church-to-cathedral ladder
+- [docs/LIGHTHOUSE-DESIGN.md](docs/LIGHTHOUSE-DESIGN.md): civic-tier lighthouse growth, including a Tier 3 ground-floor bedroom
+- [docs/FARMER-BARN-GUIDE.md](docs/FARMER-BARN-GUIDE.md): optional Farmer barn worksite, not a farmhouse
 - GitHub issues: active bug and polish tracking
 
 ## Development

@@ -13,6 +13,10 @@ class SettlementRecipeKnowledgeTest extends MinecraftBootstrapTestSupport {
 		List<String> tierThree = SettlementRecipeKnowledge.recipeIdsForTier(3);
 		assertTrue(tierOne.contains("minecraft:torch"));
 		assertTrue(tierOne.contains("minecraft:campfire"));
+		assertTrue(tierOne.contains("live-villages:string_from_wool"));
+		assertTrue(tierOne.contains("minecraft:red_dye_from_poppy"));
+		assertTrue(tierOne.contains("minecraft:yellow_dye_from_dandelion"));
+		assertTrue(tierOne.contains("minecraft:white_dye_from_bone_meal"));
 		assertFalse(tierOne.contains("minecraft:candle"));
 		assertFalse(tierOne.contains("minecraft:jack_o_lantern"));
 		assertTrue(tierTwo.contains("minecraft:candle"));
@@ -21,6 +25,11 @@ class SettlementRecipeKnowledgeTest extends MinecraftBootstrapTestSupport {
 		assertFalse(tierTwo.contains("minecraft:sea_lantern"));
 		assertTrue(tierThree.contains("minecraft:glowstone"));
 		assertTrue(tierThree.contains("minecraft:sea_lantern"));
+		assertFalse(tierTwo.contains("live-villages:copper_bell"));
+		assertTrue(tierThree.contains("live-villages:copper_bell"));
+		assertFalse(tierTwo.contains("live-villages:copper_stairs"));
+		assertTrue(tierThree.contains("live-villages:copper_stairs"));
+		assertTrue(tierThree.contains("live-villages:waxed_copper_stairs"));
 	}
 
 	@Test

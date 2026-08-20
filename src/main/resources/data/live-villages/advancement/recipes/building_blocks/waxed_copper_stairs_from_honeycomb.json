@@ -1,0 +1,25 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_stairs": {
+      "conditions": {
+        "items": [
+          {
+            "items": "live-villages:copper_stairs"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_copper_stairs"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "live-villages:waxed_copper_stairs_from_honeycomb"
+    ]
+  }
+}

@@ -118,6 +118,12 @@ public final class SettlementEconomySimulator {
 		activeRoutes.addAll(projectResult.createdRoutes());
 
 		double security = computeSecurity(simulationSettlement, infrastructure, activeRoutes, projectResult.defenseLevel(), population, elapsedDays);
+		int churchTier = 0;
+		if (level != null) {
+			churchTier = SettlementChurchWork.highestCompletedChurchTier(
+				LiveVillagesSavedData.get(level.getServer()).getBuildSitesForSettlement(settlement.id())
+			);
+		}
 		double comfort = computeComfort(
 			simulationSettlement,
 			projectResult.housingCapacity(),
@@ -126,7 +132,8 @@ public final class SettlementEconomySimulator {
 			upkeepSupply,
 			security,
 			stock,
-			elapsedDays
+			elapsedDays,
+			churchTier
 		);
 		GrowthResult growthResult = applyGrowth(
 			simulationSettlement,
@@ -773,7 +780,8 @@ public final class SettlementEconomySimulator {
 		SupplyState upkeepSupply,
 		double security,
 		Map<String, Integer> stock,
-		double elapsedDays
+		double elapsedDays,
+		int completedChurchTier
 	) {
 		double foodRatio = foodSupply.ratio();
 		double upkeepRatio = upkeepSupply.ratio();
@@ -782,6 +790,7 @@ public final class SettlementEconomySimulator {
 		double gardenerBonus = Math.min(0.08D, roleCount(settlement, SettlementRoleKeys.GARDENER) * 0.02D);
 		double beekeeperBonus = Math.min(0.06D, roleCount(settlement, SettlementRoleKeys.BEEKEEPER) * 0.02D);
 		double trophyBonus = guardTrophyComfortBonus(stock);
+		double churchBonus = SettlementChurchWork.comfortBonus(completedChurchTier, roleCount(settlement, SettlementRoleKeys.CLERIC));
 		double targetComfort = 0.55D
 			+ clamp(foodRatio, 0.0D, 1.1D) * 0.25D
 			+ clamp(upkeepRatio, 0.0D, 1.0D) * 0.10D
@@ -790,6 +799,7 @@ public final class SettlementEconomySimulator {
 			+ gardenerBonus
 			+ beekeeperBonus
 			+ trophyBonus
+			+ churchBonus
 			+ varietyBonus;
 		double blend = clamp(elapsedDays * 0.35D, 0.15D, 1.0D);
 		return clamp(settlement.comfort() + (targetComfort - settlement.comfort()) * blend, 0.35D, 1.35D);

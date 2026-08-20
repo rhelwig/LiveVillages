@@ -17,10 +17,12 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.ai.village.poi.PoiType;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.trading.TradeSet;
 
 import com.ronhelwig.livevillages.LiveVillages;
+import com.ronhelwig.livevillages.mixin.PoiTypesAccessor;
 
 public final class LiveVillagesVillagerProfessions {
 	public static final ResourceKey<PoiType> TRADEMASTER_POI = poiKey("trademaster");
@@ -74,6 +76,19 @@ public final class LiveVillagesVillagerProfessions {
 		registerProfession(FORESTER, FORESTER_POI, SoundEvents.VILLAGER_WORK_FLETCHER);
 		registerProfession(MINER, MINER_POI, SoundEvents.VILLAGER_WORK_TOOLSMITH);
 		registerProfession(PORTMASTER, PORTMASTER_POI, SoundEvents.VILLAGER_WORK_FISHERMAN);
+		registerClericWorkstationBlocks();
+	}
+
+	private static void registerClericWorkstationBlocks() {
+		BuiltInRegistries.POINT_OF_INTEREST_TYPE.get(PoiTypes.CLERIC.identifier()).ifPresent(clericPoi -> {
+			PoiTypesAccessor.livevillages$registerBlockStates(
+				clericPoi,
+				ImmutableSet.<net.minecraft.world.level.block.state.BlockState>builder()
+					.addAll(LiveVillagesBlocks.ALTAR.getStateDefinition().getPossibleStates())
+					.addAll(LiveVillagesBlocks.PULPIT.getStateDefinition().getPossibleStates())
+					.build()
+			);
+		});
 	}
 
 	private static VillagerProfession registerProfession(

@@ -51,11 +51,15 @@ These are the symbols currently used by the codebase. We can add more explicit m
 | `N` | Hanging lantern | This is a hanging lantern, not a floor lantern. |
 | `O` | Semantic storefront fixture base | Resolves to local planks, or concealed power when its paired Tier 4 storefront light needs it. |
 | `P` | Planks | Uses the local biome's wood family in the current implementation. |
-| `S` | Stairs | Uses the local biome's wood family and auto-facing unless an orientation layer overrides it. |
+| `S` | Stairs | Uses the local biome's wood family and auto-facing unless an orientation layer overrides it. Church tower roofs at layer 11 use waxed copper stairs instead. |
 | `T` | Semantic wall light | Uses auto-facing and saves a tier/knowledge-aware Torch-family choice; ordinary Torch remains the fallback. |
-| `U` | Semantic interior light | Resolves once per build site and saves the chosen material. |
-| `V` | Glass / window block | Usually glass blocks; the cartographer house currently uses panes for this symbol. |
-| `W` | Workstation / anchor block | This is structure-specific, such as a `Trade Board`, `Carpenter's Bench`, `Forester's Table`, or vanilla workstation. |
+| `t` | Trapdoor | Local wood family. Closed top-half trapdoors are used as candle shelves in the chapel nave. |
+| `U` | Semantic interior light | Resolves once per build site and saves the chosen material. Chapel `U` is a lit candle, including the vestry desk and nave sconces. |
+| `V` | Glass / window pane | Churches use glass panes. Tier 3–4 church panes are stained (red / yellow / blue). The cartographer house also uses panes. |
+| `W` | Workstation / anchor block | This is structure-specific, such as a `Trade Board`, `Carpenter's Bench`, `Forester's Table`, church `Altar`, or vanilla workstation. |
+| `p` | Pulpit | Church furniture beside the altar. `1` is still accepted as an older alias. |
+| `b` | Brewing Stand | Reserved altar-adjacent cleric work tile. The chapel can complete without it; villagers install the stand when one is available. |
+| `g` | Copper Bell | Reserved T3/T4 front bell-tower tile. The church can complete without it; a Mason casts the bell from copper, a stick, and planks. |
 | `X` | Semantic storefront light | Place above an authored solid support such as a counter or shelf. |
 | `Y` | Optional glow-berry trellis | Hangs below an authored support when the Tier `3+` settlement has discovered and stocked Glow Berries; otherwise resolves to air for that saved site. |
 | `Z` | Semantic farm / garden light | Place above an authored solid support. |
@@ -177,5 +181,6 @@ This guide matches the current code-backed blueprint system used for:
 - `Trading Post`
 - `Housing Shelter`
 - `Simple Housing Shelter`
+- `Duplex`
 
 If we later move blueprints into external data files, this guide should still be a good human-facing authoring reference, even if the exact file format changes.

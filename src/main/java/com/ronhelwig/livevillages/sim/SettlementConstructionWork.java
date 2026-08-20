@@ -511,7 +511,14 @@ public final class SettlementConstructionWork {
 
 			if (!block.blueprintSymbol().equals(Character.toString(currentSymbol))) {
 				String materialKey = SettlementConstruction.currentBlueprintMaterialKey(buildSite, block, currentSymbol);
-				block = block.withBlueprintSymbol(currentSymbol, materialKey).withStatus(SettlementBuildBlockStatus.PENDING, "");
+				boolean preserveCompletedCell = buildSite.complete()
+					&& (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED)
+					&& !currentState.isAir();
+				if (preserveCompletedCell) {
+					block = block.withBlueprintSymbol(currentSymbol, materialKey);
+				} else {
+					block = block.withBlueprintSymbol(currentSymbol, materialKey).withStatus(SettlementBuildBlockStatus.PENDING, "");
+				}
 				plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
 				if (plannedState == null) {
@@ -528,7 +535,7 @@ public final class SettlementConstructionWork {
 			SettlementBuildBlockState updatedBlock = block;
 
 			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
-				if (!matchesIntent && !playerOverride) {
+				if (!matchesIntent && !playerOverride && !(buildSite.complete() && !currentState.isAir())) {
 					updatedBlock = block.withStatus(SettlementBuildBlockStatus.PENDING, "");
 				}
 			} else if (matchesIntent || playerOverride) {
@@ -550,6 +557,10 @@ public final class SettlementConstructionWork {
 
 		for (SettlementBuildBlockState currentBlueprintBlock : SettlementConstruction.currentBlueprintBlocks(buildSite)) {
 			if (retainedPositions.contains(currentBlueprintBlock.position())) {
+				continue;
+			}
+
+			if (buildSite.complete() && SettlementConstruction.isRequiredBuildSiteBlock(buildSite, currentBlueprintBlock)) {
 				continue;
 			}
 
@@ -575,7 +586,14 @@ public final class SettlementConstructionWork {
 			changed = true;
 		}
 
-		return changed ? buildSite.withBlocks(updatedBlocks, isComplete(buildSite, updatedBlocks), tick) : buildSite;
+		boolean complete = isComplete(buildSite, updatedBlocks);
+		if (buildSite.complete() && !complete && requiredLoadedCellsStillPresent(level, buildSite, updatedBlocks)) {
+			complete = true;
+		}
+
+		return changed || complete != buildSite.complete()
+			? buildSite.withBlocks(updatedBlocks, complete, tick)
+			: buildSite;
 	}
 
 	private static boolean shouldPreservePlayerImprovements(ServerLevel level, SettlementBuildSite buildSite) {
@@ -2083,11 +2101,12 @@ public final class SettlementConstructionWork {
 
 		if (symbol == 'D'
 			&& ((isPalisadeGatehouse(buildSite) && relativePos.up() == 0)
-				|| (!isPalisadeGatehouse(buildSite) && relativePos.up() == 1))) {
+				|| (!isPalisadeGatehouse(buildSite) && relativePos.up() == 1)
+				|| (buildSite.blueprintId() == SettlementBuildSiteType.DUPLEX && relativePos.up() == 5))) {
 			if (isPalisadeGatehouse(buildSite)) {
 				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 1);
 			} else {
-				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), 2);
+				pairedPosition = relativePosition(relativePos.right(), relativePos.forward(), relativePos.up() + 1);
 			}
 		} else if (isBedFoot(buildSite, relativePos)) {
 			pairedPosition = switch (buildSite.blueprintId()) {
@@ -2096,8 +2115,9 @@ public final class SettlementConstructionWork {
 				case BUTCHER_SHOP -> relativePosition(relativePos.right(), -3, 1);
 				case CARTOGRAPHER_HOUSE -> null;
 				case CARPENTER_WORKSHOP -> relativePosition(-1, -3, 1);
-				case CLERIC_SHRINE -> relativePosition(relativePos.right(), -3, 1);
+				case CLERIC_SHRINE -> relativePosition(relativePos.right(), -2, 1);
 				case DOCK -> null;
+				case DUPLEX -> relativePosition(relativePos.right(), -1, relativePos.up());
 				case FLETCHER_HUT -> relativePosition(relativePos.right(), -3, 1);
 				case FORESTER_WORKSHOP -> relativePosition(-1, -3, 1);
 				case GARDENER_SHED -> relativePosition(relativePos.right(), -3, 1);
@@ -2147,7 +2167,10 @@ public final class SettlementConstructionWork {
 		}
 
 		char symbol = block.blueprintSymbol().charAt(0);
-		return (symbol == 'D' && relativePos.up() == 2) || isBedHead(buildSite, relativePos);
+		return (symbol == 'D'
+			&& (relativePos.up() == 2
+				|| (buildSite.blueprintId() == SettlementBuildSiteType.DUPLEX && relativePos.up() == 6)))
+			|| isBedHead(buildSite, relativePos);
 	}
 
 	private static boolean isBedFoot(SettlementBuildSite buildSite, BuildRelativePos relativePos) {
@@ -2172,8 +2195,8 @@ public final class SettlementConstructionWork {
 				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
-				&& (relativePos.right() == -1 || relativePos.right() == 1)
-				&& relativePos.forward() == -2
+				&& relativePos.right() == 1
+				&& relativePos.forward() == -1
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.LEATHERWORKER_WORKSHOP
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
@@ -2203,6 +2226,10 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == 0
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.DUPLEX
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == 0
+				&& (relativePos.up() == 1 || relativePos.up() == 5))
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER
 				&& relativePos.right() == -1
 				&& relativePos.forward() == 1
@@ -2239,8 +2266,8 @@ public final class SettlementConstructionWork {
 				&& relativePos.forward() == -3
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.CLERIC_SHRINE
-				&& (relativePos.right() == -1 || relativePos.right() == 1)
-				&& relativePos.forward() == -3
+				&& relativePos.right() == 1
+				&& relativePos.forward() == -2
 				&& relativePos.up() == 1)
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.LEATHERWORKER_WORKSHOP
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
@@ -2270,6 +2297,10 @@ public final class SettlementConstructionWork {
 				&& (relativePos.right() == -1 || relativePos.right() == 1)
 				&& relativePos.forward() == -1
 				&& relativePos.up() == 1)
+			|| (buildSite.blueprintId() == SettlementBuildSiteType.DUPLEX
+				&& (relativePos.right() == -1 || relativePos.right() == 1)
+				&& relativePos.forward() == -1
+				&& (relativePos.up() == 1 || relativePos.up() == 5))
 			|| (buildSite.blueprintId() == SettlementBuildSiteType.SIMPLE_HOUSING_SHELTER
 				&& relativePos.right() == -1
 				&& relativePos.forward() == 0
@@ -2313,17 +2344,41 @@ public final class SettlementConstructionWork {
 	}
 
 	private static boolean isComplete(SettlementBuildSite buildSite, List<SettlementBuildBlockState> blocks) {
+		return SettlementConstruction.isBuildSiteComplete(buildSite, blocks);
+	}
+
+	private static boolean requiredLoadedCellsStillPresent(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		List<SettlementBuildBlockState> blocks
+	) {
+		boolean sawLoadedRequired = false;
+
 		for (SettlementBuildBlockState block : blocks) {
 			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
 				continue;
 			}
 
-			if (block.status() != SettlementBuildBlockStatus.PLACED && block.status() != SettlementBuildBlockStatus.PLAYER_PLACED) {
+			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+			BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+
+			if (blockPos.isEmpty() || plannedState == null || !level.hasChunkAt(blockPos.get())) {
+				continue;
+			}
+
+			sawLoadedRequired = true;
+			BlockState currentState = level.getBlockState(blockPos.get());
+			if (currentState.isAir()) {
+				return false;
+			}
+
+			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState);
+			if (!matchesIntent && !isSatisfiedByPalisadePlayerOverride(level, buildSite, block, blockPos.get(), matchesIntent)) {
 				return false;
 			}
 		}
 
-		return true;
+		return sawLoadedRequired;
 	}
 
 	private static boolean isCompatiblePlacedBlock(BlockState currentState, BlockState plannedState) {
@@ -2344,7 +2399,7 @@ public final class SettlementConstructionWork {
 		}
 
 		if (requiresExactState(currentState) || requiresExactState(plannedState)) {
-			return currentState.equals(plannedState);
+			return SettlementConstruction.matchesPlacementIntent(currentState, plannedState);
 		}
 
 		return true;

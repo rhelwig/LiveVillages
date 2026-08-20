@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": "#minecraft:planks",
+    "R": "minecraft:red_dye",
+    "S": "#minecraft:wooden_slabs",
+    "W": "#minecraft:wool"
+  },
+  "pattern": [
+    " SS",
+    "SPS",
+    "W R"
+  ],
+  "result": {
+    "id": "live-villages:pulpit"
+  }
+}
