@@ -48,7 +48,12 @@ public final class SettlementConstructionWork {
 	private static final int STOCK_ACCESS_SCAN_RADIUS_BLOCKS = 48;
 	private static final int STOCK_ACCESS_SCAN_Y_RANGE_BLOCKS = 24;
 	private static final int MAX_CONSTRUCTION_WORKERS_PER_PASS = 8;
-	private static final long MAX_CONSTRUCTION_WORK_NANOS_PER_PASS = 25_000_000L;
+	private static final int MAX_CONSTRUCTION_ACTIONS_PER_PASS = 4;
+	private static final int MAX_RECONCILIATION_CELLS_PER_SITE = 64;
+	private static final int MAX_RECONCILIATION_CELLS_PER_PASS = 128;
+	private static final long MAX_RECONCILIATION_NANOS_PER_PASS = 4_000_000L;
+	private static final long MAX_CONSTRUCTION_WORK_NANOS_PER_PASS = 8_000_000L;
+	private static final long RECONCILIATION_LOG_INTERVAL_TICKS = 1_200L;
 	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_SITE = 12;
 	private static final int MAX_CONSTRUCTION_TASK_CANDIDATES_PER_WORKER = 24;
 	private static final int MAX_UNREACHABLE_TASK_RETRIES = 3;
@@ -56,6 +61,8 @@ public final class SettlementConstructionWork {
 	private static final long CONSTRUCTION_DECIDE_INTERVAL_TICKS = 320L;
 	private static final long UNREACHABLE_TASK_CACHE_TICKS = 200L;
 	private static final long CONSTRUCTION_NAVIGATION_RETRY_TICKS = 40L;
+	private static final long CONSTRUCTION_ASSIGNMENT_STALL_TICKS = 300L;
+	private static final double CONSTRUCTION_ASSIGNMENT_PROGRESS_DISTANCE_SQUARED = 1.0D;
 	private static final int STRANDED_WORKER_MIN_HEIGHT_OVER_ORIGIN = 3;
 	private static final int STRANDED_WORKER_RECOVERY_RADIUS_BLOCKS = 5;
 	private static final double STOCK_ACCESS_ROUTE_DISTANCE_SQUARED = 256.0D;
@@ -63,6 +70,12 @@ public final class SettlementConstructionWork {
 	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
 	private static final Map<String, Long> UNREACHABLE_TASK_SKIP_UNTIL = new HashMap<>();
 	private static final Map<String, NavigationAttempt> CONSTRUCTION_NAVIGATION_ATTEMPTS = new HashMap<>();
+	private static final Map<String, ConstructionAssignment> CONSTRUCTION_ASSIGNMENTS = new HashMap<>();
+	private static final Map<String, Integer> RECONCILIATION_SITE_CURSORS = new HashMap<>();
+	private static final Map<String, Integer> RECONCILIATION_BLOCK_CURSORS = new HashMap<>();
+	private static final Map<String, ReconciliationMetrics> RECONCILIATION_METRICS = new HashMap<>();
+	private static final Map<String, ConstructionProgressMetrics> CONSTRUCTION_PROGRESS_METRICS = new HashMap<>();
+	private static final Map<String, ActiveConstructionLayer> ACTIVE_CONSTRUCTION_LAYERS = new HashMap<>();
 
 	private SettlementConstructionWork() {
 	}
@@ -87,26 +100,52 @@ public final class SettlementConstructionWork {
 		boolean worldChanged = false;
 		Map<String, Integer> stockBeforeReconcile = new LinkedHashMap<>(stock);
 
-		for (SettlementBuildSite buildSite : buildSites) {
+		workingBuildSites.addAll(buildSites);
+		long reconciliationStart = System.nanoTime();
+		int reconciliationStartIndex = Math.floorMod(RECONCILIATION_SITE_CURSORS.getOrDefault(settlement.id(), 0), buildSites.size());
+		int reconciledSites = 0;
+		int reconciledCells = 0;
+
+		for (int siteStep = 0; siteStep < buildSites.size(); siteStep++) {
+			if (reconciledSites > 0
+				&& (System.nanoTime() - reconciliationStart >= MAX_RECONCILIATION_NANOS_PER_PASS
+					|| reconciledCells >= MAX_RECONCILIATION_CELLS_PER_PASS)) {
+				break;
+			}
+
+			int siteIndex = (reconciliationStartIndex + siteStep) % buildSites.size();
+			SettlementBuildSite buildSite = buildSites.get(siteIndex);
 			SettlementBuildSite paletteAdjustedBuildSite = SettlementConstruction.applyBiomeMaterialPalette(level, settlement, buildSite, tick);
 			worldChanged |= restoreMissingTradeBoard(level, settlement, paletteAdjustedBuildSite);
-			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick);
-			SettlementBuildSite refreshedBuildSite = SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick);
+			int cellBudget = Math.min(MAX_RECONCILIATION_CELLS_PER_SITE, MAX_RECONCILIATION_CELLS_PER_PASS - reconciledCells);
+			SettlementBuildSite reconciledBuildSite = reconcileBuildSiteWithWorld(level, paletteAdjustedBuildSite, stock, tick, cellBudget);
+			Integer activeLayer = activeConstructionLayer(reconciledBuildSite);
+			SettlementBuildSite refreshedBuildSite = activeLayer == null
+				? SettlementConstruction.updateBuildSiteMaterialStatus(reconciledBuildSite, stock, tick)
+				: SettlementConstruction.updateBuildSiteMaterialStatusForLayer(reconciledBuildSite, stock, tick, activeLayer);
 
 			if (!refreshedBuildSite.equals(buildSite)) {
 				buildSitesChanged = true;
 			}
 
-			workingBuildSites.add(refreshedBuildSite);
+			workingBuildSites.set(siteIndex, refreshedBuildSite);
+			reconciledSites++;
+			reconciledCells += Math.min(cellBudget, Math.max(1, buildSite.blocks().size()));
 		}
 
+		RECONCILIATION_SITE_CURSORS.put(settlement.id(), (reconciliationStartIndex + reconciledSites) % buildSites.size());
+		long reconciliationNanos = System.nanoTime() - reconciliationStart;
+		recordReconciliationMetrics(settlement.id(), tick, reconciliationNanos, reconciledSites, reconciledCells, buildSites.size());
+
+		long entityScanStart = System.nanoTime();
 		Set<String> excludedIds = excludedWorkerIds == null ? Set.of() : excludedWorkerIds;
 		List<Villager> nearbyWorkers = SettlementVillagers.nearbyConstructionWorkers(level, settlement).stream()
 			.filter(worker -> !excludedIds.contains(worker.getUUID().toString()))
 			.toList();
 		List<Villager> workers = workersForConstructionPass(nearbyWorkers, deliveries, settlement, tick);
 			
-		long entityScanTime = System.nanoTime() - methodStart;
+		long workerPhaseStart = System.nanoTime();
+		long entityScanTime = workerPhaseStart - entityScanStart;
 		if (entityScanTime > 3_000_000) { // >3ms
 			LiveVillages.LOGGER.warn(
 				"ConstructionWork: entity scan took {} ms for {} nearby workers, processing {}",
@@ -121,13 +160,21 @@ public final class SettlementConstructionWork {
 		stockChanged |= cleanupChanged;
 		Optional<BlockPos> stockAccessPos = Optional.empty();
 		boolean stockAccessResolved = false;
+		int assignmentsCreated = 0;
+		int assignmentsResumed = 0;
+		int blocksPlaced = 0;
 
 		if (!workers.isEmpty()) {
 			Set<String> claimedBlocks = claimedDeliveryBlocks(settlement, deliveries);
+			CONSTRUCTION_ASSIGNMENTS.values().stream()
+				.filter(assignment -> assignment.settlementId().equals(settlement.id()))
+				.map(ConstructionAssignment::claimKey)
+				.forEach(claimedBlocks::add);
 			int processedWorkers = 0;
 
 			for (Villager worker : workers) {
-				if (processedWorkers > 0 && System.nanoTime() - methodStart > MAX_CONSTRUCTION_WORK_NANOS_PER_PASS) {
+				if (processedWorkers >= MAX_CONSTRUCTION_ACTIONS_PER_PASS
+					|| (processedWorkers > 0 && System.nanoTime() - workerPhaseStart > MAX_CONSTRUCTION_WORK_NANOS_PER_PASS)) {
 					break;
 				}
 
@@ -151,7 +198,7 @@ public final class SettlementConstructionWork {
 						claimedBlocks.add(deliveredTask.claimKey());
 						steerWorkerTowardTask(level, settlement, worker, deliveredTask.standPos(), deliveredTask.navigationPath(), tick);
 
-						if (isWithinWorkReach(worker, deliveredTask.targetPos())) {
+						if (isWithinWorkReach(worker, deliveredTask)) {
 							ConstructionActionResult actionResult = performConstructionTask(level, stock, deliveredTask, tick, true);
 
 							if (actionResult.buildSiteChanged()) {
@@ -166,6 +213,9 @@ public final class SettlementConstructionWork {
 
 							stockChanged |= actionResult.stockChanged();
 							worldChanged |= actionResult.worldChanged();
+							if (actionResult.worldChanged()) {
+								blocksPlaced++;
+							}
 						}
 
 						continue;
@@ -177,11 +227,20 @@ public final class SettlementConstructionWork {
 					stockChanged = true;
 				}
 
+				ConstructionAssignment assignment = refreshConstructionAssignmentProgress(
+					settlement, worker, CONSTRUCTION_ASSIGNMENTS.get(workerId), tick
+				);
+				ConstructionTask assignedTask = taskForAssignment(level, workingBuildSites, assignment);
+				if (assignment != null && assignedTask == null) {
+					CONSTRUCTION_ASSIGNMENTS.remove(workerId);
+					claimedBlocks.remove(assignment.claimKey());
+				}
+
 				if (recoverStrandedConstructionWorker(level, settlement, worker, workingBuildSites, tick)) {
 					continue;
 				}
 
-				if (!SettlementVillagerWorkSchedule.shouldStartNewWork(level, worker, "construction", CONSTRUCTION_DECIDE_INTERVAL_TICKS)) {
+				if (assignedTask == null && !SettlementVillagerWorkSchedule.shouldStartNewWork(level, worker, "construction", CONSTRUCTION_DECIDE_INTERVAL_TICKS)) {
 					if (SettlementVillagerWorkSchedule.isTakingBreak(level, worker)) {
 						worker.getNavigation().stop();
 					}
@@ -190,7 +249,12 @@ public final class SettlementConstructionWork {
 				}
 
 				long chooseTaskStart = System.nanoTime();
-				ConstructionTask task = chooseConstructionTask(level, workingBuildSites, worker, claimedBlocks);
+				ConstructionTask task = assignedTask != null
+					? assignedTask
+					: chooseConstructionTask(level, workingBuildSites, worker, claimedBlocks);
+				if (assignedTask != null) {
+					assignmentsResumed++;
+				}
 				long chooseTaskTime = System.nanoTime() - chooseTaskStart;
 				if (chooseTaskTime > 50_000_000) { // >50ms
 					LiveVillages.LOGGER.warn("ConstructionWork: chooseConstructionTask took {} ms for worker {}", Math.round(chooseTaskTime / 1_000_000.0D), workerId);
@@ -198,6 +262,10 @@ public final class SettlementConstructionWork {
 
 				if (task == null) {
 					continue;
+				}
+				if (assignedTask == null) {
+					CONSTRUCTION_ASSIGNMENTS.put(workerId, ConstructionAssignment.from(settlement.id(), task, worker, tick));
+					assignmentsCreated++;
 				}
 
 				claimedBlocks.add(task.claimKey());
@@ -230,11 +298,12 @@ public final class SettlementConstructionWork {
 
 				steerWorkerTowardTask(level, settlement, worker, task.standPos(), task.navigationPath(), tick);
 
-				if (!isWithinWorkReach(worker, task.targetPos())) {
+				if (!isWithinWorkReach(worker, task)) {
 					continue;
 				}
 
 				ConstructionActionResult actionResult = performConstructionTask(level, stock, task, tick, false);
+				CONSTRUCTION_ASSIGNMENTS.remove(workerId);
 
 				if (actionResult.buildSiteChanged()) {
 					workingBuildSites.set(task.siteIndex(), actionResult.buildSite());
@@ -243,8 +312,12 @@ public final class SettlementConstructionWork {
 
 				stockChanged |= actionResult.stockChanged();
 				worldChanged |= actionResult.worldChanged();
+				if (actionResult.worldChanged()) {
+					blocksPlaced++;
+				}
 			}
 		}
+		recordConstructionProgressMetrics(settlement.id(), tick, assignmentsCreated, assignmentsResumed, blocksPlaced);
 
 		long totalTime = System.nanoTime() - methodStart;
 		if (totalTime > 100_000_000) { // >100ms
@@ -254,22 +327,80 @@ public final class SettlementConstructionWork {
 		return new ConstructionWorkResult(List.copyOf(workingBuildSites), stockChanged, buildSitesChanged, worldChanged, deliveriesChanged);
 	}
 
+	private static void recordConstructionProgressMetrics(
+		String settlementId,
+		long tick,
+		int assignmentsCreated,
+		int assignmentsResumed,
+		int blocksPlaced
+	) {
+		ConstructionProgressMetrics previous = CONSTRUCTION_PROGRESS_METRICS.getOrDefault(
+			settlementId, ConstructionProgressMetrics.empty(tick)
+		);
+		ConstructionProgressMetrics updated = previous.add(assignmentsCreated, assignmentsResumed, blocksPlaced);
+		if (tick - updated.windowStartTick() >= RECONCILIATION_LOG_INTERVAL_TICKS) {
+			long retainedAssignments = CONSTRUCTION_ASSIGNMENTS.values().stream()
+				.filter(assignment -> assignment.settlementId().equals(settlementId))
+				.count();
+			LiveVillages.LOGGER.info(
+				"ConstructionWork: progress summary for {}: {} assignments selected, {} resumed, {} blocks changed, {} retained",
+				settlementId, updated.assignmentsCreated(), updated.assignmentsResumed(), updated.blocksPlaced(), retainedAssignments
+			);
+			updated = ConstructionProgressMetrics.empty(tick);
+		}
+		CONSTRUCTION_PROGRESS_METRICS.put(settlementId, updated);
+	}
+
+	private static void recordReconciliationMetrics(
+		String settlementId,
+		long tick,
+		long nanos,
+		int sites,
+		int cells,
+		int totalSites
+	) {
+		ReconciliationMetrics previous = RECONCILIATION_METRICS.getOrDefault(settlementId, ReconciliationMetrics.empty(tick));
+		ReconciliationMetrics updated = previous.add(nanos, sites, cells);
+
+		if (nanos > MAX_RECONCILIATION_NANOS_PER_PASS * 2L) {
+			LiveVillages.LOGGER.warn(
+				"ConstructionWork: bounded reconciliation exceeded budget: {} ms, {} sites, {} cells for settlement {}",
+				Math.round(nanos / 1_000_000.0D), sites, cells, settlementId
+			);
+		}
+
+		if (tick - updated.windowStartTick() >= RECONCILIATION_LOG_INTERVAL_TICKS) {
+			LiveVillages.LOGGER.info(
+				"ConstructionWork: reconciliation summary for {}: {} passes, avg {} ms, max {} ms, {} sites, {} cells, {} total sites",
+				settlementId,
+				updated.passes(),
+				Math.round((updated.totalNanos() / (double) Math.max(1, updated.passes())) / 1_000_000.0D),
+				Math.round(updated.maxNanos() / 1_000_000.0D),
+				updated.sites(),
+				updated.cells(),
+				totalSites
+			);
+			updated = ReconciliationMetrics.empty(tick);
+		}
+
+		RECONCILIATION_METRICS.put(settlementId, updated);
+	}
+
 	private static List<Villager> workersForConstructionPass(
 		List<Villager> workers,
 		Map<String, SettlementConstructionDelivery> deliveries,
 		SettlementState settlement,
 		long tick
 	) {
-		if (workers.size() <= MAX_CONSTRUCTION_WORKERS_PER_PASS) {
-			return workers;
-		}
-
 		List<Villager> selectedWorkers = new ArrayList<>(MAX_CONSTRUCTION_WORKERS_PER_PASS);
 
 		for (Villager worker : workers) {
+			String workerId = worker.getUUID().toString();
 			SettlementConstructionDelivery delivery = deliveries.get(worker.getUUID().toString());
+			ConstructionAssignment assignment = CONSTRUCTION_ASSIGNMENTS.get(workerId);
 
-			if (delivery == null || !delivery.settlementId().equals(settlement.id())) {
+			if ((delivery == null || !delivery.settlementId().equals(settlement.id()))
+				&& (assignment == null || !assignment.settlementId().equals(settlement.id()))) {
 				continue;
 			}
 
@@ -282,8 +413,11 @@ public final class SettlementConstructionWork {
 
 		List<Villager> idleWorkers = workers.stream()
 			.filter(worker -> {
-				SettlementConstructionDelivery delivery = deliveries.get(worker.getUUID().toString());
-				return delivery == null || !delivery.settlementId().equals(settlement.id());
+				String workerId = worker.getUUID().toString();
+				SettlementConstructionDelivery delivery = deliveries.get(workerId);
+				ConstructionAssignment assignment = CONSTRUCTION_ASSIGNMENTS.get(workerId);
+				return (delivery == null || !delivery.settlementId().equals(settlement.id()))
+					&& (assignment == null || !assignment.settlementId().equals(settlement.id()));
 			})
 			.sorted(java.util.Comparator.comparingInt(worker -> worker.getVillagerData().profession().is(VillagerProfession.NONE) ? 0 : 1))
 			.toList();
@@ -422,13 +556,43 @@ public final class SettlementConstructionWork {
 	}
 
 	private static SettlementBuildSite reconcileBuildSiteWithWorld(ServerLevel level, SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
+		return reconcileBuildSiteWithWorld(level, buildSite, stock, tick, Integer.MAX_VALUE);
+	}
+
+	private static SettlementBuildSite reconcileBuildSiteWithWorld(
+		ServerLevel level,
+		SettlementBuildSite buildSite,
+		Map<String, Integer> stock,
+		long tick,
+		int maxStoredCells
+	) {
 		List<SettlementBuildBlockState> updatedBlocks = new ArrayList<>(buildSite.blocks().size());
 		Set<String> retainedPositions = new HashSet<>();
 		boolean preservePlayerImprovements = shouldPreservePlayerImprovements(level, buildSite);
 		boolean changed = false;
+		int storedCellCount = buildSite.blocks().size();
+		int sliceStart = maxStoredCells == Integer.MAX_VALUE || storedCellCount == 0
+			? 0
+			: Math.floorMod(RECONCILIATION_BLOCK_CURSORS.getOrDefault(buildSite.id(), 0), storedCellCount);
+		int sliceLength = Math.min(maxStoredCells, storedCellCount);
 
-		for (SettlementBuildBlockState block : buildSite.blocks()) {
+		for (int blockIndex = 0; blockIndex < storedCellCount; blockIndex++) {
+			SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
+			boolean inSlice = maxStoredCells == Integer.MAX_VALUE
+				|| Math.floorMod(blockIndex - sliceStart, storedCellCount) < sliceLength;
+
+			if (!inSlice) {
+				updatedBlocks.add(block);
+				retainedPositions.add(block.position());
+				continue;
+			}
+
 			if (SettlementConstruction.isObsoleteFoundationOverAuthoredBlueprint(buildSite, block)) {
+				changed = true;
+				continue;
+			}
+
+			if (SettlementConstruction.currentBlueprintSymbol(buildSite, block) == '.') {
 				changed = true;
 				continue;
 			}
@@ -555,6 +719,10 @@ public final class SettlementConstructionWork {
 			retainedPositions.add(updatedBlock.position());
 		}
 
+		if (maxStoredCells != Integer.MAX_VALUE && storedCellCount > 0) {
+			RECONCILIATION_BLOCK_CURSORS.put(buildSite.id(), (sliceStart + sliceLength) % storedCellCount);
+		}
+
 		for (SettlementBuildBlockState currentBlueprintBlock : SettlementConstruction.currentBlueprintBlocks(buildSite)) {
 			if (retainedPositions.contains(currentBlueprintBlock.position())) {
 				continue;
@@ -602,28 +770,20 @@ public final class SettlementConstructionWork {
 		}
 
 		int requiredBlocks = 0;
-		int matchingBlocks = 0;
+		int satisfiedBlocks = 0;
 
-		for (SettlementBuildBlockState block : SettlementConstruction.currentBlueprintBlocks(buildSite)) {
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
 			if (!SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
 				continue;
 			}
 
-			Optional<BlockPos> blockPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
-			BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
-
-			if (blockPos.isEmpty() || plannedState == null || !level.hasChunkAt(blockPos.get())) {
-				continue;
-			}
-
 			requiredBlocks++;
-			boolean matchesIntent = statesMatchBuildSiteIntent(buildSite, block, level.getBlockState(blockPos.get()), plannedState);
-			if (matchesIntent || isSatisfiedByPalisadePlayerOverride(level, buildSite, block, blockPos.get(), matchesIntent)) {
-				matchingBlocks++;
+			if (block.status() == SettlementBuildBlockStatus.PLACED || block.status() == SettlementBuildBlockStatus.PLAYER_PLACED) {
+				satisfiedBlocks++;
 			}
 		}
 
-		return requiredBlocks > 0 && matchingBlocks * 100 >= requiredBlocks * 85;
+		return requiredBlocks > 0 && satisfiedBlocks * 100 >= requiredBlocks * 85;
 	}
 
 	private static boolean isSatisfiedByPalisadePlayerOverride(
@@ -984,7 +1144,7 @@ public final class SettlementConstructionWork {
 			return false;
 		}
 
-		return !isWithinWorkReach(worker, task.targetPos());
+		return !isWithinWorkReach(worker, task);
 	}
 
 	private static DeliveryPickupResult pickUpConstructionDelivery(
@@ -1217,6 +1377,95 @@ public final class SettlementConstructionWork {
 		return null;
 	}
 
+	private static ConstructionTask taskForAssignment(
+		ServerLevel level,
+		List<SettlementBuildSite> buildSites,
+		ConstructionAssignment assignment
+	) {
+		if (assignment == null) {
+			return null;
+		}
+
+		for (int siteIndex = 0; siteIndex < buildSites.size(); siteIndex++) {
+			SettlementBuildSite buildSite = buildSites.get(siteIndex);
+			if (buildSite.complete()) {
+				continue;
+			}
+
+			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
+				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
+				if (!assignment.claimKey().equals(claimKey(buildSite, block))
+					|| !isSelectableConstructionStatus(block.status())
+					|| !SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)) {
+					continue;
+				}
+
+				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+				BuildRelativePos relativePos = parseRelativePos(block.position());
+				if (targetPos.isEmpty() || plannedState == null || relativePos == null || !level.hasChunkAt(targetPos.get())) {
+					return null;
+				}
+
+				BlockState currentState = level.getBlockState(targetPos.get());
+				if (statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)) {
+					return null;
+				}
+
+				return new ConstructionTask(
+					siteIndex, blockIndex, buildSite, block, targetPos.get(), assignment.standPos(), null,
+					taskLayerPriority(buildSite, relativePos.up()), assignment.claimKey()
+				);
+			}
+		}
+
+		return null;
+	}
+
+	private static ConstructionAssignment refreshConstructionAssignmentProgress(
+		SettlementState settlement,
+		Villager worker,
+		ConstructionAssignment assignment,
+		long tick
+	) {
+		if (assignment == null || !assignment.settlementId().equals(settlement.id())) {
+			return assignment;
+		}
+
+		double distanceSquared = worker.distanceToSqr(
+			assignment.standPos().getX() + 0.5D,
+			assignment.standPos().getY() + 0.5D,
+			assignment.standPos().getZ() + 0.5D
+		);
+		if (assignment.bestDistanceSquared() - distanceSquared >= CONSTRUCTION_ASSIGNMENT_PROGRESS_DISTANCE_SQUARED) {
+			ConstructionAssignment progressed = assignment.withProgress(distanceSquared, tick);
+			CONSTRUCTION_ASSIGNMENTS.put(worker.getUUID().toString(), progressed);
+			return progressed;
+		}
+
+		if (tick - assignment.lastProgressTick() < CONSTRUCTION_ASSIGNMENT_STALL_TICKS) {
+			return assignment;
+		}
+
+		String workerId = worker.getUUID().toString();
+		CONSTRUCTION_ASSIGNMENTS.remove(workerId);
+		UNREACHABLE_TASK_SKIP_UNTIL.put(assignment.claimKey(), tick + UNREACHABLE_TASK_CACHE_TICKS);
+		LiveVillages.LOGGER.warn(
+			"ConstructionWork: released stalled assignment for settlement {} worker {} block {} stand {} workerPos {} distance {} navigationDone={} ageTicks={} stalledTicks={}",
+			settlement.id(),
+			workerId,
+			assignment.claimKey(),
+			assignment.standPos(),
+			worker.blockPosition(),
+			Math.round(Math.sqrt(distanceSquared) * 10.0D) / 10.0D,
+			worker.getNavigation().isDone(),
+			tick - assignment.createdTick(),
+			tick - assignment.lastProgressTick()
+		);
+		worker.getNavigation().stop();
+		return null;
+	}
+
 	private static ConstructionTask chooseConstructionTaskCandidate(
 		ServerLevel level,
 		List<SettlementBuildSite> buildSites,
@@ -1225,6 +1474,11 @@ public final class SettlementConstructionWork {
 		Set<String> skippedBlocks,
 		long tick
 	) {
+		ConstructionTask dockPileTask = chooseDockPileTaskCandidate(level, buildSites, worker, claimedBlocks, skippedBlocks, tick);
+		if (dockPileTask != null) {
+			return dockPileTask;
+		}
+
 		ConstructionTask bestTask = null;
 		double bestDistanceSquared = Double.POSITIVE_INFINITY;
 		int bestAffinity = Integer.MAX_VALUE;
@@ -1240,12 +1494,14 @@ public final class SettlementConstructionWork {
 			if (buildSite.complete()) {
 				continue;
 			}
+			Integer activeLayer = activeConstructionLayerForPlanning(buildSite);
 
 			int candidateBlocksChecked = 0;
 			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
 				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
 
 				if (!isSelectableConstructionStatus(block.status())
+					|| !SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)
 					|| isPairedContinuation(buildSite, block)) {
 					continue;
 				}
@@ -1257,10 +1513,13 @@ public final class SettlementConstructionWork {
 				}
 
 				BuildRelativePos relativePos = parseRelativePos(block.position());
+				if (relativePos == null || (activeLayer != null && relativePos.up() != activeLayer)) {
+					continue;
+				}
 				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
 				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
-				if (relativePos == null || targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
+				if (targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
 					continue;
 				}
 
@@ -1332,6 +1591,68 @@ public final class SettlementConstructionWork {
 		return bestTask;
 	}
 
+	private static ConstructionTask chooseDockPileTaskCandidate(
+		ServerLevel level,
+		List<SettlementBuildSite> buildSites,
+		Villager worker,
+		Set<String> claimedBlocks,
+		Set<String> skippedBlocks,
+		long tick
+	) {
+		ConstructionTask bestTask = null;
+
+		for (int siteIndex = 0; siteIndex < buildSites.size(); siteIndex++) {
+			SettlementBuildSite buildSite = buildSites.get(siteIndex);
+			if (buildSite.complete() || buildSite.blueprintId() != SettlementBuildSiteType.DOCK) {
+				continue;
+			}
+
+			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
+				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
+				if (!isDockSupportPileBlock(buildSite, block) || !isSelectableConstructionStatus(block.status())) {
+					continue;
+				}
+
+				String claimKey = claimKey(buildSite, block);
+				if (claimedBlocks.contains(claimKey) || skippedBlocks.contains(claimKey) || isTemporarilyUnreachable(claimKey, tick)) {
+					continue;
+				}
+
+				BuildRelativePos relativePos = parseRelativePos(block.position());
+				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
+				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
+				if (relativePos == null || targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
+					continue;
+				}
+
+				BlockState currentState = level.getBlockState(targetPos.get());
+				if (!statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState)
+					&& !SettlementConstruction.isBuildSiteReplaceable(currentState)) {
+					continue;
+				}
+
+				if (!hasConstructionPlacementSupport(level, targetPos.get(), plannedState)) {
+					continue;
+				}
+
+				Optional<BlockPos> standPos = nearestStandPosFor(level, worker, buildSite, targetPos.get());
+				if (standPos.isEmpty()) {
+					continue;
+				}
+
+				ConstructionTask candidate = new ConstructionTask(
+					siteIndex, blockIndex, buildSite, block, targetPos.get(), standPos.get(), null,
+					relativePos.up(), claimKey
+				);
+				if (bestTask == null || candidate.layer() < bestTask.layer()) {
+					bestTask = candidate;
+				}
+			}
+		}
+
+		return bestTask;
+	}
+
 	private static boolean isTemporarilyUnreachable(String claimKey, long tick) {
 		Long skipUntilTick = UNREACHABLE_TASK_SKIP_UNTIL.get(claimKey);
 
@@ -1356,21 +1677,26 @@ public final class SettlementConstructionWork {
 			if (buildSite.complete()) {
 				continue;
 			}
+			Integer activeLayer = activeConstructionLayerForPlanning(buildSite);
 
 			int candidateBlocksChecked = 0;
 			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
 				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
 
 				if (!isSelectableConstructionStatus(block.status())
+					|| !SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)
 					|| isPairedContinuation(buildSite, block)) {
 					continue;
 				}
 
 				BuildRelativePos relativePos = parseRelativePos(block.position());
+				if (relativePos == null || (activeLayer != null && relativePos.up() != activeLayer)) {
+					continue;
+				}
 				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
 				BlockState plannedState = SettlementConstruction.plannedBuildSiteBlockState(buildSite, block);
 
-				if (relativePos == null || targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
+				if (targetPos.isEmpty() || plannedState == null || !level.hasChunkAt(targetPos.get())) {
 					continue;
 				}
 
@@ -1543,7 +1869,7 @@ public final class SettlementConstructionWork {
 				}
 			}
 
-			return horizontalSupports >= 2;
+			return horizontalSupports >= requiredHorizontalConstructionSupports(plannedState);
 		}
 
 		for (Direction direction : Direction.values()) {
@@ -1647,6 +1973,10 @@ public final class SettlementConstructionWork {
 			|| plannedState.getBlock() instanceof FenceBlock
 			|| plannedState.getBlock() instanceof FenceGateBlock
 			|| plannedState.getBlock() instanceof TrapDoorBlock;
+	}
+
+	static int requiredHorizontalConstructionSupports(BlockState plannedState) {
+		return plannedState.getBlock() instanceof FenceBlock ? 1 : 2;
 	}
 
 	private static boolean requiresIndependentConstructionSupport(BlockState plannedState) {
@@ -1795,6 +2125,12 @@ public final class SettlementConstructionWork {
 		BlockState placementState = SettlementConstruction.localCompatibleMaterialPlacementState(level, task.targetPos(), plannedState, block.expectedMaterialKey());
 		level.setBlock(task.targetPos(), placementState, BLOCK_UPDATE_FLAGS);
 		SettlementConstruction.updateChestStateAfterPlacement(level, task.targetPos());
+		if (isDockSupportPileBlock(task.buildSite(), block)) {
+			LiveVillages.LOGGER.info(
+				"ConstructionWork: drove dock support pile block at {} for site {}",
+				task.targetPos(), task.buildSite().id()
+			);
+		}
 		return ConstructionActionResult.placed(
 			updateBlockStatus(materialResult.buildSite(), task.blockIndex(), SettlementBuildBlockStatus.PLACED, "", tick),
 			materialResult.stockChanged()
@@ -2624,6 +2960,34 @@ public final class SettlementConstructionWork {
 		return worker.distanceToSqr(targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D) <= CONSTRUCTION_WORK_REACH_DISTANCE_SQUARED;
 	}
 
+	private static boolean isWithinWorkReach(Villager worker, ConstructionTask task) {
+		return isWithinWorkReach(worker, task.targetPos())
+			|| isDockPileWorkPosition(worker.blockPosition(), task.buildSite(), task.block(), task.targetPos());
+	}
+
+	static boolean isDockPileWorkPosition(
+		BlockPos workerPos,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block,
+		BlockPos targetPos
+	) {
+		if (!isDockSupportPileBlock(buildSite, block)) {
+			return false;
+		}
+
+		int horizontalDistance = Math.max(Math.abs(workerPos.getX() - targetPos.getX()), Math.abs(workerPos.getZ() - targetPos.getZ()));
+		return horizontalDistance <= 1
+			&& workerPos.getY() >= buildSite.origin().getY()
+			&& workerPos.getY() <= buildSite.origin().getY() + 2
+			&& targetPos.getY() < buildSite.origin().getY();
+	}
+
+	static boolean isDockSupportPileBlock(SettlementBuildSite buildSite, SettlementBuildBlockState block) {
+		return buildSite.blueprintId() == SettlementBuildSiteType.DOCK
+			&& "L".equals(block.blueprintSymbol())
+			&& "logs".equals(block.expectedMaterialKey());
+	}
+
 	private static Optional<ReachableStand> standPosFor(ServerLevel level, Villager worker, SettlementBuildSite buildSite, BlockPos targetPos) {
 		List<BlockPos> candidates = standCandidatesFor(level, buildSite, targetPos);
 		candidates.sort((a, b) -> Double.compare(a.distSqr(worker.blockPosition()), b.distSqr(worker.blockPosition())));
@@ -2664,6 +3028,23 @@ public final class SettlementConstructionWork {
 
 	private static List<BlockPos> standCandidatesFor(ServerLevel level, SettlementBuildSite buildSite, BlockPos targetPos) {
 		List<BlockPos> candidates = new ArrayList<>();
+
+		if (buildSite.blueprintId() == SettlementBuildSiteType.DOCK && targetPos.getY() < buildSite.origin().getY()) {
+			int deckStandY = buildSite.origin().getY() + 1;
+			for (int dx = -1; dx <= 1; dx++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					BlockPos candidate = new BlockPos(targetPos.getX() + dx, deckStandY, targetPos.getZ() + dz);
+					if (isStandable(level, candidate)) {
+						candidates.add(candidate);
+					}
+				}
+			}
+
+			if (!candidates.isEmpty()) {
+				return candidates;
+			}
+		}
+
 		int minY = Math.max(level.getMinY(), Math.min(buildSite.origin().getY() + 1, targetPos.getY() - 4));
 		int maxY = Math.min(level.getMaxY() - 2, Math.max(targetPos.getY(), buildSite.origin().getY() + 2));
 
@@ -2688,6 +3069,41 @@ public final class SettlementConstructionWork {
 		}
 
 		return candidates;
+	}
+
+	static Integer activeConstructionLayer(SettlementBuildSite buildSite) {
+		Integer activeLayer = null;
+		int activePriority = Integer.MAX_VALUE;
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!isSelectableConstructionStatus(block.status())
+				|| !SettlementConstruction.isRequiredBuildSiteBlock(buildSite, block)
+				|| isPairedContinuation(buildSite, block)) {
+				continue;
+			}
+
+			BuildRelativePos relativePos = parseRelativePos(block.position());
+			if (relativePos == null) {
+				continue;
+			}
+
+			int priority = taskLayerPriority(buildSite, relativePos.up());
+			if (priority < activePriority) {
+				activeLayer = relativePos.up();
+				activePriority = priority;
+			}
+		}
+		return activeLayer;
+	}
+
+	private static Integer activeConstructionLayerForPlanning(SettlementBuildSite buildSite) {
+		ActiveConstructionLayer cached = ACTIVE_CONSTRUCTION_LAYERS.get(buildSite.id());
+		if (cached != null && cached.siteUpdatedTick() == buildSite.updatedTick()) {
+			return cached.layer();
+		}
+
+		Integer layer = activeConstructionLayer(buildSite);
+		ACTIVE_CONSTRUCTION_LAYERS.put(buildSite.id(), new ActiveConstructionLayer(buildSite.updatedTick(), layer));
+		return layer;
 	}
 
 	private static int taskLayerPriority(SettlementBuildSite buildSite, int relativeUp) {
@@ -2807,7 +3223,76 @@ public final class SettlementConstructionWork {
 	private record ReachableStand(BlockPos pos, Path path) {
 	}
 
+	private record ConstructionAssignment(
+		String settlementId,
+		String claimKey,
+		BlockPos standPos,
+		long createdTick,
+		long lastProgressTick,
+		double bestDistanceSquared
+	) {
+		private static ConstructionAssignment from(String settlementId, ConstructionTask task, Villager worker, long tick) {
+			double distanceSquared = worker.distanceToSqr(
+				task.standPos().getX() + 0.5D,
+				task.standPos().getY() + 0.5D,
+				task.standPos().getZ() + 0.5D
+			);
+			return new ConstructionAssignment(settlementId, task.claimKey(), task.standPos().immutable(), tick, tick, distanceSquared);
+		}
+
+		private ConstructionAssignment withProgress(double distanceSquared, long tick) {
+			return new ConstructionAssignment(settlementId, claimKey, standPos, createdTick, tick, distanceSquared);
+		}
+	}
+
 	private record NavigationAttempt(BlockPos target, long retryAfterTick) {
+	}
+
+	private record ActiveConstructionLayer(long siteUpdatedTick, Integer layer) {
+	}
+
+	private record ReconciliationMetrics(
+		long windowStartTick,
+		long passes,
+		long totalNanos,
+		long maxNanos,
+		long sites,
+		long cells
+	) {
+		private static ReconciliationMetrics empty(long tick) {
+			return new ReconciliationMetrics(tick, 0L, 0L, 0L, 0L, 0L);
+		}
+
+		private ReconciliationMetrics add(long nanos, int reconciledSites, int reconciledCells) {
+			return new ReconciliationMetrics(
+				windowStartTick,
+				passes + 1L,
+				totalNanos + nanos,
+				Math.max(maxNanos, nanos),
+				sites + reconciledSites,
+				cells + reconciledCells
+			);
+		}
+	}
+
+	private record ConstructionProgressMetrics(
+		long windowStartTick,
+		long assignmentsCreated,
+		long assignmentsResumed,
+		long blocksPlaced
+	) {
+		private static ConstructionProgressMetrics empty(long tick) {
+			return new ConstructionProgressMetrics(tick, 0L, 0L, 0L);
+		}
+
+		private ConstructionProgressMetrics add(long created, long resumed, long placed) {
+			return new ConstructionProgressMetrics(
+				windowStartTick,
+				assignmentsCreated + created,
+				assignmentsResumed + resumed,
+				blocksPlaced + placed
+			);
+		}
 	}
 
 	private record ConstructionActionResult(

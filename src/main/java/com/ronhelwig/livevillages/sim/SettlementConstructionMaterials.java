@@ -96,6 +96,7 @@ public final class SettlementConstructionMaterials {
 			case "glowstone" -> craftGlowstone(goods);
 			case "jack_o_lantern" -> craftJackOLantern(goods);
 			case "glass" -> craftGlass(goods);
+			case "glass_display_case" -> craftGlassDisplayCase(goods);
 			case "stone" -> craftStone(goods);
 			case "smooth_stone" -> craftSmoothStone(goods);
 			case "stone_bricks" -> craftStoneBricks(goods);
@@ -269,6 +270,28 @@ public final class SettlementConstructionMaterials {
 		}
 
 		return ConstructionMaterialResult.supplied(1);
+	}
+
+	private static ConstructionMaterialResult craftGlassDisplayCase(Map<String, Integer> goods) {
+		Map<String, Integer> workingGoods = new LinkedHashMap<>(goods);
+		int craftingSteps = 0;
+
+		if (!consumeDirect(workingGoods, "logs", 6)) {
+			return ConstructionMaterialResult.missing("logs");
+		}
+
+		for (int glass = 0; glass < 3; glass++) {
+			ConstructionMaterialResult glassResult = consumeOrCraft(workingGoods, "glass");
+			if (!glassResult.supplied()) {
+				return glassResult;
+			}
+			craftingSteps += glassResult.craftingSteps();
+		}
+
+		addGoods(workingGoods, "glass_display_case", 5);
+		goods.clear();
+		goods.putAll(workingGoods);
+		return ConstructionMaterialResult.supplied(craftingSteps + 1);
 	}
 
 	private static ConstructionMaterialResult craftStone(Map<String, Integer> goods) {

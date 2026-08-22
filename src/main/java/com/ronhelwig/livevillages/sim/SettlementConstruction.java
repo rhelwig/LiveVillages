@@ -79,6 +79,7 @@ public final class SettlementConstruction {
 	private static final int MAX_STRUCTURE_FOUNDATION_BLOCKS = 7;
 	private static final int MAX_SITE_LANDSCAPING_BLOCKS = 40;
 	private static final int MAX_WORKSHOP_SITE_LANDSCAPING_BLOCKS = 72;
+	private static final int MIN_AUTHORED_WORKSHOP_RECOVERY_MATCHES = 24;
 	private static final int MAX_CHAPEL_SITE_LANDSCAPING_BLOCKS = 180;
 	private static final int MAX_MINE_ENTRANCE_SITE_LANDSCAPING_BLOCKS = 140;
 	private static final int MAX_MINE_ENTRANCE_TERRAIN_CUT_BLOCKS = 8;
@@ -2738,11 +2739,23 @@ public final class SettlementConstruction {
 			return WorkstationBuildResult.resumed(updateBuildSiteMaterialStatus(existingBuildSite.get(), stock, level.getServer().getTickCount()));
 		}
 
+		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		if (isPositionInExistingShelteredStructure(level, benchPos)) {
+			if (settlementId.startsWith("custom:")) {
+				SettlementBuildSite recovered = recoverAuthoredCarpenterWorkshop(level, benchPos, horizontalFacing, settlementId);
+				if (recovered != null) {
+					LiveVillages.LOGGER.info(
+						"Construction discovery: recovered Carpenter's Workshop build site around sheltered bench {} in settlement {} facing {}",
+						benchPos, settlementId, recovered.facing()
+					);
+					return WorkstationBuildResult.started(updateBuildSiteMaterialStatus(
+						recovered, stock, level.getServer().getTickCount()
+					));
+				}
+			}
 			return WorkstationBuildResult.completed();
 		}
 
-		Direction horizontalFacing = facing.getAxis() == Direction.Axis.Y ? Direction.NORTH : facing;
 		BlockPos origin = benchPos.relative(horizontalFacing.getOpposite(), 3).below();
 		AnchoredStructureSite site = findAnchoredStructureSiteOrPlaceBlockedSign(
 			level,
@@ -2771,6 +2784,66 @@ public final class SettlementConstruction {
 			site.facing(),
 			level.getServer().getTickCount()
 		), stock, level.getServer().getTickCount()));
+	}
+
+	private static SettlementBuildSite recoverAuthoredCarpenterWorkshop(
+		ServerLevel level,
+		BlockPos benchPos,
+		Direction preferredFacing,
+		String settlementId
+	) {
+		SettlementBuildSite bestSite = null;
+		int bestMatches = 0;
+		List<Direction> facings = new ArrayList<>(List.of(preferredFacing));
+		for (Direction facing : Direction.Plane.HORIZONTAL) {
+			if (!facings.contains(facing)) {
+				facings.add(facing);
+			}
+		}
+
+		for (Direction facing : facings) {
+			BlockPos origin = benchPos.relative(facing.getOpposite(), 3).below();
+			SettlementBuildSite candidate = createPendingBuildSite(
+				level,
+				StructureKind.CARPENTER_WORKSHOP,
+				CARPENTER_WORKSHOP_BLUEPRINT,
+				settlementId,
+				origin,
+				benchPos.immutable(),
+				benchPos.immutable(),
+				facing,
+				level.getServer().getTickCount()
+			);
+			int matches = authoredStructureMatches(level, candidate);
+			if (matches > bestMatches) {
+				bestMatches = matches;
+				bestSite = candidate;
+			}
+		}
+
+		return bestMatches >= MIN_AUTHORED_WORKSHOP_RECOVERY_MATCHES ? bestSite : null;
+	}
+
+	private static int authoredStructureMatches(ServerLevel level, SettlementBuildSite buildSite) {
+		int matches = 0;
+		for (SettlementBuildBlockState block : buildSite.blocks()) {
+			if (!isRequiredBuildSiteBlock(buildSite, block)) {
+				continue;
+			}
+
+			Optional<BlockPos> worldPos = buildSiteBlockPos(buildSite, block);
+			BlockState plannedState = plannedBuildSiteBlockState(buildSite, block);
+			if (worldPos.isEmpty() || plannedState == null || !level.hasChunkAt(worldPos.get())) {
+				continue;
+			}
+
+			BlockState currentState = level.getBlockState(worldPos.get());
+			if (currentState.is(plannedState.getBlock())
+				|| isFlexibleMaterialMatch(currentState, plannedState, block.expectedMaterialKey())) {
+				matches++;
+			}
+		}
+		return matches;
 	}
 
 	public static WorkstationBuildResult withBlockedStructureSignsSuppressed(Supplier<WorkstationBuildResult> starter) {
@@ -4863,7 +4936,7 @@ public final class SettlementConstruction {
 					int right = blueprint.minRight() + column;
 					char symbol = rowPattern.charAt(column);
 
-					if (symbol == 'A') {
+					if (symbol == 'A' || symbol == '.') {
 						continue;
 					}
 
@@ -5087,7 +5160,7 @@ public final class SettlementConstruction {
 				for (int column = 0; column < rowPattern.length(); column++) {
 					char symbol = rowPattern.charAt(column);
 
-					if (symbol == 'A') {
+					if (symbol == 'A' || symbol == '.') {
 						continue;
 					}
 
@@ -7982,6 +8055,24 @@ public final class SettlementConstruction {
 	}
 
 	public static SettlementBuildSite updateBuildSiteMaterialStatus(SettlementBuildSite buildSite, Map<String, Integer> stock, long tick) {
+		return updateBuildSiteMaterialStatus(buildSite, stock, tick, null);
+	}
+
+	public static SettlementBuildSite updateBuildSiteMaterialStatusForLayer(
+		SettlementBuildSite buildSite,
+		Map<String, Integer> stock,
+		long tick,
+		int activeLayer
+	) {
+		return updateBuildSiteMaterialStatus(buildSite, stock, tick, activeLayer);
+	}
+
+	private static SettlementBuildSite updateBuildSiteMaterialStatus(
+		SettlementBuildSite buildSite,
+		Map<String, Integer> stock,
+		long tick,
+		Integer activeLayer
+	) {
 		buildSite = normalizeBuildSiteDefinition(buildSite, tick);
 		Map<String, Integer> reservedStock = new java.util.LinkedHashMap<>(stock);
 		Map<String, Integer> reservedSiteMaterials = new java.util.LinkedHashMap<>(buildSite.siteMaterials());
@@ -8000,6 +8091,14 @@ public final class SettlementConstruction {
 				|| normalizedBlock.status() == SettlementBuildBlockStatus.BLOCKED) {
 				updatedBlocks.add(normalizedBlock);
 				continue;
+			}
+
+			if (activeLayer != null) {
+				BlueprintRelativePos relativePos = parseRelativeBlueprintPosition(normalizedBlock.position());
+				if (relativePos == null || relativePos.up() != activeLayer) {
+					updatedBlocks.add(normalizedBlock);
+					continue;
+				}
 			}
 
 			SettlementConstructionMaterials.ConstructionMaterialResult materialResult =
@@ -8181,7 +8280,7 @@ public final class SettlementConstruction {
 		}
 
 		char symbol = currentBlueprintSymbol(buildSite, block);
-		return symbol != 'A' && symbol != 'Y' && symbol != 'b' && symbol != 'g';
+		return symbol != 'A' && symbol != '.' && symbol != 'Y' && symbol != 'b' && symbol != 'g';
 	}
 
 	public static boolean isBuildSiteComplete(SettlementBuildSite buildSite) {

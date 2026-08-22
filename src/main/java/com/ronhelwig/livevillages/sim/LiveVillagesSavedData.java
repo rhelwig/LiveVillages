@@ -168,6 +168,8 @@ public class LiveVillagesSavedData extends SavedData {
 	private final Map<String, Integer> autonomousSupportStartOffsets = new HashMap<>();
 	private final Map<String, Long> autonomousSupportRetryAfterTicks = new HashMap<>();
 	private final Map<String, Long> populationDiagnosticTicks = new HashMap<>();
+	private final Set<String> loggedShelteredCarpenterBenches = new HashSet<>();
+	private final Set<String> loggedMissingCarpenterWorkshopAnchors = new HashSet<>();
 
 	public record CachedSurvey(SettlementConstruction.InfrastructureSurvey survey, long lastSurveyTick) {
 	}
@@ -1634,7 +1636,7 @@ public class LiveVillagesSavedData extends SavedData {
 					discoveryStepStart = warnIfConstructionDiscoverySlow("autonomous_support", workingSettlement, discoveryStepStart);
 				}
 
-				if (!catchupMaterialized) {
+				if (placedWorkstationDiscoveryDue) {
 					SettlementConstruction.PlacedWorkstations placedWorkstations = SettlementConstruction.scanPlacedWorkstations(level, workingSettlement);
 					changed |= tryStartPlacedWorkstationBuildSites(level, workingSettlement, stock, placedWorkstations);
 					warnIfConstructionDiscoverySlow("placed_workstations", workingSettlement, discoveryStepStart);
@@ -1846,6 +1848,16 @@ public class LiveVillagesSavedData extends SavedData {
 		SettlementConstruction.PlacedWorkstations workstations
 	) {
 		boolean changed = false;
+		if (settlement.population().getOrDefault("carpenter", 0) > 0
+			&& workstations.carpenterBenches().isEmpty()
+			&& findBuildSite(settlement.id(), SettlementBuildSiteType.CARPENTER_WORKSHOP).isEmpty()
+			&& loggedMissingCarpenterWorkshopAnchors.add(settlement.id())) {
+			LiveVillages.LOGGER.warn(
+				"Construction discovery: settlement {} has {} Carpenters but no Carpenter Bench or Carpenter's Workshop build site; no workshop preview can be generated",
+				settlement.id(),
+				settlement.population().getOrDefault("carpenter", 0)
+			);
+		}
 		changed |= tryStartPlacedCarpenterWorkshopBuildSites(level, settlement, stock, workstations.carpenterBenches());
 		changed |= tryStartPlacedBakeryBuildSites(level, settlement, stock, workstations.bakersCounters());
 		changed |= tryStartPlacedBeekeeperApiaryBuildSites(level, settlement, stock, workstations.honeySeparators());
@@ -2867,6 +2879,20 @@ public class LiveVillagesSavedData extends SavedData {
 				SettlementBuildSite previousBuildSite = buildSites.put(buildResult.buildSite().id(), buildResult.buildSite());
 				changed |= !buildResult.buildSite().equals(previousBuildSite);
 				changed |= ensureWorkforceIfNeeded(level, settlement);
+			} else if (buildResult.isCompleted()
+				&& existingBuildSite.isEmpty()
+				&& loggedShelteredCarpenterBenches.add(settlement.id() + "|" + benchPos.asLong())) {
+				LiveVillages.LOGGER.info(
+					"Construction discovery: Carpenter Bench at {} in settlement {} is inside an existing shelter; no Carpenter's Workshop build site is registered",
+					benchPos,
+					settlement.id()
+				);
+			} else if (buildResult.isBlocked() && existingBuildSite.isEmpty()) {
+				LiveVillages.LOGGER.warn(
+					"Construction discovery: Carpenter Bench at {} in settlement {} could not register a Carpenter's Workshop build site",
+					benchPos,
+					settlement.id()
+				);
 			}
 		}
 

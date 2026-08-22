@@ -7,6 +7,25 @@ import org.junit.jupiter.api.Test;
 
 class SettlementConstructionMaterialsLightingTest {
 	@Test
+	void glassDisplayCasesUseTheirAuthoredBatchRecipe() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("logs", 6, "glass", 3));
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "glass_display_case");
+		assertTrue(result.supplied());
+		assertEquals(1, result.craftingSteps());
+		assertEquals(Map.of("glass_display_case", 5), stock);
+	}
+
+	@Test
+	void failedGlassDisplayCaseCraftIsAtomic() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("logs", 6, "glass", 2));
+		Map<String, Integer> original = new LinkedHashMap<>(stock);
+		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "glass_display_case");
+		assertFalse(result.supplied());
+		assertEquals("glass", result.missingMaterialKey());
+		assertEquals(original, stock);
+	}
+
+	@Test
 	void stringCanBeSpunFromWoolAndPreservesTheBatchRemainder() {
 		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("wool", 1));
 		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "string");

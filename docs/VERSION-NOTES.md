@@ -2,9 +2,9 @@
 
 This document tracks short, user-facing notes for releases after the initial published version. Keep the newest release first and write for players rather than developers. These notes can be adapted for Modrinth, CurseForge, GitHub releases, and announcement posts.
 
-## 1.0.2 — Upcoming
+## 1.0.3 — Upcoming
 
-Live Villages `1.0.2` focuses on making settlement growth more dependable, visible, and easier on the server.
+Live Villages `1.0.3` focuses on making settlement growth more dependable, visible, and easier on the server.
 
 ### What’s new
 

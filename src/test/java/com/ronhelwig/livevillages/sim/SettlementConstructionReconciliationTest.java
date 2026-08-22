@@ -172,6 +172,71 @@ class SettlementConstructionReconciliationTest extends MinecraftBootstrapTestSup
 		));
 	}
 
+	@Test
+	void legacyBlueprintPaddingDoesNotBlockCompletionOrReturnToCurrentPlan() {
+		SettlementBuildSite duplex = new SettlementBuildSite(
+			"test", "settlement", SettlementBuildSiteType.DUPLEX,
+			BlockPos.ZERO, BlockPos.ZERO, BlockPos.ZERO,
+			Direction.NORTH, "birch", "cobblestone", Map.of(),
+			List.of(
+				SettlementBuildBlockState.placed("-2,-2,0", 'P', "planks"),
+				SettlementBuildBlockState.pending("-3,-2,0", '.', "")
+			),
+			false, 0L, 0L
+		);
+
+		assertFalse(SettlementConstruction.isRequiredBuildSiteBlock(
+			duplex,
+			SettlementBuildBlockState.pending("-3,-2,0", '.', "")
+		));
+		assertTrue(SettlementConstruction.isBuildSiteComplete(duplex));
+		assertTrue(SettlementConstruction.currentBlueprintBlocks(duplex).stream()
+			.noneMatch(block -> ".".equals(block.blueprintSymbol())));
+	}
+
+	@Test
+	void dockPileCanBeWorkedFromDeckButDoesNotExpandOrdinaryReach() {
+		SettlementBuildBlockState piling = SettlementBuildBlockState.pending("1,4,-7", 'L', "logs");
+		SettlementBuildSite dock = new SettlementBuildSite(
+			"test", "settlement", SettlementBuildSiteType.DOCK,
+			new BlockPos(10, 63, 20), BlockPos.ZERO, BlockPos.ZERO,
+			Direction.NORTH, "birch", "", Map.of(), List.of(piling), false, 0L, 0L
+		);
+		BlockPos target = SettlementConstruction.buildSiteBlockPos(dock, piling).orElseThrow();
+
+		assertTrue(SettlementConstructionWork.isDockSupportPileBlock(dock, piling));
+		assertTrue(SettlementConstructionWork.isDockPileWorkPosition(new BlockPos(target.getX(), 64, target.getZ()), dock, piling, target));
+		assertFalse(SettlementConstructionWork.isDockPileWorkPosition(new BlockPos(target.getX() + 2, 64, target.getZ()), dock, piling, target));
+		assertFalse(SettlementConstructionWork.isDockPileWorkPosition(new BlockPos(target.getX(), 64, target.getZ()), chapelSite(List.of()), piling, target));
+	}
+
+	@Test
+	void constructionFocusesOnLowestIncompleteLayer() {
+		SettlementBuildBlockState optionalAir = SettlementBuildBlockState.pending("20,20,0", 'A', "");
+		SettlementBuildSite site = chapelSite(List.of(
+			SettlementBuildBlockState.placed("0,0,0", 'C', "cobblestone"),
+			optionalAir,
+			SettlementBuildBlockState.pending("0,3,1", 'W', "altar"),
+			SettlementBuildBlockState.pending("-1,-2,2", 'U', "torch")
+		));
+
+		assertFalse(SettlementConstruction.isRequiredBuildSiteBlock(site, optionalAir));
+		assertEquals(1, SettlementConstructionWork.activeConstructionLayer(site));
+
+		SettlementBuildSite nextLayer = chapelSite(List.of(
+			SettlementBuildBlockState.placed("0,0,0", 'C', "cobblestone"),
+			SettlementBuildBlockState.placed("0,3,1", 'W', "altar"),
+			SettlementBuildBlockState.pending("-1,-2,2", 'U', "torch")
+		));
+		assertEquals(2, SettlementConstructionWork.activeConstructionLayer(nextLayer));
+	}
+
+	@Test
+	void fenceRowsCanSeedFromOneHorizontalSupport() {
+		assertEquals(1, SettlementConstructionWork.requiredHorizontalConstructionSupports(Blocks.OAK_FENCE.defaultBlockState()));
+		assertEquals(2, SettlementConstructionWork.requiredHorizontalConstructionSupports(Blocks.OAK_STAIRS.defaultBlockState()));
+	}
+
 	private static SettlementBuildSite chapelSite(List<SettlementBuildBlockState> blocks) {
 		return new SettlementBuildSite(
 			"test",
