@@ -102,14 +102,15 @@ public final class SettlementRoadwrightWork {
 		Collection<SettlementState> allSettlements,
 		List<RouteState> routes
 	) {
-		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
+		int routeRadius = roadwrightRouteRadius(settlement);
+		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement, routeRadius);
 
 		if (roadwrights.isEmpty()) {
 			SettlementProfessionDiagnostics.log(level, settlement, SettlementRoleKeys.ROADWRIGHT, "no_roadwrights", "");
 			return RoadworkResult.unchanged();
 		}
 
-		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights);
+		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights, routeRadius);
 		List<PathTarget> externalTargets = externalTargets(settlement, allSettlements, routes);
 		Set<String> busyRoadwrightIds = new HashSet<>();
 		boolean worldChanged = false;
@@ -261,7 +262,7 @@ public final class SettlementRoadwrightWork {
 			return RoadworkCatchupResult.none();
 		}
 
-		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
+		List<Villager> roadwrights = routeRoadwrights(level, settlement);
 
 		if (roadwrights.isEmpty()) {
 			return RoadworkCatchupResult.none();
@@ -351,7 +352,7 @@ public final class SettlementRoadwrightWork {
 		Map<String, RoadworkDebugPlan> debugPlans = new HashMap<>();
 		long tick = level.getServer().getTickCount();
 
-		for (Villager roadwright : SettlementVillagers.nearbyRoadwrights(level, settlement)) {
+		for (Villager roadwright : routeRoadwrights(level, settlement)) {
 			String roadwrightId = roadwright.getUUID().toString();
 			cachedRoadworkPlan(level, settlement, roadwrightId, tick)
 				.ifPresent(plan -> debugPlans.put(roadwrightId, plan));
@@ -398,7 +399,7 @@ public final class SettlementRoadwrightWork {
 			return SurveyorMapForecast.empty();
 		}
 
-		List<Villager> roadwrights = SettlementVillagers.nearbyRoadwrights(level, settlement);
+		List<Villager> roadwrights = routeRoadwrights(level, settlement);
 		List<Villager> roadWorkers = roadworkWorkersForMaintenance(level, settlement, roadwrights);
 		int helperCount = Math.max(0, roadWorkers.size() - roadwrights.size());
 		int dailyWorkUnits = forecastDailyWorkUnits(level, roadwrights.size(), helperCount);
@@ -471,7 +472,7 @@ public final class SettlementRoadwrightWork {
 		long tick = level.getServer().getTickCount();
 		List<PathTarget> externalTargets = externalTargets(settlement, allSettlements, routes);
 
-		for (Villager roadwright : SettlementVillagers.nearbyRoadwrights(level, settlement)) {
+		for (Villager roadwright : routeRoadwrights(level, settlement)) {
 			cachedRoadworkPlan(level, settlement, roadwright.getUUID().toString(), tick)
 				.flatMap(plan -> forecastRoutePlan(level, settlement, plan))
 				.ifPresent(plan -> addForecastCandidate(candidates, seen, plan));
@@ -604,7 +605,7 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static boolean usesLoadedRoadwork(ServerLevel level, SettlementState settlement) {
-		return !SettlementVillagers.nearbyRoadwrights(level, settlement).isEmpty();
+		return !routeRoadwrights(level, settlement).isEmpty();
 	}
 
 	private static boolean isPlanningRoadwright(Villager villager) {
@@ -612,7 +613,16 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static List<Villager> roadworkWorkersForMaintenance(ServerLevel level, SettlementState settlement, List<Villager> roadwrights) {
-		List<Villager> helpers = SettlementVillagers.nearbyRoadworkHelpers(level, settlement);
+		return roadworkWorkersForMaintenance(level, settlement, roadwrights, roadwrightRouteRadius(settlement));
+	}
+
+	private static List<Villager> roadworkWorkersForMaintenance(
+		ServerLevel level,
+		SettlementState settlement,
+		List<Villager> roadwrights,
+		int routeRadius
+	) {
+		List<Villager> helpers = SettlementVillagers.nearbyRoadworkHelpers(level, settlement, routeRadius);
 
 		if (helpers.isEmpty()) {
 			return List.of();
@@ -845,7 +855,7 @@ public final class SettlementRoadwrightWork {
 	private static List<BlockPos> roadworkStartPositions(ServerLevel level, SettlementState settlement) {
 		LinkedHashSet<BlockPos> starts = new LinkedHashSet<>();
 
-		for (Villager roadwright : SettlementVillagers.nearbyRoadwrights(level, settlement)) {
+		for (Villager roadwright : routeRoadwrights(level, settlement)) {
 			starts.add(roadwrightOwnStart(level, settlement, roadwright).immutable());
 		}
 
@@ -970,7 +980,7 @@ public final class SettlementRoadwrightWork {
 		List<BlockPos> targets = nearbyMileposts(
 			level,
 			settlement.center(),
-			Math.min(MILEPOST_TARGET_RADIUS_BLOCKS, roadwrightWorkRadius(settlement))
+			roadwrightRouteRadius(settlement)
 		);
 		MILEPOST_TARGET_CACHE.put(cacheKey, new CachedMilepostTargets(currentTick, targets));
 		return targets;
@@ -2042,11 +2052,23 @@ public final class SettlementRoadwrightWork {
 	}
 
 	private static Optional<BlockPos> furthestEstablishedExternalAnchor(ServerLevel level, SettlementState settlement, BlockPos targetPos) {
-		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, roadwrightWorkRadius(settlement), EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
+		return furthestEstablishedRouteAnchor(level, settlement.center(), targetPos, roadwrightRouteRadius(settlement), EXTERNAL_ROUTE_ANCHOR_BASE_CORRIDOR_BLOCKS);
 	}
 
 	private static int roadwrightWorkRadius(SettlementState settlement) {
 		return SettlementVillagers.professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT);
+	}
+
+	private static List<Villager> routeRoadwrights(ServerLevel level, SettlementState settlement) {
+		return SettlementVillagers.nearbyRoadwrights(level, settlement, roadwrightRouteRadius(settlement));
+	}
+
+	private static int roadwrightRouteRadius(SettlementState settlement) {
+		return roadwrightRouteRadius(roadwrightWorkRadius(settlement));
+	}
+
+	static int roadwrightRouteRadius(int workRadius) {
+		return Math.min(MILEPOST_TARGET_RADIUS_BLOCKS, workRadius + MILEPOST_IDEAL_SPACING_BLOCKS);
 	}
 
 	private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {

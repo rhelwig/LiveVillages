@@ -7,6 +7,19 @@ import org.junit.jupiter.api.Test;
 
 class SettlementConstructionMaterialsLightingTest {
 	@Test
+	void semanticCandleFixtureConsumesFourCandlesAtomically() {
+		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("candle", 4));
+		var block = SettlementBuildBlockState.pending("0,0,0", 'U', "candle");
+
+		assertTrue(SettlementConstructionMaterials.consumeForBlock(stock, new LinkedHashMap<>(), block).supplied());
+		assertEquals(0, stock.getOrDefault("candle", 0));
+
+		Map<String, Integer> shortStock = new LinkedHashMap<>(Map.of("candle", 3));
+		assertFalse(SettlementConstructionMaterials.consumeForBlock(shortStock, new LinkedHashMap<>(), block).supplied());
+		assertEquals(3, shortStock.get("candle"));
+	}
+
+	@Test
 	void glassDisplayCasesUseTheirAuthoredBatchRecipe() {
 		Map<String, Integer> stock = new LinkedHashMap<>(Map.of("logs", 6, "glass", 3));
 		var result = SettlementConstructionMaterials.consumeMaterial(stock, new LinkedHashMap<>(), "glass_display_case");

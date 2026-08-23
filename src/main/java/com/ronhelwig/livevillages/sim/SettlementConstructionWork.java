@@ -69,6 +69,7 @@ public final class SettlementConstructionWork {
 	private static final int BLOCK_UPDATE_FLAGS = 3;
 	private static final String BLOCKED_REASON_UNSUPPORTED = "unsupported";
 	private static final Map<String, Long> UNREACHABLE_TASK_SKIP_UNTIL = new HashMap<>();
+	private static final Map<String, Long> UNREACHABLE_STAND_SKIP_UNTIL = new HashMap<>();
 	private static final Map<String, NavigationAttempt> CONSTRUCTION_NAVIGATION_ATTEMPTS = new HashMap<>();
 	private static final Map<String, ConstructionAssignment> CONSTRUCTION_ASSIGNMENTS = new HashMap<>();
 	private static final Map<String, Integer> RECONCILIATION_SITE_CURSORS = new HashMap<>();
@@ -251,7 +252,7 @@ public final class SettlementConstructionWork {
 				long chooseTaskStart = System.nanoTime();
 				ConstructionTask task = assignedTask != null
 					? assignedTask
-					: chooseConstructionTask(level, workingBuildSites, worker, claimedBlocks);
+					: chooseConstructionTask(level, stock, workingBuildSites, worker, claimedBlocks);
 				if (assignedTask != null) {
 					assignmentsResumed++;
 				}
@@ -1111,7 +1112,15 @@ public final class SettlementConstructionWork {
 					return null;
 				}
 
-				Optional<ReachableStand> standPos = standPosFor(level, worker, buildSite, targetPos.get());
+				String blockClaimKey = claimKey(buildSite, block);
+				Optional<ReachableStand> standPos = standPosFor(
+					level,
+					worker,
+					buildSite,
+					targetPos.get(),
+					blockClaimKey,
+					level.getServer().getTickCount()
+				);
 
 				if (standPos.isEmpty()) {
 					return null;
@@ -1126,7 +1135,7 @@ public final class SettlementConstructionWork {
 					standPos.get().pos(),
 					standPos.get().path(),
 					relativePos.up(),
-					claimKey(buildSite, block)
+					blockClaimKey
 				);
 			}
 		}
@@ -1345,6 +1354,7 @@ public final class SettlementConstructionWork {
 
 	private static ConstructionTask chooseConstructionTask(
 		ServerLevel level,
+		Map<String, Integer> stock,
 		List<SettlementBuildSite> buildSites,
 		Villager worker,
 		Set<String> claimedBlocks
@@ -1353,14 +1363,16 @@ public final class SettlementConstructionWork {
 		long tick = level.getServer().getTickCount();
 
 		for (int attempt = 0; attempt < MAX_UNREACHABLE_TASK_RETRIES; attempt++) {
-			ConstructionTask bestTask = chooseConstructionTaskCandidate(level, buildSites, worker, claimedBlocks, skippedUnreachableBlocks, tick);
+			ConstructionTask bestTask = chooseConstructionTaskCandidate(level, stock, buildSites, worker, claimedBlocks, skippedUnreachableBlocks, tick);
 
 			if (bestTask == null) {
 				return null;
 			}
 
 			long standPosStart = System.nanoTime();
-			Optional<ReachableStand> reachableStandPos = standPosFor(level, worker, bestTask.buildSite(), bestTask.targetPos());
+			Optional<ReachableStand> reachableStandPos = standPosFor(
+				level, worker, bestTask.buildSite(), bestTask.targetPos(), bestTask.claimKey(), tick
+			);
 			long standPosTime = System.nanoTime() - standPosStart;
 			if (standPosTime > 50_000_000) { // >50ms
 				LiveVillages.LOGGER.warn("ConstructionWork: final standPosFor took {} ms for block at {}", Math.round(standPosTime / 1_000_000.0D), bestTask.targetPos());
@@ -1371,7 +1383,7 @@ public final class SettlementConstructionWork {
 			}
 
 			skippedUnreachableBlocks.add(bestTask.claimKey());
-			UNREACHABLE_TASK_SKIP_UNTIL.put(bestTask.claimKey(), tick + UNREACHABLE_TASK_CACHE_TICKS);
+			UNREACHABLE_TASK_SKIP_UNTIL.put(unreachableTaskKey(worker, bestTask.claimKey()), tick + UNREACHABLE_TASK_CACHE_TICKS);
 		}
 
 		return null;
@@ -1449,7 +1461,10 @@ public final class SettlementConstructionWork {
 
 		String workerId = worker.getUUID().toString();
 		CONSTRUCTION_ASSIGNMENTS.remove(workerId);
-		UNREACHABLE_TASK_SKIP_UNTIL.put(assignment.claimKey(), tick + UNREACHABLE_TASK_CACHE_TICKS);
+		UNREACHABLE_STAND_SKIP_UNTIL.put(
+			unreachableStandKey(worker, assignment.claimKey(), assignment.standPos()),
+			tick + UNREACHABLE_TASK_CACHE_TICKS
+		);
 		LiveVillages.LOGGER.warn(
 			"ConstructionWork: released stalled assignment for settlement {} worker {} block {} stand {} workerPos {} distance {} navigationDone={} ageTicks={} stalledTicks={}",
 			settlement.id(),
@@ -1468,6 +1483,7 @@ public final class SettlementConstructionWork {
 
 	private static ConstructionTask chooseConstructionTaskCandidate(
 		ServerLevel level,
+		Map<String, Integer> stock,
 		List<SettlementBuildSite> buildSites,
 		Villager worker,
 		Set<String> claimedBlocks,
@@ -1479,9 +1495,6 @@ public final class SettlementConstructionWork {
 			return dockPileTask;
 		}
 
-		ConstructionTask bestTask = null;
-		double bestDistanceSquared = Double.POSITIVE_INFINITY;
-		int bestAffinity = Integer.MAX_VALUE;
 		int totalCandidateBlocksChecked = 0;
 		int startSiteIndex = buildSites.isEmpty()
 			? 0
@@ -1494,8 +1507,9 @@ public final class SettlementConstructionWork {
 			if (buildSite.complete()) {
 				continue;
 			}
-			Integer activeLayer = activeConstructionLayerForPlanning(buildSite);
-
+			ConstructionTask bestSiteTask = null;
+			double bestSiteDistanceSquared = Double.POSITIVE_INFINITY;
+			int bestSiteAffinity = Integer.MAX_VALUE;
 			int candidateBlocksChecked = 0;
 			for (int blockIndex = 0; blockIndex < buildSite.blocks().size(); blockIndex++) {
 				SettlementBuildBlockState block = buildSite.blocks().get(blockIndex);
@@ -1508,12 +1522,14 @@ public final class SettlementConstructionWork {
 
 				String claimKey = claimKey(buildSite, block);
 
-				if (claimedBlocks.contains(claimKey) || skippedBlocks.contains(claimKey) || isTemporarilyUnreachable(claimKey, tick)) {
+				if (claimedBlocks.contains(claimKey)
+					|| skippedBlocks.contains(claimKey)
+					|| isTemporarilyUnreachable(worker, claimKey, tick)) {
 					continue;
 				}
 
 				BuildRelativePos relativePos = parseRelativePos(block.position());
-				if (relativePos == null || (activeLayer != null && relativePos.up() != activeLayer)) {
+				if (relativePos == null) {
 					continue;
 				}
 				Optional<BlockPos> targetPos = SettlementConstruction.buildSiteBlockPos(buildSite, block);
@@ -1525,7 +1541,8 @@ public final class SettlementConstructionWork {
 
 				BlockState currentState = level.getBlockState(targetPos.get());
 				if (block.status() == SettlementBuildBlockStatus.MISSING_MATERIAL
-					&& (SettlementConstruction.isBuildSiteReplaceable(currentState) || statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState))) {
+					&& (SettlementConstruction.isBuildSiteReplaceable(currentState) || statesMatchBuildSiteIntent(buildSite, block, currentState, plannedState))
+					&& !canSupplyConstructionMaterial(stock, buildSite, block)) {
 					continue;
 				}
 
@@ -1577,18 +1594,25 @@ public final class SettlementConstructionWork {
 					claimKey
 				);
 
-				if (bestTask == null
-					|| candidateTask.layer() < bestTask.layer()
-					|| (candidateTask.layer() == bestTask.layer() && affinity < bestAffinity)
-					|| (candidateTask.layer() == bestTask.layer() && affinity == bestAffinity && distanceSquared < bestDistanceSquared)) {
-					bestTask = candidateTask;
-					bestAffinity = affinity;
-					bestDistanceSquared = distanceSquared;
+				if (bestSiteTask == null
+					|| candidateTask.layer() < bestSiteTask.layer()
+					|| (candidateTask.layer() == bestSiteTask.layer() && affinity < bestSiteAffinity)
+					|| (candidateTask.layer() == bestSiteTask.layer() && affinity == bestSiteAffinity && distanceSquared < bestSiteDistanceSquared)) {
+					bestSiteTask = candidateTask;
+					bestSiteAffinity = affinity;
+					bestSiteDistanceSquared = distanceSquared;
 				}
+			}
+
+			// Layer numbers are local to a structure. Return the best task from the first
+			// actionable site in this worker's rotating order instead of letting a newly
+			// started foundation outrank every older building in the settlement.
+			if (bestSiteTask != null) {
+				return bestSiteTask;
 			}
 		}
 
-		return bestTask;
+		return null;
 	}
 
 	private static ConstructionTask chooseDockPileTaskCandidate(
@@ -1614,7 +1638,9 @@ public final class SettlementConstructionWork {
 				}
 
 				String claimKey = claimKey(buildSite, block);
-				if (claimedBlocks.contains(claimKey) || skippedBlocks.contains(claimKey) || isTemporarilyUnreachable(claimKey, tick)) {
+				if (claimedBlocks.contains(claimKey)
+					|| skippedBlocks.contains(claimKey)
+					|| isTemporarilyUnreachable(worker, claimKey, tick)) {
 					continue;
 				}
 
@@ -1653,15 +1679,16 @@ public final class SettlementConstructionWork {
 		return bestTask;
 	}
 
-	private static boolean isTemporarilyUnreachable(String claimKey, long tick) {
-		Long skipUntilTick = UNREACHABLE_TASK_SKIP_UNTIL.get(claimKey);
+	private static boolean isTemporarilyUnreachable(Villager worker, String claimKey, long tick) {
+		String cacheKey = unreachableTaskKey(worker, claimKey);
+		Long skipUntilTick = UNREACHABLE_TASK_SKIP_UNTIL.get(cacheKey);
 
 		if (skipUntilTick == null) {
 			return false;
 		}
 
 		if (skipUntilTick <= tick) {
-			UNREACHABLE_TASK_SKIP_UNTIL.remove(claimKey);
+			UNREACHABLE_TASK_SKIP_UNTIL.remove(cacheKey);
 			return false;
 		}
 
@@ -2962,7 +2989,23 @@ public final class SettlementConstructionWork {
 
 	private static boolean isWithinWorkReach(Villager worker, ConstructionTask task) {
 		return isWithinWorkReach(worker, task.targetPos())
+			|| isAtAssignedStand(worker.blockPosition(), task.standPos())
+			|| isFoundationWorkPosition(worker.blockPosition(), task.buildSite(), task.targetPos())
 			|| isDockPileWorkPosition(worker.blockPosition(), task.buildSite(), task.block(), task.targetPos());
+	}
+
+	static boolean isAtAssignedStand(BlockPos workerPos, BlockPos standPos) {
+		return workerPos.distSqr(standPos) <= 9.0D;
+	}
+
+	static boolean isFoundationWorkPosition(BlockPos workerPos, SettlementBuildSite buildSite, BlockPos targetPos) {
+		int down = workerPos.getY() - targetPos.getY();
+		int dx = workerPos.getX() - targetPos.getX();
+		int dz = workerPos.getZ() - targetPos.getZ();
+		return targetPos.getY() < buildSite.origin().getY()
+			&& down >= 0
+			&& down <= 8
+			&& (dx * dx) + (dz * dz) <= 25;
 	}
 
 	static boolean isDockPileWorkPosition(
@@ -2988,8 +3031,16 @@ public final class SettlementConstructionWork {
 			&& "logs".equals(block.expectedMaterialKey());
 	}
 
-	private static Optional<ReachableStand> standPosFor(ServerLevel level, Villager worker, SettlementBuildSite buildSite, BlockPos targetPos) {
+	private static Optional<ReachableStand> standPosFor(
+		ServerLevel level,
+		Villager worker,
+		SettlementBuildSite buildSite,
+		BlockPos targetPos,
+		String claimKey,
+		long tick
+	) {
 		List<BlockPos> candidates = standCandidatesFor(level, buildSite, targetPos);
+		candidates.removeIf(candidate -> isTemporarilyUnreachableStand(worker, claimKey, candidate, tick));
 		candidates.sort((a, b) -> Double.compare(a.distSqr(worker.blockPosition()), b.distSqr(worker.blockPosition())));
 
 		if (!candidates.isEmpty() && isWithinWorkReach(worker, targetPos)) {
@@ -3006,6 +3057,47 @@ public final class SettlementConstructionWork {
 		}
 
 		return Optional.empty();
+	}
+
+	static boolean canSupplyConstructionMaterial(
+		Map<String, Integer> stock,
+		SettlementBuildSite buildSite,
+		SettlementBuildBlockState block
+	) {
+		return SettlementConstructionMaterials.consumeForBlock(
+			new LinkedHashMap<>(stock),
+			new LinkedHashMap<>(buildSite.siteMaterials()),
+			block
+		).supplied();
+	}
+
+	private static String unreachableTaskKey(Villager worker, String claimKey) {
+		return worker.getUUID() + "|" + claimKey;
+	}
+
+	private static String unreachableStandKey(Villager worker, String claimKey, BlockPos standPos) {
+		return unreachableTaskKey(worker, claimKey) + "|" + standPos.asLong();
+	}
+
+	private static boolean isTemporarilyUnreachableStand(
+		Villager worker,
+		String claimKey,
+		BlockPos standPos,
+		long tick
+	) {
+		String cacheKey = unreachableStandKey(worker, claimKey, standPos);
+		Long skipUntilTick = UNREACHABLE_STAND_SKIP_UNTIL.get(cacheKey);
+
+		if (skipUntilTick == null) {
+			return false;
+		}
+
+		if (skipUntilTick <= tick) {
+			UNREACHABLE_STAND_SKIP_UNTIL.remove(cacheKey);
+			return false;
+		}
+
+		return true;
 	}
 
 	private static Optional<BlockPos> nearestStandPosFor(ServerLevel level, Villager worker, SettlementBuildSite buildSite, BlockPos targetPos) {

@@ -2,6 +2,7 @@ package com.ronhelwig.livevillages.sim;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ronhelwig.livevillages.MinecraftBootstrapTestSupport;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CandleBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 
@@ -211,6 +213,25 @@ class SettlementConstructionReconciliationTest extends MinecraftBootstrapTestSup
 	}
 
 	@Test
+	void deepFoundationCanBeFilledFromNearbySurfaceButNotAtLongRange() {
+		SettlementBuildSite site = chapelSite(List.of());
+		BlockPos target = site.origin().offset(0, -4, 0);
+
+		assertTrue(SettlementConstructionWork.isFoundationWorkPosition(site.origin().offset(3, 2, 0), site, target));
+		assertFalse(SettlementConstructionWork.isFoundationWorkPosition(site.origin().offset(6, 2, 0), site, target));
+		assertFalse(SettlementConstructionWork.isFoundationWorkPosition(site.origin().offset(0, 5, 0), site, target));
+		assertFalse(SettlementConstructionWork.isFoundationWorkPosition(site.origin(), site, site.origin().above()));
+	}
+
+	@Test
+	void workerCanActWhenNavigationStopsNearItsValidatedStandPosition() {
+		BlockPos stand = new BlockPos(81, 68, -180);
+
+		assertTrue(SettlementConstructionWork.isAtAssignedStand(new BlockPos(80, 67, -179), stand));
+		assertFalse(SettlementConstructionWork.isAtAssignedStand(new BlockPos(77, 67, -179), stand));
+	}
+
+	@Test
 	void constructionFocusesOnLowestIncompleteLayer() {
 		SettlementBuildBlockState optionalAir = SettlementBuildBlockState.pending("20,20,0", 'A', "");
 		SettlementBuildSite site = chapelSite(List.of(
@@ -229,6 +250,39 @@ class SettlementConstructionReconciliationTest extends MinecraftBootstrapTestSup
 			SettlementBuildBlockState.pending("-1,-2,2", 'U', "torch")
 		));
 		assertEquals(2, SettlementConstructionWork.activeConstructionLayer(nextLayer));
+	}
+
+	@Test
+	void churchCandleFixturesUseBrightSameColorBundlesWithVariedFixtures() {
+		SettlementBuildBlockState left = SettlementBuildBlockState.pending("-1,-2,2", 'U', "candle");
+		SettlementBuildBlockState right = SettlementBuildBlockState.pending("1,-2,2", 'U', "candle");
+		SettlementBuildSite church = chapelSite(List.of(left, right));
+		var leftState = SettlementConstruction.plannedBuildSiteBlockState(church, left);
+		var rightState = SettlementConstruction.plannedBuildSiteBlockState(church, right);
+
+		assertTrue(leftState.getBlock() instanceof CandleBlock);
+		assertTrue(rightState.getBlock() instanceof CandleBlock);
+		assertEquals(4, leftState.getValue(CandleBlock.CANDLES));
+		assertEquals(4, rightState.getValue(CandleBlock.CANDLES));
+		assertTrue(leftState.getValue(CandleBlock.LIT));
+		assertNotEquals(leftState.getBlock(), rightState.getBlock());
+	}
+
+	@Test
+	void missingMaterialTaskRechecksMaterialsAlreadyDeliveredToSite() {
+		SettlementBuildBlockState block = SettlementBuildBlockState.pending("0,0,0", 'C', "cobblestone")
+			.withStatus(SettlementBuildBlockStatus.MISSING_MATERIAL, "cobblestone");
+		SettlementBuildSite suppliedSite = new SettlementBuildSite(
+			"test", "settlement", SettlementBuildSiteType.CLERIC_SHRINE,
+			BlockPos.ZERO, BlockPos.ZERO, BlockPos.ZERO,
+			Direction.NORTH, "birch", "cobblestone", Map.of("cobblestone", 1),
+			List.of(block), false, 0L, 0L
+		);
+
+		assertTrue(SettlementConstructionWork.canSupplyConstructionMaterial(Map.of(), suppliedSite, block));
+		assertFalse(SettlementConstructionWork.canSupplyConstructionMaterial(
+			Map.of(), suppliedSite.withSiteMaterials(Map.of(), 0L), block
+		));
 	}
 
 	@Test

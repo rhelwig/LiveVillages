@@ -21,7 +21,33 @@ public final class SettlementConstructionMaterials {
 			return ConstructionMaterialResult.supplied(0);
 		}
 
+		if ("candle".equals(block.expectedMaterialKey()) && "U".equals(block.blueprintSymbol())) {
+			return consumeCandleBundle(settlementStock, villagerGoods);
+		}
+
 		return consumeMaterial(settlementStock, villagerGoods, block.expectedMaterialKey());
+	}
+
+	private static ConstructionMaterialResult consumeCandleBundle(
+		Map<String, Integer> settlementStock,
+		Map<String, Integer> villagerGoods
+	) {
+		Map<String, Integer> workingStock = new LinkedHashMap<>(settlementStock);
+		Map<String, Integer> workingVillagerGoods = new LinkedHashMap<>(villagerGoods);
+		int crafted = 0;
+		for (int candle = 0; candle < 4; candle++) {
+			ConstructionMaterialResult result = consumeMaterial(workingStock, workingVillagerGoods, "candle");
+			if (!result.supplied()) {
+				return result;
+			}
+			crafted += result.craftingSteps();
+		}
+
+		settlementStock.clear();
+		settlementStock.putAll(workingStock);
+		villagerGoods.clear();
+		villagerGoods.putAll(workingVillagerGoods);
+		return ConstructionMaterialResult.supplied(crafted);
 	}
 
 	public static boolean tryConsumeCost(Map<String, Integer> settlementStock, Map<String, Integer> cost) {

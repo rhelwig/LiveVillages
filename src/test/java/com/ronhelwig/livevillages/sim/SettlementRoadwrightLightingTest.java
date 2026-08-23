@@ -20,4 +20,10 @@ class SettlementRoadwrightLightingTest {
 		assertEquals(2, northSouthCandidates);
 		assertEquals(2, eastWestCandidates);
 	}
+
+	@Test
+	void routeRadiusReachesOneAdditionalMilepostInterval() {
+		assertEquals(292, SettlementRoadwrightWork.roadwrightRouteRadius(192));
+		assertEquals(512, SettlementRoadwrightWork.roadwrightRouteRadius(480));
+	}
 }

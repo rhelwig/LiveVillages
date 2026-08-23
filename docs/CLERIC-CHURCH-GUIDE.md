@@ -69,7 +69,7 @@ Founding village church. Small, but a real interior. No back bedroom.
 - `M` cobble or local stone foundation and low wall
 - `P` / `L` local wood walls and roof
 - `V` clear glass panes; the top of each window is a plank lintel, not glass
-- `t` + `U` nave sconces: closed top-half trapdoors with a lit candle on top, one layer below the old wall-torch line
+- `t` + `U` nave sconces: closed top-half trapdoors with a lit four-candle bundle on top, one layer below the old wall-torch line. Each bundle uses one color because vanilla cannot mix candle colors within one block; neighboring sconces vary among warm and jewel-toned colors.
 - `D` front door pair only
 - `W` founding `Altar`
 - `p` pulpit on one side of the altar
@@ -96,7 +96,7 @@ The chapel that has arrived. The current authored 9×15 vestry church is this ti
 - More `M` on the lower walls and corners
 - Brass-language accents through lanterns and a few polished or cut stone bits where the palette allows
 - Extra `V` windows, still clear panes under plank lintels
-- The vestry desk plank next to the chest holds a lit candle (`U`)
+- The vestry desk plank next to the chest holds a lit four-candle bundle (`U`)
 - Same trapdoor-and-candle nave sconces as Tier 1, one layer below the old wall-torch line
 
 **Civic pride:** medium comfort bonus, larger than Tier 1. A village with a parish church should feel more established than one with only huts.

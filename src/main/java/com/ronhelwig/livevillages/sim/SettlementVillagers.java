@@ -252,13 +252,22 @@ public final class SettlementVillagers {
 	}
 
 	public static List<Villager> nearbyRoadwrights(ServerLevel level, SettlementState settlement) {
-		return settlementVillagers(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT)).stream()
+		return nearbyRoadwrights(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT));
+	}
+
+	public static List<Villager> nearbyRoadwrights(ServerLevel level, SettlementState settlement, int radiusBlocks) {
+		return settlementVillagers(level, settlement, radiusBlocks).stream()
 			.filter(villager -> !villager.isBaby() && isCustomRoadwright(villager))
 			.toList();
 	}
 
 	public static List<Villager> nearbyRoadworkHelpers(ServerLevel level, SettlementState settlement) {
-		List<Villager> villagers = settlementVillagers(level, settlement, villagerRadius(settlement));
+		return nearbyRoadworkHelpers(level, settlement, professionWorkRadiusBlocks(settlement, SettlementRoleKeys.ROADWRIGHT));
+	}
+
+	public static List<Villager> nearbyRoadworkHelpers(ServerLevel level, SettlementState settlement, int roadwrightRadiusBlocks) {
+		int baseRadius = villagerRadius(settlement);
+		List<Villager> villagers = settlementVillagers(level, settlement, roadwrightRadiusBlocks);
 
 		if (villagers.stream().noneMatch(SettlementVillagers::isCustomRoadwright)) {
 			return List.of();
@@ -266,7 +275,9 @@ public final class SettlementVillagers {
 
 		return villagers.stream()
 			.filter(villager -> !villager.isBaby())
-			.filter(villager -> isCustomRoadwright(villager) || villager.getVillagerData().profession().is(VillagerProfession.NONE))
+			.filter(villager -> isCustomRoadwright(villager)
+				|| (distanceToCenterSqr(villager, settlement.center()) <= (double) baseRadius * baseRadius
+					&& villager.getVillagerData().profession().is(VillagerProfession.NONE)))
 			.toList();
 	}
 

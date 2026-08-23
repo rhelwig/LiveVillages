@@ -5332,7 +5332,10 @@ public final class SettlementConstruction {
 			case "glass_display_case" -> LiveVillagesBlocks.isGlassDisplayCase(currentState) && LiveVillagesBlocks.isGlassDisplayCase(plannedState);
 			case "iron_bars" -> currentState.is(Blocks.IRON_BARS) && plannedState.is(Blocks.IRON_BARS);
 			case "copper_bars" -> isCopperBars(currentState) && isCopperBars(plannedState);
-			case "candle" -> isCandleBlockState(currentState) && isCandleBlockState(plannedState);
+			case "candle" -> currentState.getBlock() == plannedState.getBlock()
+				&& currentState.hasProperty(CandleBlock.CANDLES)
+				&& plannedState.hasProperty(CandleBlock.CANDLES)
+				&& currentState.getValue(CandleBlock.CANDLES).equals(plannedState.getValue(CandleBlock.CANDLES));
 			case "copper_bulb" -> isCopperBulbBlockState(currentState) && isCopperBulbBlockState(plannedState);
 			case "froglight" -> isFroglightBlockState(currentState) && isFroglightBlockState(plannedState);
 			case "lantern" -> currentState.hasProperty(LanternBlock.HANGING) && plannedState.hasProperty(LanternBlock.HANGING);
@@ -6835,7 +6838,7 @@ public final class SettlementConstruction {
 			case 'R' -> ladderStateFor(blueprint, facing, right, forward, up);
 			case 'T' -> semanticWallLightStateFor(materialKey, blueprint, facing, right, forward, up);
 			case 't' -> trapdoorStateFor(blueprint, facing, woodFamily, right, forward, up);
-			case 'J', 'U', 'X', 'Z' -> semanticLightStateFor(materialKey);
+			case 'J', 'U', 'X', 'Z' -> semanticLightStateFor(materialKey, structureKind, right, forward, up);
 			case 'Y' -> gardenTrellisStateFor(materialKey);
 			case 'V' -> glassPaneStateFor(blueprint, structureKind, facing, right, forward, up);
 			case 'K' -> Blocks.CAMPFIRE.defaultBlockState();
@@ -7178,9 +7181,9 @@ public final class SettlementConstruction {
 		return lanternStateFor();
 	}
 
-	private static BlockState semanticLightStateFor(String materialKey) {
+	private static BlockState semanticLightStateFor(String materialKey, StructureKind structureKind, int right, int forward, int up) {
 		return switch (materialKey == null ? "" : materialKey) {
-			case "candle" -> Blocks.CANDLE.defaultBlockState().setValue(CandleBlock.LIT, true);
+			case "candle" -> candleBundleStateFor(structureKind, right, forward, up);
 			case "copper_bulb" -> Blocks.WAXED_COPPER_BULB.defaultBlockState()
 				.setValue(BlockStateProperties.LIT, true)
 				.setValue(BlockStateProperties.POWERED, false);
@@ -7194,6 +7197,21 @@ public final class SettlementConstruction {
 			case "soul_lantern" -> Blocks.SOUL_LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, false);
 			default -> Blocks.TORCH.defaultBlockState();
 		};
+	}
+
+	private static BlockState candleBundleStateFor(StructureKind structureKind, int right, int forward, int up) {
+		Block candle = Blocks.CANDLE;
+		if (structureKind == StructureKind.CLERIC_SHRINE) {
+			Block[] churchCandles = {
+				Blocks.RED_CANDLE, Blocks.ORANGE_CANDLE, Blocks.YELLOW_CANDLE,
+				Blocks.BLUE_CANDLE, Blocks.PURPLE_CANDLE, Blocks.MAGENTA_CANDLE
+			};
+			candle = churchCandles[Math.floorMod((right * 31) + (forward * 17) + up, churchCandles.length)];
+		}
+
+		return candle.defaultBlockState()
+			.setValue(CandleBlock.CANDLES, CandleBlock.MAX_CANDLES)
+			.setValue(CandleBlock.LIT, true);
 	}
 
 	private static BlockState storefrontFixtureBaseStateFor(String materialKey, String woodFamily) {
