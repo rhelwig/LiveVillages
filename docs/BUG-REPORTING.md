@@ -2,9 +2,9 @@
 
 This guide is for playtesters, artists, and coders who want to report a problem with Live Villages on GitHub.
 
-GitHub issues for this project live here:
+Forgejo issues for this project live here:
 
-<https://github.com/rhelwig/LiveVillages/issues>
+<https://git.ronhelwig.com/ronhelwig.com/live-villages/issues>
 
 Before making a new bug report, take a quick look through the open issues to see if someone already reported the same problem.
 
@@ -13,7 +13,7 @@ Before making a new bug report, take a quick look through the open issues to see
 
 ## Super Short Version
 
-If something looks wrong or feels broken, open a GitHub issue and tell us:
+If something looks wrong or feels broken, open a Forgejo issue and tell us:
 
 - what you were doing
 - what went wrong

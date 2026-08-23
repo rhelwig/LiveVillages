@@ -133,7 +133,7 @@ So `sync my code` might mean:
 ## Simple Rules
 
 - Check Discord first if you are not sure what to work on.
-- Check GitHub issues for tracked bugs.
+- Check Forgejo issues for tracked bugs.
 - Start from updated code when possible.
 - Keep one branch per topic.
 - Commit often enough that you do not lose work.

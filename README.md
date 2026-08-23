@@ -94,7 +94,7 @@ Server/debug utilities:
 - [docs/PROFESSIONS.md](docs/PROFESSIONS.md): profession-specific design notes
 - [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md): active work ordering and implementation notes
 - [docs/WINDOWS-DEVELOPMENT-SETUP.md](docs/WINDOWS-DEVELOPMENT-SETUP.md): beginner-friendly Windows setup guide for building and running the mod in VS Code
-- [docs/BUG-REPORTING.md](docs/BUG-REPORTING.md): short GitHub issue guide for playtesters, artists, and coders
+- [docs/BUG-REPORTING.md](docs/BUG-REPORTING.md): short Forgejo issue guide for playtesters, artists, and coders
 - [docs/PLAYTEST-GUIDE.md](docs/PLAYTEST-GUIDE.md): simple playtesting guide for contributors who want to help without reading code
 - [docs/CONTRIBUTOR-GLOSSARY.md](docs/CONTRIBUTOR-GLOSSARY.md): plain-language glossary for project and GitHub terms
 - [docs/GIT-GITHUB-FOR-NEWBS.md](docs/GIT-GITHUB-FOR-NEWBS.md): beginner-friendly guide to commits, syncing, branches, and pull requests
@@ -103,7 +103,7 @@ Server/debug utilities:
 - [docs/CLERIC-CHURCH-GUIDE.md](docs/CLERIC-CHURCH-GUIDE.md): size, materials, altar founding, and civic-pride brief for the church-to-cathedral ladder
 - [docs/LIGHTHOUSE-DESIGN.md](docs/LIGHTHOUSE-DESIGN.md): civic-tier lighthouse growth, including a Tier 3 ground-floor bedroom
 - [docs/FARMER-BARN-GUIDE.md](docs/FARMER-BARN-GUIDE.md): optional Farmer barn worksite, not a farmhouse
-- GitHub issues: active bug and polish tracking
+- Forgejo issues: active bug and polish tracking
 
 ## Development
 

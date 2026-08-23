@@ -150,7 +150,7 @@ If you only changed colors on an existing texture, you may only need the texture
 Because planning happens mostly on Discord:
 
 - ask on Discord if someone is already working on it
-- check GitHub issues for tracked visual bugs
+- check Forgejo issues for tracked visual bugs
 - then make the file changes
 
 Discord is for coordination.

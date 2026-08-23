@@ -150,7 +150,7 @@ In PowerShell:
 
 ```powershell
 cd $HOME\Projects
-git clone https://github.com/rhelwig/LiveVillages.git
+git clone https://git.ronhelwig.com/ronhelwig.com/live-villages.git
 cd .\LiveVillages
 ```
 

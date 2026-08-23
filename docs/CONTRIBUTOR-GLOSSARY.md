@@ -238,12 +238,12 @@ It says how the object is built in 3D and which textures go on which faces.
 
 For this project, `.bbmodel` files are source files for artists, not runtime files used directly by the mod.
 
-## Discord And GitHub
+## Discord And Forgejo
 
 For this project:
 
 - use Discord for planning, coordination, quick questions, and checking what needs help
-- use GitHub issues for bug reports and tracked work
+- use Forgejo issues for bug reports and tracked work
 - use GitHub pull requests for actual file changes you want reviewed
 
 Discord is where people talk.

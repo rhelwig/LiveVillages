@@ -124,7 +124,7 @@ If you are not sure which word is right, check [CONTRIBUTOR-GLOSSARY.md](CONTRIB
 
 ## Before Reporting A Bug
 
-Before making a new GitHub issue:
+Before making a new Forgejo issue:
 
 1. Check the open issues quickly.
 2. If someone already reported the same bug, add a comment there.
@@ -134,12 +134,12 @@ The full reporting guide is here:
 
 [BUG-REPORTING.md](BUG-REPORTING.md)
 
-## Discord And GitHub
+## Discord And Forgejo
 
 For this project:
 
 - use Discord for coordination, playtest ideas, and quick questions
-- use GitHub issues for bug reports that should be tracked
+- use Forgejo issues for bug reports that should be tracked
 
 If Discord is where you first mention a bug, that is fine.
 
